@@ -4,7 +4,66 @@
 // Note: figures are modeled/estimated from published sources; 2024 is projected
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const COUNTRY = {
+export interface Country {
+  name: string;
+  code: string;
+  flag: string;
+  currency: string;
+  description: string;
+}
+
+export interface GDPEntry {
+  year: number;
+  gdp_bn: number;
+  gdp_growth: number;
+  gdp_per_capita: number;
+  digital_pct: number;
+}
+
+export interface ExportEntry {
+  year: number;
+  total: number;
+  oil_gas: number;
+  metals: number;
+  chemicals: number;
+  machinery: number;
+  agriculture: number;
+  other: number;
+}
+
+export interface ImportEntry {
+  year: number;
+  total: number;
+  china: number;
+  russia: number;
+  eu: number;
+  us: number;
+  turkey: number;
+  uk: number;
+  other: number;
+}
+
+export interface TradeBalanceEntry {
+  year: number;
+  exports: number;
+  imports: number;
+  balance: number;
+}
+
+export interface PieEntry {
+  name: string;
+  value: number;
+}
+
+export interface KPIEntry {
+  label: string;
+  value: string;
+  sub: string;
+  trend: string | null;
+  color: string;
+}
+
+export const COUNTRY: Country = {
   name: "Kazakhstan",
   code: "KZ",
   flag: "🇰🇿",
@@ -17,7 +76,7 @@ export const COUNTRY = {
 // gdp_growth: real GDP growth rate (%)
 // gdp_per_capita: nominal GDP per capita (USD)
 // digital_pct: digital economy as % of GDP (estimated)
-export const GDP_DATA = [
+export const GDP_DATA: GDPEntry[] = [
   { year:2010, gdp_bn:148,  gdp_growth: 7.3,  gdp_per_capita: 9070,  digital_pct:1.4 },
   { year:2011, gdp_bn:188,  gdp_growth: 7.5,  gdp_per_capita:11380,  digital_pct:1.6 },
   { year:2012, gdp_bn:208,  gdp_growth: 5.0,  gdp_per_capita:12390,  digital_pct:1.8 },
@@ -37,7 +96,7 @@ export const GDP_DATA = [
 
 // ── EXPORTS ───────────────────────────────────────────────────────────────────
 // All values in USD billions
-export const EXPORTS_DATA = [
+export const EXPORTS_DATA: ExportEntry[] = [
   { year:2010, total:60.3, oil_gas:43.2, metals:8.1,  chemicals:1.8, machinery:0.9, agriculture:2.1, other:4.2 },
   { year:2012, total:86.9, oil_gas:62.4, metals:9.5,  chemicals:2.4, machinery:1.2, agriculture:3.1, other:8.3 },
   { year:2014, total:79.5, oil_gas:56.3, metals:9.6,  chemicals:2.3, machinery:1.2, agriculture:3.0, other:7.1 },
@@ -50,7 +109,7 @@ export const EXPORTS_DATA = [
 
 // ── IMPORTS ───────────────────────────────────────────────────────────────────
 // All values in USD billions, broken down by partner country/region
-export const IMPORTS_DATA = [
+export const IMPORTS_DATA: ImportEntry[] = [
   { year:2010, total:31.1, china: 7.2, russia:10.4, eu:6.8, us:1.2, turkey:1.3, uk:0.9, other:3.3 },
   { year:2012, total:46.4, china:10.5, russia:14.2, eu:9.3, us:1.8, turkey:2.0, uk:1.3, other:7.3 },
   { year:2014, total:41.3, china:10.6, russia:12.9, eu:8.5, us:1.7, turkey:2.0, uk:1.2, other:4.4 },
@@ -62,7 +121,7 @@ export const IMPORTS_DATA = [
 ];
 
 // ── DERIVED: TRADE BALANCE ────────────────────────────────────────────────────
-export const TRADE_BALANCE = EXPORTS_DATA.map((e, i) => ({
+export const TRADE_BALANCE: TradeBalanceEntry[] = EXPORTS_DATA.map((e, i) => ({
   year:    e.year,
   exports: e.total,
   imports: IMPORTS_DATA[i].total,
@@ -70,7 +129,7 @@ export const TRADE_BALANCE = EXPORTS_DATA.map((e, i) => ({
 }));
 
 // ── PIE BREAKDOWNS (most recent year) ─────────────────────────────────────────
-export const PIE_EXPORTS_2024 = [
+export const PIE_EXPORTS_2024: PieEntry[] = [
   { name:"Oil & Gas",   value:56   },
   { name:"Metals",      value:12   },
   { name:"Agriculture", value: 5   },
@@ -79,7 +138,7 @@ export const PIE_EXPORTS_2024 = [
   { name:"Other",       value: 4.2 },
 ];
 
-export const PIE_IMPORTS_2024 = [
+export const PIE_IMPORTS_2024: PieEntry[] = [
   { name:"China",  value:20   },
   { name:"Russia", value: 9.8 },
   { name:"EU",     value: 8.5 },
@@ -90,7 +149,7 @@ export const PIE_IMPORTS_2024 = [
 ];
 
 // ── KPI SUMMARY (headline cards) ──────────────────────────────────────────────
-export const KPI_SUMMARY = [
+export const KPI_SUMMARY: KPIEntry[] = [
   { label:"GDP 2024",      value:"$278B",  sub:"Nominal USD",       trend:"+$17B YoY",      color:"#00AAFF" },
   { label:"GDP Growth",    value:"4.8%",   sub:"Real 2024",          trend:"↑ Accelerating", color:"#10B981" },
   { label:"GDP/Capita",    value:"$14.2K", sub:"2024 estimate",      trend:"+5.3% YoY",      color:"#8B5CF6" },
@@ -102,7 +161,7 @@ export const KPI_SUMMARY = [
 ];
 
 // ── AI CHAT SUGGESTIONS ───────────────────────────────────────────────────────
-export const CHAT_SUGGESTIONS = [
+export const CHAT_SUGGESTIONS: string[] = [
   "Show Kazakhstan's GDP growth vs oil prices 2010–2024",
   "Compare imports from China, Russia and EU over time",
   "What are Kazakhstan's top export sectors?",
@@ -114,7 +173,7 @@ export const CHAT_SUGGESTIONS = [
 ];
 
 // ── WEB SEARCH SUGGESTIONS ────────────────────────────────────────────────────
-export const SEARCH_SUGGESTIONS = [
+export const SEARCH_SUGGESTIONS: string[] = [
   "Kazakhstan GDP growth forecast 2025",
   "Kazakhstan oil and gas exports latest data",
   "Foreign direct investment Kazakhstan 2024",

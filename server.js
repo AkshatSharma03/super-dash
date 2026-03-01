@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
+import { createHash } from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -14,6 +15,84 @@ if (!ANTHROPIC_API_KEY) {
   console.error('ERROR: ANTHROPIC_API_KEY environment variable is not set.');
   console.error('Add it to your .env file or set it in your hosting platform.');
   process.exit(1);
+}
+
+// ── LRU Cache (implemented from scratch) ──────────────────────────────────────
+// Doubly-linked list + HashMap gives O(1) get and put.
+// Evicts the least-recently-used entry when capacity is reached.
+// Each entry also carries a TTL so stale responses are never served.
+class LRUNode {
+  constructor(key, value, ttlMs = 60 * 60 * 1000) {
+    this.key       = key;
+    this.value     = value;
+    this.expiresAt = Date.now() + ttlMs;
+    this.prev      = null;
+    this.next      = null;
+  }
+}
+
+class LRUCache {
+  constructor(capacity) {
+    this.capacity = capacity;
+    this.map      = new Map();          // key → node
+    // Sentinel head/tail — never evicted, simplify pointer updates
+    this.head = new LRUNode(null, null);
+    this.tail = new LRUNode(null, null);
+    this.head.next = this.tail;
+    this.tail.prev = this.head;
+  }
+
+  _detach(node) {
+    node.prev.next = node.next;
+    node.next.prev = node.prev;
+  }
+
+  _attachFront(node) {
+    node.next       = this.head.next;
+    node.prev       = this.head;
+    this.head.next.prev = node;
+    this.head.next  = node;
+  }
+
+  get(key) {
+    const node = this.map.get(key);
+    if (!node) return null;
+    if (Date.now() > node.expiresAt) {   // TTL expired — treat as miss
+      this._detach(node);
+      this.map.delete(key);
+      return null;
+    }
+    // Move to front (most recently used)
+    this._detach(node);
+    this._attachFront(node);
+    return node.value;
+  }
+
+  put(key, value, ttlMs) {
+    if (this.map.has(key)) {
+      this._detach(this.map.get(key));
+      this.map.delete(key);
+    }
+    const node = new LRUNode(key, value, ttlMs);
+    this._attachFront(node);
+    this.map.set(key, node);
+    if (this.map.size > this.capacity) {  // evict LRU (node before tail)
+      const lru = this.tail.prev;
+      this._detach(lru);
+      this.map.delete(lru.key);
+    }
+  }
+
+  get size() { return this.map.size; }
+}
+
+// 200-entry cache: chat + search responses (TTL: 1 h chat, 30 min search)
+const apiCache = new LRUCache(200);
+
+function cacheKey(endpoint, body) {
+  return createHash('sha256')
+    .update(endpoint + JSON.stringify(body))
+    .digest('hex');
 }
 
 const app = express();
@@ -146,6 +225,17 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
     content: String(m.content || '').slice(0, 12000),
   }));
 
+  // LRU cache check (only cache single-turn queries to avoid stale context)
+  const isSingleTurn = messages.length === 1;
+  const ck = isSingleTurn ? cacheKey('/chat', messages) : null;
+  if (ck) {
+    const cached = apiCache.get(ck);
+    if (cached) {
+      console.log('[cache hit] /api/chat');
+      return res.json(cached);
+    }
+  }
+
   try {
     const data = await callAnthropic({
       model: 'claude-sonnet-4-20250514',
@@ -155,11 +245,14 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
     });
 
     const text = data.content?.map(b => b.text || '').join('') || '{}';
+    let parsed;
     try {
-      res.json(JSON.parse(text.replace(/```json|```/g, '').trim()));
+      parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
     } catch {
-      res.json({ insight: text, charts: [], sources: [], followUps: [] });
+      parsed = { insight: text, charts: [], sources: [], followUps: [] };
     }
+    if (ck) apiCache.put(ck, parsed, 60 * 60 * 1000); // 1 h TTL
+    res.json(parsed);
   } catch (e) {
     console.error('/api/chat error:', e.message);
     res.status(502).json({ error: e.message });
@@ -170,6 +263,14 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
 app.post('/api/search', apiLimiter, async (req, res) => {
   const query = String(req.body.query || '').trim().slice(0, 1000);
   if (!query) return res.status(400).json({ error: 'query is required' });
+
+  // LRU cache check (search results are valid for 30 min)
+  const ck = cacheKey('/search', { query });
+  const cached = apiCache.get(ck);
+  if (cached) {
+    console.log('[cache hit] /api/search:', query.slice(0, 40));
+    return res.json(cached);
+  }
 
   let text = '', sources = [], webSearchUsed = false;
 
@@ -233,7 +334,9 @@ app.post('/api/search', apiLimiter, async (req, res) => {
     }
   }
 
-  res.json({ text, sources, webSearchUsed });
+  const result = { text, sources, webSearchUsed };
+  apiCache.put(ck, result, 30 * 60 * 1000); // 30 min TTL
+  res.json(result);
 });
 
 // ── POST /api/analyze-csv ──────────────────────────────────────────────────
