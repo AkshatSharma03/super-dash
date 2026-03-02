@@ -1,6 +1,6 @@
 # 🇰🇿 Kazakhstan Economic Intelligence Dashboard
 
-> A full-stack economic research platform with AI-driven visualisation, five implemented-from-scratch computer science algorithms, and a production-grade Express backend — built for the **Silicon Steppes** research project at Boston University.
+> A full-stack economic research platform with AI-driven visualisation, five implemented-from-scratch computer science algorithms, and a production-grade Express backend — built for the **Kazakhstan international relations** research paper.
 
 ---
 
