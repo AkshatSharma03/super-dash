@@ -1,4 +1,4 @@
-# 🇰🇿 Kazakhstan Economic Intelligence Dashboard
+#  Economic Intelligence Dashboard
 
 > A full-stack economic research platform with AI-driven visualisation, five implemented-from-scratch computer science algorithms, and a production-grade Express backend — built for the **Kazakhstan international relations** research paper.
 
