@@ -11,9 +11,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // ── Configuration ─────────────────────────────────────────────────────────────
 // All tuneable numbers live here — never scattered as inline magic values.
 const PORT              = process.env.PORT || 3000;
-const MODEL             = 'claude-sonnet-4-20250514';
+const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
 const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const IS_DEV            = process.env.NODE_ENV !== 'production';
 
 // LRU cache
 const CACHE_CAP         = 200;                // max entries before LRU eviction
@@ -33,6 +34,7 @@ const MAX_CSV_ROWS      = 500;
 const MAX_CONTEXT_CHARS = 2_000;
 const CSV_SAMPLE_ROWS   = 30;                 // rows included in the prompt (keep under ~4k tokens)
 const MAX_SEARCH_TURNS  = 8;                  // tool-use loop guard — prevents infinite Anthropic loops
+const ANTHROPIC_TIMEOUT_MS = 55_000;          // 55 s — Anthropic's own limit is 60 s
 // ─────────────────────────────────────────────────────────────────────────────
 
 if (!ANTHROPIC_API_KEY) {
@@ -115,6 +117,18 @@ class LRUCache {
 
 const apiCache = new LRUCache(CACHE_CAP);
 
+/** Validate and normalize a parsed Claude AIResponse object.
+ *  Returns a safe object with correct types, or null if input is not an object. */
+function validateAIResponse(parsed) {
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  return {
+    insight:   typeof parsed.insight   === 'string'  ? parsed.insight   : '',
+    charts:    Array.isArray(parsed.charts)           ? parsed.charts    : [],
+    sources:   Array.isArray(parsed.sources)          ? parsed.sources   : [],
+    followUps: Array.isArray(parsed.followUps)        ? parsed.followUps : [],
+  };
+}
+
 /** SHA-256 of endpoint + serialized body — deterministic, collision-resistant cache key. */
 function cacheKey(endpoint, body) {
   return createHash('sha256').update(endpoint + JSON.stringify(body)).digest('hex');
@@ -124,15 +138,21 @@ function cacheKey(endpoint, body) {
 
 const app = express();
 
-// CORS: allow the Vite dev server (port 5173) to reach the API (port 3000).
-// In production both are served from the same origin so this header is a no-op.
+// CORS: allowlisted origins — exact-match only (no regex). Covers Vite dev (5173) and
+// alternate HMR port (5174). Production serves same-origin so this block is a no-op.
+// Override with CORS_ORIGINS env var for non-standard ports (comma-separated).
+const DEV_ORIGINS = new Set(
+  (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174')
+    .split(',').map(o => o.trim()).filter(Boolean)
+);
+
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
-  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+  if (DEV_ORIGINS.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Access-Control-Max-Age', '86400');
+    res.setHeader('Access-Control-Max-Age', '600');  // 10 min
   }
   if (req.method === 'OPTIONS') return res.status(204).end();
   next();
@@ -166,6 +186,16 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests. Please wait a few minutes and try again.' },
 });
 
+// Static files can be fetched more frequently than API calls (browsers fan out
+// requests for JS/CSS/images), but still need a ceiling against abusive hammering.
+const staticLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,  // 1-min window
+  max:      200,             // generous for legitimate browser fan-out
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message: { error: 'Too many requests.' },
+});
+
 // ── Anthropic helper ──────────────────────────────────────────────────────────
 
 /**
@@ -185,6 +215,7 @@ async function callAnthropic(body, extraHeaders = {}) {
       ...extraHeaders,
     },
     body: JSON.stringify(body),
+    signal: AbortSignal.timeout(ANTHROPIC_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`);
   return res.json();
@@ -269,7 +300,7 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
   const ck = isSingleTurn ? cacheKey('/chat', messages) : null;
   if (ck) {
     const cached = apiCache.get(ck);
-    if (cached) { console.log('[cache hit] /api/chat'); return res.json(cached); }
+    if (cached) { if (IS_DEV) console.log('[cache hit] /api/chat'); return res.json(cached); }
   }
 
   try {
@@ -277,7 +308,8 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
     const text = data.content?.map(b => b.text || '').join('') || '{}';
     let parsed;
     try {
-      parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+      const raw = JSON.parse(text.replace(/```json|```/g, '').trim());
+      parsed = validateAIResponse(raw) ?? { insight: text, charts: [], sources: [], followUps: [] };
     } catch {
       // Claude occasionally wraps JSON in markdown; fallback to raw text insight
       parsed = { insight: text, charts: [], sources: [], followUps: [] };
@@ -300,7 +332,7 @@ app.post('/api/search', apiLimiter, async (req, res) => {
 
   const ck = cacheKey('/search', { query });
   const cached = apiCache.get(ck);
-  if (cached) { console.log('[cache hit] /api/search:', query.slice(0, 40)); return res.json(cached); }
+  if (cached) { if (IS_DEV) console.log('[cache hit] /api/search:', query.slice(0, 40)); return res.json(cached); }
 
   let text = '', sources = [], webSearchUsed = false;
 
@@ -411,7 +443,8 @@ Rules:
     const data = await callAnthropic({ model: MODEL, max_tokens: 4000, system: CSV_SYSTEM, messages: [{ role: 'user', content: prompt }] });
     const txt  = data.content?.map(b => b.text || '').join('') || '{}';
     try {
-      res.json(JSON.parse(txt.replace(/```json|```/g, '').trim()));
+      const raw = JSON.parse(txt.replace(/```json|```/g, '').trim());
+      res.json(validateAIResponse(raw) ?? { insight: txt, charts: [], sources: ['Uploaded CSV'], followUps: [] });
     } catch {
       res.json({ insight: txt, charts: [], sources: ['Uploaded CSV'], followUps: [] });
     }
@@ -425,6 +458,7 @@ Rules:
 // In production, Express serves the Vite-built dist/ folder.
 // SPA fallback: all non-API routes return index.html so React Router works.
 const DIST = join(__dirname, 'dist');
+app.use(staticLimiter);
 app.use(express.static(DIST));
 app.use((_req, res) => res.sendFile(join(DIST, 'index.html')));
 

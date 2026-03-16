@@ -31,11 +31,15 @@ export default function DataMode() {
     setError(null);
     const reader = new FileReader();
     reader.onload = e => {
-      const parsed = parseCSV((e.target as FileReader).result as string);
-      if (!parsed.headers.length) {
-        setError("Could not parse CSV — ensure it has a header row."); return;
+      try {
+        const parsed = parseCSV((e.target as FileReader).result as string);
+        if (!parsed.headers.length) {
+          setError("Could not parse CSV — ensure it has a header row."); return;
+        }
+        setCsv(parsed);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "CSV parse error.");
       }
-      setCsv(parsed);
     };
     reader.readAsText(f);
   };

@@ -28,6 +28,7 @@ export function parseCSV(raw: string): ParsedCSV {
         cols.push(cur.trim()); cur = "";
       } else cur += line[i];
     }
+    if (inQ) throw new Error("CSV parse error: unclosed quote in field.");
     cols.push(cur.trim());
     return cols;
   };
