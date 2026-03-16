@@ -7,6 +7,8 @@ import helmet from 'helmet';
 import { createHash } from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import Database from 'better-sqlite3';
+import { mkdirSync } from 'fs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -41,12 +43,24 @@ const ANTHROPIC_TIMEOUT_MS = 55_000;          // 55 s — Anthropic's own limit 
 // Auth
 const JWT_SECRET     = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 const BCRYPT_ROUNDS  = 10;
+
+// Database
+const DB_PATH = process.env.DB_PATH || join(__dirname, 'data', 'econChart.db');
 // ─────────────────────────────────────────────────────────────────────────────
 
 if (!ANTHROPIC_API_KEY) {
   console.error('ERROR: ANTHROPIC_API_KEY environment variable is not set.');
   console.error('Add it to your .env file or set it in your hosting platform.');
   process.exit(1);
+}
+
+if (!process.env.JWT_SECRET) {
+  if (!IS_DEV) {
+    console.error('ERROR: JWT_SECRET environment variable is not set in production.');
+    console.error('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
+    process.exit(1);
+  }
+  console.warn('WARNING: JWT_SECRET not set — using insecure default. Set JWT_SECRET in .env before going to production.');
 }
 
 // ── LRU Cache ─────────────────────────────────────────────────────────────────
@@ -123,11 +137,47 @@ class LRUCache {
 
 const apiCache = new LRUCache(CACHE_CAP);
 
-// ── In-memory stores ───────────────────────────────────────────────────────────
-// NOTE: These reset on server restart. Replace with a database for production.
-const users        = new Map(); // email → { id, email, name, hashedPassword, createdAt }
-const chatSessions = new Map(); // sessionId → { id, userId, title, messages, createdAt, updatedAt }
-const userSessions = new Map(); // userId → Set<sessionId>
+// ── SQLite database ────────────────────────────────────────────────────────────
+mkdirSync(join(__dirname, 'data'), { recursive: true });
+const db = new Database(DB_PATH);
+
+// WAL mode: faster writes, concurrent reads, safe on crash
+db.pragma('journal_mode = WAL');
+// Enforce foreign-key constraints
+db.pragma('foreign_keys = ON');
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS users (
+    id              TEXT PRIMARY KEY,
+    email           TEXT UNIQUE NOT NULL,
+    name            TEXT NOT NULL,
+    hashed_password TEXT NOT NULL,
+    created_at      TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS chat_sessions (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title      TEXT NOT NULL,
+    messages   TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON chat_sessions(user_id);
+`);
+
+// ── Prepared statements (compiled once, reused on every request) ──────────────
+const stmt = {
+  userByEmail:     db.prepare('SELECT * FROM users WHERE email = ?'),
+  userById:        db.prepare('SELECT id, email, name FROM users WHERE id = ?'),
+  insertUser:      db.prepare('INSERT INTO users (id, email, name, hashed_password, created_at) VALUES (?, ?, ?, ?, ?)'),
+  sessionsByUser:  db.prepare('SELECT id, title, created_at, updated_at FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC'),
+  sessionById:     db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_id = ?'),
+  insertSession:   db.prepare('INSERT INTO chat_sessions (id, user_id, title, messages, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
+  updateSession:   db.prepare('UPDATE chat_sessions SET messages = ?, title = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
+  deleteSession:   db.prepare('DELETE FROM chat_sessions WHERE id = ? AND user_id = ?'),
+};
 
 /** Validate and normalize a parsed Claude AIResponse object.
  *  Returns a safe object with correct types, or null if input is not an object.
@@ -212,6 +262,15 @@ const apiLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders:   false,
   message: { error: 'Too many requests. Please wait a few minutes and try again.' },
+});
+
+// Auth endpoints are brute-force targets — stricter limit: 10 attempts per 15 min per IP.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max:      10,
+  standardHeaders: true,
+  legacyHeaders:   false,
+  message: { error: 'Too many authentication attempts. Please wait 15 minutes and try again.' },
 });
 
 // Static files can be fetched more frequently than API calls (browsers fan out
@@ -498,7 +557,7 @@ Rules:
 // ── Auth routes ───────────────────────────────────────────────────────────────
 
 // POST /api/auth/register
-app.post('/api/auth/register', apiLimiter, async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password || !name)
     return res.status(400).json({ error: 'email, password, and name are required' });
@@ -507,24 +566,23 @@ app.post('/api/auth/register', apiLimiter, async (req, res) => {
   if (String(password).length < 8)
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   const em = String(email).toLowerCase().trim();
-  if (users.has(em)) return res.status(409).json({ error: 'Email already registered' });
+  if (stmt.userByEmail.get(em)) return res.status(409).json({ error: 'Email already registered' });
   const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
   const id   = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const user = { id, email: em, name: String(name).slice(0, 80).trim(), hashedPassword, createdAt: new Date().toISOString() };
-  users.set(em, user);
-  userSessions.set(id, new Set());
-  const token = jwt.sign({ id, email: em, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
-  res.json({ token, user: { id, email: em, name: user.name } });
+  const uname = String(name).slice(0, 80).trim();
+  stmt.insertUser.run(id, em, uname, hashedPassword, new Date().toISOString());
+  const token = jwt.sign({ id, email: em, name: uname }, JWT_SECRET, { expiresIn: '7d' });
+  res.json({ token, user: { id, email: em, name: uname } });
 });
 
 // POST /api/auth/login
-app.post('/api/auth/login', apiLimiter, async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
   const em   = String(email).toLowerCase().trim();
-  const user = users.get(em);
+  const user = stmt.userByEmail.get(em);
   if (!user) return res.status(401).json({ error: 'Invalid email or password' });
-  const match = await bcrypt.compare(String(password), user.hashedPassword);
+  const match = await bcrypt.compare(String(password), user.hashed_password);
   if (!match) return res.status(401).json({ error: 'Invalid email or password' });
   const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
   res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
@@ -532,20 +590,16 @@ app.post('/api/auth/login', apiLimiter, async (req, res) => {
 
 // GET /api/auth/me — validate token and return user
 app.get('/api/auth/me', requireAuth, (req, res) => {
-  res.json({ id: req.user.id, email: req.user.email, name: req.user.name });
+  const user = stmt.userById.get(req.user.id);
+  if (!user) return res.status(401).json({ error: 'User not found' });
+  res.json(user);
 });
 
 // ── Chat session routes ────────────────────────────────────────────────────────
 
 // GET /api/sessions — list sessions for logged-in user (summaries only, no messages)
 app.get('/api/sessions', requireAuth, (req, res) => {
-  const ids    = userSessions.get(req.user.id) || new Set();
-  const result = [...ids]
-    .map(id => chatSessions.get(id))
-    .filter(Boolean)
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-    .map(({ id, title, createdAt, updatedAt }) => ({ id, title, createdAt, updatedAt }));
-  res.json(result);
+  res.json(stmt.sessionsByUser.all(req.user.id));
 });
 
 // POST /api/sessions — create a new session
@@ -553,36 +607,33 @@ app.post('/api/sessions', requireAuth, (req, res) => {
   const title = String(req.body.title || 'New Chat').slice(0, 100);
   const id    = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const now   = new Date().toISOString();
-  const session = { id, userId: req.user.id, title, messages: [], createdAt: now, updatedAt: now };
-  chatSessions.set(id, session);
-  if (!userSessions.has(req.user.id)) userSessions.set(req.user.id, new Set());
-  userSessions.get(req.user.id).add(id);
-  res.json(session);
+  stmt.insertSession.run(id, req.user.id, title, '[]', now, now);
+  res.json({ id, userId: req.user.id, title, messages: [], createdAt: now, updatedAt: now });
 });
 
 // GET /api/sessions/:id — load full session with messages
 app.get('/api/sessions/:id', requireAuth, (req, res) => {
-  const session = chatSessions.get(req.params.id);
-  if (!session || session.userId !== req.user.id) return res.status(404).json({ error: 'Session not found' });
-  res.json(session);
+  const row = stmt.sessionById.get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Session not found' });
+  res.json({ ...row, messages: JSON.parse(row.messages) });
 });
 
 // PATCH /api/sessions/:id — update messages and/or title
 app.patch('/api/sessions/:id', requireAuth, (req, res) => {
-  const session = chatSessions.get(req.params.id);
-  if (!session || session.userId !== req.user.id) return res.status(404).json({ error: 'Session not found' });
-  if (Array.isArray(req.body.messages)) session.messages = req.body.messages;
-  if (typeof req.body.title === 'string') session.title = req.body.title.slice(0, 100);
-  session.updatedAt = new Date().toISOString();
-  res.json({ id: session.id, title: session.title, updatedAt: session.updatedAt });
+  const row = stmt.sessionById.get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Session not found' });
+  const newMessages = Array.isArray(req.body.messages) ? JSON.stringify(req.body.messages) : row.messages;
+  const newTitle    = typeof req.body.title === 'string' ? req.body.title.slice(0, 100) : row.title;
+  const now         = new Date().toISOString();
+  stmt.updateSession.run(newMessages, newTitle, now, req.params.id, req.user.id);
+  res.json({ id: row.id, title: newTitle, updatedAt: now });
 });
 
 // DELETE /api/sessions/:id
 app.delete('/api/sessions/:id', requireAuth, (req, res) => {
-  const session = chatSessions.get(req.params.id);
-  if (!session || session.userId !== req.user.id) return res.status(404).json({ error: 'Session not found' });
-  chatSessions.delete(req.params.id);
-  userSessions.get(req.user.id)?.delete(req.params.id);
+  const row = stmt.sessionById.get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Session not found' });
+  stmt.deleteSession.run(req.params.id, req.user.id);
   res.json({ ok: true });
 });
 
