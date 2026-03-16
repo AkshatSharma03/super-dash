@@ -11,4 +11,24 @@ export default defineConfig({
       '/api': 'http://localhost:3000',
     },
   },
+  test: {
+    globals: true,
+    environment: 'node',
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'json-summary', 'html'],
+      include: [
+        'src/algorithms/**/*.ts',
+        'src/utils/csv.ts',
+      ],
+      exclude: ['src/**/*.test.ts'],
+      thresholds: {
+        lines:      80,
+        functions:  80,
+        branches:   70,
+        statements: 80,
+      },
+    },
+  },
 })
