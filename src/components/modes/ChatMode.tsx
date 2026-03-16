@@ -6,7 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useRef, useEffect } from "react";
 import { CHAT_SUGGESTIONS } from "../../data/kazakhstan";
-import { askClaude, getSessions, createSession, updateSession, deleteSession } from "../../utils/api";
+import { askClaude, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
 import type { Message, AIResponse, ChatSession } from "../../types";
 import { DynChart } from "../ui";
 
@@ -116,10 +116,8 @@ export default function ChatMode({ token }: ChatModeProps) {
   const loadSession = async (sessionId: string) => {
     if (sessionId === activeSessionId) return;
     try {
-      const { messages: saved } = await import("../../utils/api").then(m =>
-        m.getSession(token, sessionId)
-      );
-      setMessages(saved as Message[]);
+      const session = await getSession(token, sessionId);
+      setMessages(session.messages as Message[]);
       setActiveSessionId(sessionId);
     } catch { /* silently ignore — session still selectable */ }
   };
