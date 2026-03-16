@@ -62,6 +62,17 @@ export interface ParsedCSV {
   rows: Record<string, string>[];
 }
 
+// ── Auth + session types ───────────────────────────────────────────────────────
+
+/** Authenticated user returned from /api/auth/login and /api/auth/register. */
+export interface User { id: string; email: string; name: string; }
+
+/** Summary of a saved chat session (no messages — for sidebar list). */
+export interface ChatSession { id: string; title: string; createdAt: string; updatedAt: string; }
+
+/** Full chat session including all messages (returned by GET /api/sessions/:id). */
+export interface ChatSessionFull extends ChatSession { messages: Message[]; }
+
 // ── App types ─────────────────────────────────────────────────────────────────
 
 /** The five top-level navigation modes. */
