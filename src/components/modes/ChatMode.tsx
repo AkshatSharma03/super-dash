@@ -57,11 +57,20 @@ function ChatMessage({ msg, onFollowUp }: ChatMessageProps) {
       ))}
 
       {sources.length > 0 && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
           <span style={{ fontSize: 11, color: "#64748b" }}>Sources:</span>
-          {sources.map((s, i) => (
-            <span key={i} style={{ fontSize: 11, color: "#64748b", background: "#1e2130", border: "1px solid #2d3348", borderRadius: 4, padding: "2px 8px" }}>{s}</span>
-          ))}
+          {sources.map((s, i) =>
+            s.url ? (
+              <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: 11, color: "#00AAFF", background: "#1e2130", border: "1px solid #2d334880", borderRadius: 4, padding: "2px 8px", textDecoration: "none", transition: "border-color .15s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#00AAFF"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#2d334880"; }}>
+                {s.title} ↗
+              </a>
+            ) : (
+              <span key={i} style={{ fontSize: 11, color: "#64748b", background: "#1e2130", border: "1px solid #2d3348", borderRadius: 4, padding: "2px 8px" }}>{s.title}</span>
+            )
+          )}
         </div>
       )}
 
