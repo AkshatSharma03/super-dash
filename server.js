@@ -5,6 +5,8 @@ import { dirname, join } from 'path';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
 import { createHash } from 'crypto';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -35,6 +37,10 @@ const MAX_CONTEXT_CHARS = 2_000;
 const CSV_SAMPLE_ROWS   = 30;                 // rows included in the prompt (keep under ~4k tokens)
 const MAX_SEARCH_TURNS  = 8;                  // tool-use loop guard — prevents infinite Anthropic loops
 const ANTHROPIC_TIMEOUT_MS = 55_000;          // 55 s — Anthropic's own limit is 60 s
+
+// Auth
+const JWT_SECRET     = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+const BCRYPT_ROUNDS  = 10;
 // ─────────────────────────────────────────────────────────────────────────────
 
 if (!ANTHROPIC_API_KEY) {
@@ -117,6 +123,12 @@ class LRUCache {
 
 const apiCache = new LRUCache(CACHE_CAP);
 
+// ── In-memory stores ───────────────────────────────────────────────────────────
+// NOTE: These reset on server restart. Replace with a database for production.
+const users        = new Map(); // email → { id, email, name, hashedPassword, createdAt }
+const chatSessions = new Map(); // sessionId → { id, userId, title, messages, createdAt, updatedAt }
+const userSessions = new Map(); // userId → Set<sessionId>
+
 /** Validate and normalize a parsed Claude AIResponse object.
  *  Returns a safe object with correct types, or null if input is not an object.
  *  Normalizes sources to [{title, url}] — handles both old string[] and new object[]. */
@@ -139,6 +151,15 @@ function validateAIResponse(parsed) {
 /** SHA-256 of endpoint + serialized body — deterministic, collision-resistant cache key. */
 function cacheKey(endpoint, body) {
   return createHash('sha256').update(endpoint + JSON.stringify(body)).digest('hex');
+}
+
+/** Verify Bearer JWT and attach req.user. Returns 401 if missing or invalid. */
+function requireAuth(req, res, next) {
+  const auth  = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'Authentication required' });
+  try { req.user = jwt.verify(token, JWT_SECRET); next(); }
+  catch { res.status(401).json({ error: 'Invalid or expired token' }); }
 }
 
 // ── Express setup ─────────────────────────────────────────────────────────────
@@ -233,7 +254,7 @@ async function callAnthropic(body, extraHeaders = {}) {
 
 // Instructs Claude to return ONLY a JSON AIResponse — no markdown wrapper.
 // Client-side DynChart depends on the exact shape: { insight, charts[], sources[], followUps[] }.
-const CHAT_SYSTEM = `You are an expert data analyst and economist specializing in Kazakhstan and Central Asia economics, trade, AI governance, and Silicon Steppes digital strategy research.
+const CHAT_SYSTEM = `You are an expert data analyst and economist with comprehensive knowledge of global economics, international trade, financial markets, macroeconomic policy, and economic history across all countries and regions.
 
 When a user asks a question, respond ONLY with a valid JSON object (no markdown, no preamble):
 {
@@ -276,8 +297,8 @@ Rules:
 
 // Instructs Claude to return structured markdown with section headers.
 // SearchMode renders this via MarkdownText which handles ##, bullets, bold.
-const SEARCH_SYSTEM = `You are an expert research analyst and economist specializing in Kazakhstan and Central Asian economies.
-When searching, prioritize authoritative sources: World Bank (worldbank.org), IMF (imf.org), OECD (oecd.org), Kazakhstan Bureau of Statistics (stat.gov.kz), National Bank of Kazakhstan, Reuters, Bloomberg, Financial Times, Eurasianet.
+const SEARCH_SYSTEM = `You are an expert research analyst and economist with comprehensive knowledge of global economics and financial markets.
+When searching, prioritize authoritative sources: World Bank (worldbank.org), IMF (imf.org), OECD (oecd.org), national statistics offices, central banks, Reuters, Bloomberg, Financial Times, and regional economic organizations.
 
 Structure your response clearly with these sections:
 
@@ -472,6 +493,97 @@ Rules:
     console.error('/api/analyze-csv error:', e.message);
     res.status(502).json({ error: e.message });
   }
+});
+
+// ── Auth routes ───────────────────────────────────────────────────────────────
+
+// POST /api/auth/register
+app.post('/api/auth/register', apiLimiter, async (req, res) => {
+  const { email, password, name } = req.body;
+  if (!email || !password || !name)
+    return res.status(400).json({ error: 'email, password, and name are required' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email)))
+    return res.status(400).json({ error: 'Invalid email address' });
+  if (String(password).length < 8)
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const em = String(email).toLowerCase().trim();
+  if (users.has(em)) return res.status(409).json({ error: 'Email already registered' });
+  const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+  const id   = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const user = { id, email: em, name: String(name).slice(0, 80).trim(), hashedPassword, createdAt: new Date().toISOString() };
+  users.set(em, user);
+  userSessions.set(id, new Set());
+  const token = jwt.sign({ id, email: em, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+  res.json({ token, user: { id, email: em, name: user.name } });
+});
+
+// POST /api/auth/login
+app.post('/api/auth/login', apiLimiter, async (req, res) => {
+  const { email, password } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
+  const em   = String(email).toLowerCase().trim();
+  const user = users.get(em);
+  if (!user) return res.status(401).json({ error: 'Invalid email or password' });
+  const match = await bcrypt.compare(String(password), user.hashedPassword);
+  if (!match) return res.status(401).json({ error: 'Invalid email or password' });
+  const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+  res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
+});
+
+// GET /api/auth/me — validate token and return user
+app.get('/api/auth/me', requireAuth, (req, res) => {
+  res.json({ id: req.user.id, email: req.user.email, name: req.user.name });
+});
+
+// ── Chat session routes ────────────────────────────────────────────────────────
+
+// GET /api/sessions — list sessions for logged-in user (summaries only, no messages)
+app.get('/api/sessions', requireAuth, (req, res) => {
+  const ids    = userSessions.get(req.user.id) || new Set();
+  const result = [...ids]
+    .map(id => chatSessions.get(id))
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .map(({ id, title, createdAt, updatedAt }) => ({ id, title, createdAt, updatedAt }));
+  res.json(result);
+});
+
+// POST /api/sessions — create a new session
+app.post('/api/sessions', requireAuth, (req, res) => {
+  const title = String(req.body.title || 'New Chat').slice(0, 100);
+  const id    = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now   = new Date().toISOString();
+  const session = { id, userId: req.user.id, title, messages: [], createdAt: now, updatedAt: now };
+  chatSessions.set(id, session);
+  if (!userSessions.has(req.user.id)) userSessions.set(req.user.id, new Set());
+  userSessions.get(req.user.id).add(id);
+  res.json(session);
+});
+
+// GET /api/sessions/:id — load full session with messages
+app.get('/api/sessions/:id', requireAuth, (req, res) => {
+  const session = chatSessions.get(req.params.id);
+  if (!session || session.userId !== req.user.id) return res.status(404).json({ error: 'Session not found' });
+  res.json(session);
+});
+
+// PATCH /api/sessions/:id — update messages and/or title
+app.patch('/api/sessions/:id', requireAuth, (req, res) => {
+  const session = chatSessions.get(req.params.id);
+  if (!session || session.userId !== req.user.id) return res.status(404).json({ error: 'Session not found' });
+  if (Array.isArray(req.body.messages)) session.messages = req.body.messages;
+  if (typeof req.body.title === 'string') session.title = req.body.title.slice(0, 100);
+  session.updatedAt = new Date().toISOString();
+  res.json({ id: session.id, title: session.title, updatedAt: session.updatedAt });
+});
+
+// DELETE /api/sessions/:id
+app.delete('/api/sessions/:id', requireAuth, (req, res) => {
+  const session = chatSessions.get(req.params.id);
+  if (!session || session.userId !== req.user.id) return res.status(404).json({ error: 'Session not found' });
+  chatSessions.delete(req.params.id);
+  userSessions.get(req.user.id)?.delete(req.params.id);
+  res.json({ ok: true });
 });
 
 // ── Static file serving ───────────────────────────────────────────────────────

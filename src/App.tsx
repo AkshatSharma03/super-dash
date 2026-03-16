@@ -1,39 +1,68 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// APP SHELL  —  top-level layout: header, mode navigation, year-range filter.
-// Each mode is a self-contained component imported from components/modes/.
-// This file intentionally contains no business logic — only routing and layout.
+// APP SHELL  —  top-level layout: auth gate, header, mode navigation.
+// Shows AuthPage when the user is not logged in; the full dashboard otherwise.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from "react";
-import { COUNTRY } from "./data/kazakhstan";
-import type { Mode } from "./types";
-import { Btn } from "./components/ui";
+import { useState, useEffect } from "react";
+import type { Mode, User } from "./types";
+import { fetchMe } from "./utils/api";
+import AuthPage    from "./components/auth/AuthPage";
 import DashboardMode from "./components/modes/DashboardMode";
 import ChatMode      from "./components/modes/ChatMode";
 import SearchMode    from "./components/modes/SearchMode";
 import DataMode      from "./components/modes/DataMode";
 import AnalyticsMode from "./components/modes/AnalyticsMode";
 
-// Tab labels shown in the top navigation bar.
 const MODES: [Mode, string][] = [
-  ["dashboard", "📊 Dashboard"],
   ["chat",      "💬 AI Chat"],
   ["search",    "🔍 Search"],
   ["data",      "📁 Data"],
   ["analytics", "🧮 Analytics"],
+  ["dashboard", "🇰🇿 KZ Data"],
 ];
 
-// Header badge text and description strip for the active mode.
 const MODE_META: Record<Mode, { label: string; desc: string; color: string }> = {
-  dashboard: { label: "Dashboard Mode",   color: "#00AAFF", desc: "Pre-built charts with filterable static data — great for overview and reference" },
-  chat:      { label: "AI Chat Mode",     color: "#8B5CF6", desc: "Prompt-driven · Claude generates charts and analysis dynamically from your query" },
-  search:    { label: "Web Search Mode",  color: "#10B981", desc: "Live web search · Claude pulls and summarizes current data from reliable sources" },
-  data:      { label: "Data Upload Mode", color: "#F59E0B", desc: "Upload a CSV file · Claude analyzes your data and creates charts automatically" },
-  analytics: { label: "Analytics Mode",   color: "#EF4444", desc: "Algorithms from scratch: OLS Regression · HHI Concentration · K-Means Clustering · Z-Score Anomaly Detection" },
+  chat:      { label: "AI Chat",            color: "#8B5CF6", desc: "Ask any economic question — Claude generates interactive charts and analysis from your query" },
+  search:    { label: "Web Search",         color: "#10B981", desc: "Live web search · Claude pulls and summarises current data from authoritative sources" },
+  data:      { label: "Data Upload",        color: "#F59E0B", desc: "Upload a CSV file · Claude analyses your data and creates charts automatically" },
+  analytics: { label: "Analytics",          color: "#EF4444", desc: "Algorithms from scratch: OLS Regression · HHI Concentration · K-Means Clustering · Z-Score Anomaly Detection" },
+  dashboard: { label: "Kazakhstan Data",    color: "#00AAFF", desc: "Pre-built charts with 15 years of Kazakhstan economic data — GDP, trade, exports, imports" },
 };
 
 export default function App() {
-  const [mode,      setMode]      = useState<Mode>("dashboard");
+  const [user,      setUser]      = useState<User | null>(null);
+  const [token,     setToken]     = useState<string | null>(null);
+  const [authReady, setAuthReady] = useState(false);   // prevents flash of auth page on refresh
+  const [mode,      setMode]      = useState<Mode>("chat");
   const [yearRange, setYearRange] = useState<[number, number]>([2010, 2024]);
+
+  // On mount: restore session from localStorage and validate the token
+  useEffect(() => {
+    const stored = localStorage.getItem("ec_token");
+    if (!stored) { setAuthReady(true); return; }
+    fetchMe(stored)
+      .then(u => { setToken(stored); setUser(u); })
+      .catch(() => { localStorage.removeItem("ec_token"); })
+      .finally(() => setAuthReady(true));
+  }, []);
+
+  const handleAuth = (t: string, u: User) => {
+    localStorage.setItem("ec_token", t);
+    setToken(t);
+    setUser(u);
+  };
+
+  const logout = () => {
+    localStorage.removeItem("ec_token");
+    setToken(null);
+    setUser(null);
+  };
+
+  // Don't render until we've checked localStorage (avoids auth page flash)
+  if (!authReady) return null;
+
+  // Unauthenticated: show landing + login/register
+  if (!user || !token) return <AuthPage onAuth={handleAuth} />;
+
   const { label, desc, color } = MODE_META[mode];
   const modeIcon = MODES.find(m => m[0] === mode)?.[1].split(" ")[0] ?? "";
 
@@ -41,28 +70,27 @@ export default function App() {
     <div style={{ fontFamily: "Inter,sans-serif", background: "#0f1117", height: "100vh", display: "flex", flexDirection: "column", color: "#e2e8f0" }}>
 
       {/* ── Header ── */}
-      <div style={{ padding: "12px 24px", borderBottom: "1px solid #1e2130", display: "flex", alignItems: "center", gap: 14, flexShrink: 0, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 9, background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>🇰🇿</div>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: "#fff" }}>{COUNTRY.flag} {COUNTRY.name} Economic Intelligence</h1>
-            <p style={{ margin: 0, fontSize: 11, color: "#64748b" }}>{COUNTRY.description}</p>
-          </div>
+      <div style={{ padding: "10px 20px", borderBottom: "1px solid #1e2130", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, flexWrap: "wrap" }}>
+
+        {/* Brand */}
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📊</div>
+          <span style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>EconChart</span>
         </div>
 
-        {/* Mode toggle */}
-        <div style={{ marginLeft: "auto", display: "flex", background: "#1e2130", borderRadius: 9, padding: 3, border: "1px solid #2d3348", gap: 3, flexWrap: "nowrap" }}>
+        {/* Mode tabs */}
+        <div style={{ marginLeft: 16, display: "flex", background: "#1e2130", borderRadius: 9, padding: 3, border: "1px solid #2d3348", gap: 2, flexWrap: "nowrap" }}>
           {MODES.map(([m, lbl]) => (
             <button key={m} onClick={() => setMode(m)} style={{
               background: mode === m ? MODE_META[m].color : "transparent",
               color: mode === m ? "#fff" : "#94a3b8",
-              border: "none", borderRadius: 7, padding: "6px 14px",
+              border: "none", borderRadius: 7, padding: "6px 13px",
               fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .2s", whiteSpace: "nowrap",
             }}>{lbl}</button>
           ))}
         </div>
 
-        {/* Year-range filter — Dashboard only */}
+        {/* Year filter — dashboard only */}
         {mode === "dashboard" && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#1e2130", border: "1px solid #2d3348", borderRadius: 8, padding: "6px 14px" }}>
             <span style={{ fontSize: 11, color: "#64748b" }}>Years:</span>
@@ -73,26 +101,41 @@ export default function App() {
             <span style={{ fontSize: 11, color: "#00AAFF", minWidth: 28 }}>{yearRange[1]}</span>
           </div>
         )}
+
+        {/* User + logout */}
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#1e2130", border: "1px solid #2d3348", borderRadius: 8, padding: "6px 12px" }}>
+            <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <span style={{ fontSize: 12, color: "#e2e8f0", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</span>
+          </div>
+          <button onClick={logout}
+            style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 7, padding: "6px 12px", fontSize: 11, color: "#64748b", cursor: "pointer", transition: "all .15s" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#EF4444"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
+            Sign out
+          </button>
+        </div>
       </div>
 
-      {/* ── Mode badge + description strip ── */}
-      <div style={{ padding: "7px 24px", borderBottom: "1px solid #1e2130", flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
+      {/* ── Mode badge + description ── */}
+      <div style={{ padding: "6px 20px", borderBottom: "1px solid #1e2130", flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ fontSize: 11, borderRadius: 5, padding: "2px 10px", fontWeight: 600, background: color + "22", color, border: `1px solid ${color}44` }}>
           {modeIcon} {label}
         </span>
         <span style={{ fontSize: 11, color: "#64748b" }}>{desc}</span>
       </div>
 
-      {/* ── Main content area — each mode fills the remaining space ── */}
-      <div style={{ flex: 1, overflowY: "auto", padding: mode === "chat" ? "16px 24px 0" : "20px 24px" }}>
-        {mode === "dashboard"  && <div style={{ maxWidth: 1100, margin: "0 auto" }}><DashboardMode yearRange={yearRange} setYearRange={setYearRange} /></div>}
-        {mode === "chat"       && <div style={{ maxWidth: 900, margin: "0 auto", height: "100%", display: "flex", flexDirection: "column" }}><ChatMode /></div>}
+      {/* ── Main content ── */}
+      <div style={{ flex: 1, overflowY: mode === "chat" ? "hidden" : "auto", padding: mode === "chat" ? "16px 20px 0" : "20px 20px" }}>
+        {mode === "chat"       && <div style={{ maxWidth: 1060, margin: "0 auto", height: "100%", display: "flex", flexDirection: "column" }}><ChatMode token={token} /></div>}
         {mode === "search"     && <SearchMode />}
         {mode === "data"       && <DataMode />}
         {mode === "analytics"  && <AnalyticsMode />}
+        {mode === "dashboard"  && <div style={{ maxWidth: 1100, margin: "0 auto" }}><DashboardMode yearRange={yearRange} setYearRange={setYearRange} /></div>}
       </div>
 
-      {/* Global animation keyframe + scrollbar styling */}
       <style>{`
         @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
         ::-webkit-scrollbar { width:6px }
