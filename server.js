@@ -177,6 +177,11 @@ const stmt = {
   insertSession:   db.prepare('INSERT INTO chat_sessions (id, user_id, title, messages, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
   updateSession:   db.prepare('UPDATE chat_sessions SET messages = ?, title = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
   deleteSession:   db.prepare('DELETE FROM chat_sessions WHERE id = ? AND user_id = ?'),
+  // Account management
+  userByIdFull:    db.prepare('SELECT * FROM users WHERE id = ?'),
+  updatePassword:  db.prepare('UPDATE users SET hashed_password = ? WHERE id = ?'),
+  deleteUser:      db.prepare('DELETE FROM users WHERE id = ?'),
+  sessionMessages: db.prepare('SELECT messages FROM chat_sessions WHERE user_id = ?'),
 };
 
 /** Validate and normalize a parsed Claude AIResponse object.
@@ -593,6 +598,47 @@ app.get('/api/auth/me', requireAuth, (req, res) => {
   const user = stmt.userById.get(req.user.id);
   if (!user) return res.status(401).json({ error: 'User not found' });
   res.json(user);
+});
+
+// GET /api/auth/usage — usage stats for the logged-in user
+app.get('/api/auth/usage', requireAuth, (req, res) => {
+  const user     = stmt.userById.get(req.user.id);
+  if (!user) return res.status(401).json({ error: 'User not found' });
+  const rows     = stmt.sessionMessages.all(req.user.id);
+  const sessionCount = rows.length;
+  const messageCount = rows.reduce((sum, r) => {
+    const msgs = JSON.parse(r.messages);
+    return sum + msgs.filter(m => m.role === 'user').length;
+  }, 0);
+  res.json({ sessionCount, messageCount, memberSince: user.created_at });
+});
+
+// PATCH /api/auth/password — change password (requires current password)
+app.patch('/api/auth/password', requireAuth, authLimiter, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!currentPassword || !newPassword)
+    return res.status(400).json({ error: 'currentPassword and newPassword are required' });
+  if (String(newPassword).length < 8)
+    return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  const user = stmt.userByIdFull.get(req.user.id);
+  if (!user) return res.status(401).json({ error: 'User not found' });
+  const match = await bcrypt.compare(String(currentPassword), user.hashed_password);
+  if (!match) return res.status(401).json({ error: 'Current password is incorrect' });
+  const hashed = await bcrypt.hash(String(newPassword), BCRYPT_ROUNDS);
+  stmt.updatePassword.run(hashed, req.user.id);
+  res.json({ ok: true });
+});
+
+// DELETE /api/auth/account — permanently delete account + all sessions
+app.delete('/api/auth/account', requireAuth, authLimiter, async (req, res) => {
+  const { password } = req.body;
+  if (!password) return res.status(400).json({ error: 'Password confirmation is required' });
+  const user = stmt.userByIdFull.get(req.user.id);
+  if (!user) return res.status(401).json({ error: 'User not found' });
+  const match = await bcrypt.compare(String(password), user.hashed_password);
+  if (!match) return res.status(401).json({ error: 'Password is incorrect' });
+  stmt.deleteUser.run(req.user.id);  // CASCADE deletes all their sessions too
+  res.json({ ok: true });
 });
 
 // ── Chat session routes ────────────────────────────────────────────────────────

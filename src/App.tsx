@@ -5,7 +5,8 @@
 import { useState, useEffect } from "react";
 import type { Mode, User } from "./types";
 import { fetchMe } from "./utils/api";
-import AuthPage    from "./components/auth/AuthPage";
+import AuthPage      from "./components/auth/AuthPage";
+import SettingsPanel from "./components/auth/SettingsPanel";
 import DashboardMode from "./components/modes/DashboardMode";
 import ChatMode      from "./components/modes/ChatMode";
 import SearchMode    from "./components/modes/SearchMode";
@@ -32,8 +33,9 @@ export default function App() {
   const [user,      setUser]      = useState<User | null>(null);
   const [token,     setToken]     = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);   // prevents flash of auth page on refresh
-  const [mode,      setMode]      = useState<Mode>("chat");
-  const [yearRange, setYearRange] = useState<[number, number]>([2010, 2024]);
+  const [mode,         setMode]         = useState<Mode>("chat");
+  const [yearRange,    setYearRange]    = useState<[number, number]>([2010, 2024]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   // On mount: restore session from localStorage and validate the token
   useEffect(() => {
@@ -102,14 +104,18 @@ export default function App() {
           </div>
         )}
 
-        {/* User + logout */}
+        {/* User chip — click to open settings */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#1e2130", border: "1px solid #2d3348", borderRadius: 8, padding: "6px 12px" }}>
+          <button onClick={() => setSettingsOpen(true)}
+            style={{ display: "flex", alignItems: "center", gap: 8, background: "#1e2130", border: "1px solid #2d3348", borderRadius: 8, padding: "6px 12px", cursor: "pointer", transition: "all .15s" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#8B5CF6"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
             <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
               {user.name.charAt(0).toUpperCase()}
             </div>
             <span style={{ fontSize: 12, color: "#e2e8f0", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</span>
-          </div>
+            <span style={{ fontSize: 10, color: "#64748b" }}>⚙</span>
+          </button>
           <button onClick={logout}
             style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 7, padding: "6px 12px", fontSize: 11, color: "#64748b", cursor: "pointer", transition: "all .15s" }}
             onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#EF4444"; }}
@@ -135,6 +141,15 @@ export default function App() {
         {mode === "analytics"  && <AnalyticsMode />}
         {mode === "dashboard"  && <div style={{ maxWidth: 1100, margin: "0 auto" }}><DashboardMode yearRange={yearRange} setYearRange={setYearRange} /></div>}
       </div>
+
+      {settingsOpen && (
+        <SettingsPanel
+          user={user}
+          token={token}
+          onClose={() => setSettingsOpen(false)}
+          onLogout={logout}
+        />
+      )}
 
       <style>{`
         @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }

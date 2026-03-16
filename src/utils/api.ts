@@ -32,11 +32,15 @@ async function patch<T>(path: string, body: unknown, token?: string): Promise<T>
   return res.json() as Promise<T>;
 }
 
-/** Helper: DELETE an endpoint with optional auth. */
-async function del<T>(path: string, token?: string): Promise<T> {
+/** Helper: DELETE an endpoint with optional auth and optional body. */
+async function del<T>(path: string, token?: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;
-  const res = await fetch(path, { method: "DELETE", headers });
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(path, {
+    method: "DELETE", headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
   if (!res.ok) throw new Error(`${await res.text()}`);
   return res.json() as Promise<T>;
 }
@@ -53,6 +57,18 @@ export function login(email: string, password: string) {
 
 export function fetchMe(token: string) {
   return get<User>("/api/auth/me", token);
+}
+
+export function getUsage(token: string) {
+  return get<{ sessionCount: number; messageCount: number; memberSince: string }>("/api/auth/usage", token);
+}
+
+export function changePassword(token: string, currentPassword: string, newPassword: string) {
+  return patch<{ ok: boolean }>("/api/auth/password", { currentPassword, newPassword }, token);
+}
+
+export function deleteAccount(token: string, password: string) {
+  return del<{ ok: boolean }>("/api/auth/account", token, { password });
 }
 
 // ── Chat sessions ─────────────────────────────────────────────────────────────
