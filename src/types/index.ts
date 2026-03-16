@@ -29,11 +29,14 @@ export interface ChartConfig {
 
 // ── API response types ────────────────────────────────────────────────────────
 
+/** A source citation returned by /api/chat and /api/analyze-csv. */
+export interface AISource { title: string; url: string | null; }
+
 /** Structured response from /api/chat and /api/analyze-csv. */
 export interface AIResponse {
   insight?: string;
   charts?: ChartConfig[];
-  sources?: string[];
+  sources?: AISource[];
   followUps?: string[];
   error?: string;
 }

@@ -118,13 +118,20 @@ class LRUCache {
 const apiCache = new LRUCache(CACHE_CAP);
 
 /** Validate and normalize a parsed Claude AIResponse object.
- *  Returns a safe object with correct types, or null if input is not an object. */
+ *  Returns a safe object with correct types, or null if input is not an object.
+ *  Normalizes sources to [{title, url}] — handles both old string[] and new object[]. */
 function validateAIResponse(parsed) {
   if (typeof parsed !== 'object' || parsed === null) return null;
+  const rawSources = Array.isArray(parsed.sources) ? parsed.sources : [];
+  const sources = rawSources.map(s =>
+    typeof s === 'string'
+      ? { title: s, url: null }
+      : { title: String(s.title || ''), url: s.url ? String(s.url) : null }
+  );
   return {
     insight:   typeof parsed.insight   === 'string'  ? parsed.insight   : '',
     charts:    Array.isArray(parsed.charts)           ? parsed.charts    : [],
-    sources:   Array.isArray(parsed.sources)          ? parsed.sources   : [],
+    sources,
     followUps: Array.isArray(parsed.followUps)        ? parsed.followUps : [],
   };
 }
@@ -242,13 +249,14 @@ When a user asks a question, respond ONLY with a valid JSON object (no markdown,
       "series": [{"key":"fieldname","name":"Display Name","color":"#hex","chartType":"bar|line","stacked":false,"rightAxis":false}]
     }
   ],
-  "sources": ["World Bank","IMF","UN Comtrade","stat.gov.kz"],
+  "sources": [{"title":"World Bank","url":"https://data.worldbank.org"},{"title":"IMF","url":"https://www.imf.org/en/Data"}],
   "followUps": ["Follow-up question 1","Follow-up question 2","Follow-up question 3"]
 }
 
 Rules:
 - 1-3 charts per response. Choose types intelligently: trends->line/area, comparisons->bar, composition->pie, multi-metric->composed
 - Use real, accurate data from your knowledge (World Bank, IMF, UN Comtrade, stat.gov.kz, OECD)
+- sources: array of objects with "title" (institution name) and "url" (direct link to the dataset or homepage — never null)
 - For pie charts: each data item needs 'name' and 'value'
 - Dense data: 8-15 points per chart when possible
 - Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4`;
@@ -311,7 +319,6 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       const raw = JSON.parse(text.replace(/```json|```/g, '').trim());
       parsed = validateAIResponse(raw) ?? { insight: text, charts: [], sources: [], followUps: [] };
     } catch {
-      // Claude occasionally wraps JSON in markdown; fallback to raw text insight
       parsed = { insight: text, charts: [], sources: [], followUps: [] };
     }
     if (ck) apiCache.put(ck, parsed, TTL_CHAT_MS);
@@ -444,9 +451,9 @@ Rules:
     const txt  = data.content?.map(b => b.text || '').join('') || '{}';
     try {
       const raw = JSON.parse(txt.replace(/```json|```/g, '').trim());
-      res.json(validateAIResponse(raw) ?? { insight: txt, charts: [], sources: ['Uploaded CSV'], followUps: [] });
+      res.json(validateAIResponse(raw) ?? { insight: txt, charts: [], sources: [{ title: 'Uploaded CSV', url: null }], followUps: [] });
     } catch {
-      res.json({ insight: txt, charts: [], sources: ['Uploaded CSV'], followUps: [] });
+      res.json({ insight: txt, charts: [], sources: [{ title: 'Uploaded CSV', url: null }], followUps: [] });
     }
   } catch (e) {
     console.error('/api/analyze-csv error:', e.message);
