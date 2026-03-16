@@ -249,14 +249,27 @@ When a user asks a question, respond ONLY with a valid JSON object (no markdown,
       "series": [{"key":"fieldname","name":"Display Name","color":"#hex","chartType":"bar|line","stacked":false,"rightAxis":false}]
     }
   ],
-  "sources": [{"title":"World Bank","url":"https://data.worldbank.org"},{"title":"IMF","url":"https://www.imf.org/en/Data"}],
+  "sources": [
+    {"title":"World Bank – Kazakhstan GDP","url":"https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=KZ"},
+    {"title":"IMF – Kazakhstan Article IV","url":"https://www.imf.org/en/Publications/CR?country=KAZ"}
+  ],
   "followUps": ["Follow-up question 1","Follow-up question 2","Follow-up question 3"]
 }
 
 Rules:
 - 1-3 charts per response. Choose types intelligently: trends->line/area, comparisons->bar, composition->pie, multi-metric->composed
 - Use real, accurate data from your knowledge (World Bank, IMF, UN Comtrade, stat.gov.kz, OECD)
-- sources: array of objects with "title" (institution name) and "url" (direct link to the dataset or homepage — never null)
+- sources: array of {title, url} where url is the DEEPEST possible link to the exact dataset or report page — never just a homepage. Use these known deep-link patterns:
+  * World Bank indicator: https://data.worldbank.org/indicator/<INDICATOR_CODE>?locations=KZ
+    Common codes: NY.GDP.MKTP.CD (GDP), NY.GDP.MKTP.KD.ZG (GDP growth), NY.GDP.PCAP.CD (GDP per capita),
+    NE.TRD.GNFS.ZS (trade % GDP), BX.GSR.GNFS.CD (exports), BM.GSR.GNFS.CD (imports)
+  * IMF country reports: https://www.imf.org/en/Publications/CR?country=KAZ
+  * IMF World Economic Outlook data: https://www.imf.org/en/Publications/WEO
+  * IMF Direction of Trade Statistics: https://data.imf.org/?sk=9d6028d4-f14a-464c-a2f2-59b2cd424b85
+  * UN Comtrade: https://comtradeplus.un.org/TradeFlow?Frequency=A&Flows=X&CommodityCodes=TOTAL&Partners=0&Reporters=398&period=2023&AggregateBy=none&BreakdownMode=plus
+  * Kazakhstan Bureau of Statistics: https://stat.gov.kz/en/industries/economy/national-accounts/
+  * Kazakhstan National Bank: https://www.nationalbank.kz/en/page/statistics
+  * OECD Kazakhstan: https://data.oecd.org/kazakhstan.htm
 - For pie charts: each data item needs 'name' and 'value'
 - Dense data: 8-15 points per chart when possible
 - Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4`;
