@@ -83,10 +83,6 @@ describe("Trie — insert & search", () => {
     trie.insert("term", 1);
     trie.insert("term", 99);
     // The node should have weight 99 now — verify via search priority
-    const t2 = new Trie();
-    t2.insert("term", 99);
-    t2.insert("other-term", 50);
-    const r = t2.search("", 2); // empty prefix returns nothing
     // Use explicit prefix that both share
     const t3 = new Trie();
     t3.insert("ax-low",  1);
