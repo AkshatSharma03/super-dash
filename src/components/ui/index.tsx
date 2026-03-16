@@ -18,12 +18,14 @@ import type { BtnProps, KPIProps, CardProps, AnalyticsCardProps, ChartConfig } f
 export function Btn({ onClick, children, active, style = {}, disabled = false }: BtnProps) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      background: active ? "#00AAFF" : "#1e2130",
-      color: active ? "#fff" : "#94a3b8",
-      border: "1px solid " + (active ? "#00AAFF" : "#2d3348"),
-      borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: 600,
+      background: active ? "#00AAFF" : "transparent",
+      color: active ? "#fff" : "#64748b",
+      border: "none",
+      borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: active ? 700 : 500,
       cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
-      transition: "all .15s", ...style,
+      transition: "all .15s",
+      boxShadow: active ? "0 2px 8px #00AAFF44" : "none",
+      ...style,
     }}>{children}</button>
   );
 }
@@ -34,11 +36,12 @@ export function Btn({ onClick, children, active, style = {}, disabled = false }:
 export function KPI({ label, value, sub, color = "#00AAFF", trend }: KPIProps) {
   const up = trend && (trend.startsWith("+") || trend.startsWith("↑"));
   return (
-    <div style={{ background: "#1e2130", borderRadius: 12, padding: "14px 16px", border: "1px solid #2d3348" }}>
-      <p style={{ margin: "0 0 4px", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 1 }}>{label}</p>
-      <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color }}>{value}</p>
-      <p style={{ margin: "0 0 2px", fontSize: 11, color: "#94a3b8" }}>{sub}</p>
-      {trend && <p style={{ margin: 0, fontSize: 11, color: up ? "#10B981" : "#EF4444" }}>{trend}</p>}
+    <div style={{ background: "#1e2130", borderRadius: 12, padding: "14px 16px", border: "1px solid #2d3348", borderTop: `3px solid ${color}`, overflow: "hidden", position: "relative" }}>
+      <div style={{ position: "absolute", top: 0, right: 0, width: 60, height: 60, borderRadius: "0 0 0 60px", background: color + "08", pointerEvents: "none" }} />
+      <p style={{ margin: "0 0 5px", fontSize: 10, color: "#475569", textTransform: "uppercase", letterSpacing: "0.8px", fontWeight: 600 }}>{label}</p>
+      <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color, letterSpacing: "-0.5px" }}>{value}</p>
+      <p style={{ margin: "0 0 2px", fontSize: 11, color: "#64748b" }}>{sub}</p>
+      {trend && <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: up ? "#10B981" : "#EF4444" }}>{trend}</p>}
     </div>
   );
 }
@@ -49,7 +52,7 @@ export function KPI({ label, value, sub, color = "#00AAFF", trend }: KPIProps) {
 export function Card({ title, children }: CardProps) {
   return (
     <div style={{ background: "#1e2130", borderRadius: 12, padding: 18, border: "1px solid #2d3348", marginBottom: 18 }}>
-      <h3 style={{ margin: "0 0 14px", fontSize: 13, color: "#94a3b8", fontWeight: 600 }}>{title}</h3>
+      <h3 style={{ margin: "0 0 14px", fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px" }}>{title}</h3>
       {children}
     </div>
   );
@@ -58,17 +61,17 @@ export function Card({ title, children }: CardProps) {
 /** Extended card with badge pill and subtitle — used in AnalyticsMode panels. */
 export function AnalyticsCard({ title, subtitle, badge, badgeColor = "#00AAFF", children }: AnalyticsCardProps) {
   return (
-    <div style={{ background: "#1e2130", borderRadius: 12, padding: 20, border: "1px solid #2d3348" }}>
+    <div style={{ background: "#1e2130", borderRadius: 12, padding: 20, border: "1px solid #2d3348", borderTop: `2px solid ${badgeColor}44` }}>
       <div style={{ marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
-          <h3 style={{ margin: 0, fontSize: 13, color: "#e2e8f0", fontWeight: 700 }}>{title}</h3>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
           {badge && (
-            <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: badgeColor + "22", color: badgeColor, border: `1px solid ${badgeColor}44` }}>
+            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: badgeColor + "22", color: badgeColor, border: `1px solid ${badgeColor}44`, textTransform: "uppercase", letterSpacing: "0.5px" }}>
               {badge}
             </span>
           )}
         </div>
-        {subtitle && <p style={{ margin: 0, fontSize: 11, color: "#64748b" }}>{subtitle}</p>}
+        <h3 style={{ margin: "0 0 4px", fontSize: 13, color: "#e2e8f0", fontWeight: 700, letterSpacing: "-0.2px" }}>{title}</h3>
+        {subtitle && <p style={{ margin: 0, fontSize: 11, color: "#475569", lineHeight: 1.5 }}>{subtitle}</p>}
       </div>
       {children}
     </div>

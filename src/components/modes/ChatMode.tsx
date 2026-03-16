@@ -15,7 +15,7 @@ import { DynChart } from "../ui";
 function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string) => void }) {
   if (msg.role === "user") return (
     <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
-      <div style={{ background: "#00AAFF", color: "#fff", borderRadius: "12px 12px 3px 12px", padding: "10px 16px", maxWidth: "72%", fontSize: 14 }}>
+      <div style={{ background: "linear-gradient(135deg, #0099EE, #0077CC)", color: "#fff", borderRadius: "14px 14px 3px 14px", padding: "10px 16px", maxWidth: "72%", fontSize: 14, lineHeight: 1.55, boxShadow: "0 2px 8px #00AAFF30" }}>
         {msg.content}
       </div>
     </div>
@@ -23,52 +23,52 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
 
   const { insight, charts = [], sources = [], followUps = [], error }: AIResponse = msg.content ?? {};
   return (
-    <div style={{ marginBottom: 22 }}>
+    <div style={{ marginBottom: 22, animation: "fadeInUp .25s ease-out" }}>
       {insight && (
-        <div style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 12, padding: 16, marginBottom: 14 }}>
+        <div style={{ background: "#1a1d2e", border: "1px solid #2d3348", borderLeft: "3px solid #8B5CF6", borderRadius: "0 12px 12px 0", padding: 16, marginBottom: 14 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-            <span style={{ fontSize: 15 }}>🤖</span>
-            <span style={{ fontSize: 11, color: "#8B5CF6", fontWeight: 700, textTransform: "uppercase" }}>Analysis</span>
+            <div style={{ width: 20, height: 20, borderRadius: "50%", background: "linear-gradient(135deg,#8B5CF6,#6D28D9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, flexShrink: 0 }}>✦</div>
+            <span style={{ fontSize: 10, color: "#8B5CF6", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px" }}>Analysis</span>
           </div>
           <p style={{ margin: 0, fontSize: 14, color: "#cbd5e1", lineHeight: 1.75 }}>{insight}</p>
         </div>
       )}
       {error && (
-        <div style={{ background: "#EF444422", border: "1px solid #EF4444", borderRadius: 10, padding: 14, marginBottom: 14, fontSize: 13, color: "#EF4444" }}>
-          {error}
+        <div style={{ background: "#EF444418", border: "1px solid #EF444455", borderRadius: 10, padding: 14, marginBottom: 14, fontSize: 13, color: "#EF4444", display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <span style={{ flexShrink: 0 }}>⚠</span> {error}
         </div>
       )}
       {charts.map(chart => (
         <div key={chart.id} style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 12, padding: 18, marginBottom: 12 }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 14, color: "#e2e8f0", fontWeight: 600 }}>{chart.title}</h3>
-          {chart.description && <p style={{ margin: "0 0 12px", fontSize: 12, color: "#64748b" }}>{chart.description}</p>}
+          <h3 style={{ margin: "0 0 4px", fontSize: 13, color: "#e2e8f0", fontWeight: 700, letterSpacing: "-0.2px" }}>{chart.title}</h3>
+          {chart.description && <p style={{ margin: "0 0 12px", fontSize: 12, color: "#475569" }}>{chart.description}</p>}
           <DynChart chart={chart} />
         </div>
       ))}
       {sources.length > 0 && (
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: "#64748b" }}>Sources:</span>
+          <span style={{ fontSize: 10, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Sources:</span>
           {sources.map((s, i) =>
             s.url ? (
               <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: 11, color: "#00AAFF", background: "#1e2130", border: "1px solid #2d334880", borderRadius: 4, padding: "2px 8px", textDecoration: "none", transition: "border-color .15s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#00AAFF"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#2d334880"; }}>
+                style={{ fontSize: 11, color: "#00AAFF", background: "#161929", border: "1px solid #2d334870", borderRadius: 5, padding: "2px 8px", textDecoration: "none", transition: "border-color .15s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#00AAFF66"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#2d334870"; }}>
                 {s.title} ↗
               </a>
             ) : (
-              <span key={i} style={{ fontSize: 11, color: "#64748b", background: "#1e2130", border: "1px solid #2d3348", borderRadius: 4, padding: "2px 8px" }}>{s.title}</span>
+              <span key={i} style={{ fontSize: 11, color: "#475569", background: "#161929", border: "1px solid #2d3348", borderRadius: 5, padding: "2px 8px" }}>{s.title}</span>
             )
           )}
         </div>
       )}
       {followUps.length > 0 && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
           {followUps.map((q, i) => (
             <button key={i} onClick={() => onFollowUp(q)}
-              style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 20, padding: "5px 12px", fontSize: 12, color: "#94a3b8", cursor: "pointer", transition: "all .15s" }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#8B5CF6"; (e.currentTarget as HTMLButtonElement).style.color = "#8B5CF6"; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}>
+              style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 20, padding: "5px 12px", fontSize: 12, color: "#64748b", cursor: "pointer", transition: "all .15s" }}
+              onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF666"; el.style.color = "#8B5CF6"; el.style.background = "#8B5CF610"; }}
+              onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.color = "#64748b"; el.style.background = "#161929"; }}>
               {q}
             </button>
           ))}
@@ -177,10 +177,10 @@ export default function ChatMode({ token }: ChatModeProps) {
       <div style={{ width: 210, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid #1e2130", paddingRight: 0, marginRight: 16 }}>
 
         <button onClick={newChat}
-          style={{ margin: "0 0 10px", background: "#1e2130", border: "1px solid #2d3348", borderRadius: 8, padding: "9px 14px", fontSize: 12, fontWeight: 600, color: "#e2e8f0", cursor: "pointer", textAlign: "left", transition: "all .15s" }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#8B5CF6"; }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
-          ✦ New chat
+          style={{ margin: "0 0 10px", background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "9px 14px", fontSize: 12, fontWeight: 600, color: "#cbd5e1", cursor: "pointer", textAlign: "left", transition: "all .15s", display: "flex", alignItems: "center", gap: 7 }}
+          onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF666"; el.style.background = "#1a1d2e"; }}
+          onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.background = "#161929"; }}>
+          <span style={{ fontSize: 13 }}>✦</span> New chat
         </button>
 
         <div style={{ flex: 1, overflowY: "auto" }}>
@@ -220,21 +220,21 @@ export default function ChatMode({ token }: ChatModeProps) {
         <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
 
           {isEmpty ? (
-            <div style={{ maxWidth: 640, margin: "0 auto", paddingTop: 16 }}>
+            <div style={{ maxWidth: 640, margin: "0 auto", paddingTop: 20, animation: "fadeInUp .3s ease-out" }}>
               <div style={{ textAlign: "center", marginBottom: 28 }}>
-                <div style={{ fontSize: 38, marginBottom: 10 }}>💬</div>
-                <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800, color: "#fff" }}>Ask anything about any economy</h2>
-                <p style={{ margin: 0, fontSize: 13, color: "#64748b", lineHeight: 1.6 }}>
+                <div style={{ width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg,#8B5CF6,#00AAFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 14px", boxShadow: "0 0 24px #8B5CF644" }}>💬</div>
+                <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>Ask anything about any economy</h2>
+                <p style={{ margin: 0, fontSize: 13, color: "#475569", lineHeight: 1.65 }}>
                   Generate interactive charts and expert analysis from World Bank, IMF, UN Comtrade, and OECD data.<br />
                   Ask about any country, sector, or time period.
                 </p>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                 {CHAT_SUGGESTIONS.map((s, i) => (
                   <button key={i} onClick={() => send(s)}
-                    style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 10, padding: "12px 14px", fontSize: 13, color: "#94a3b8", cursor: "pointer", textAlign: "left", lineHeight: 1.4, transition: "all .15s" }}
-                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#8B5CF6"; (e.currentTarget as HTMLButtonElement).style.color = "#e2e8f0"; }}
-                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}>
+                    style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: "12px 14px", fontSize: 12, color: "#64748b", cursor: "pointer", textAlign: "left", lineHeight: 1.5, transition: "all .15s" }}
+                    onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF666"; el.style.color = "#cbd5e1"; el.style.background = "#1a1d2e"; }}
+                    onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.color = "#64748b"; el.style.background = "#161929"; }}>
                     {s}
                   </button>
                 ))}
@@ -246,10 +246,14 @@ export default function ChatMode({ token }: ChatModeProps) {
                 <ChatMessage key={i} msg={m} onFollowUp={q => { setInput(q); inputRef.current?.focus(); }} />
               ))}
               {loading && (
-                <div style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 12, padding: "14px 18px", display: "inline-flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
-                  <span style={{ fontSize: 14 }}>🤖</span>
-                  <span style={{ fontSize: 13, color: "#64748b" }}>Generating charts and analysis…</span>
-                  <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</span>
+                <div style={{ background: "#1a1d2e", border: "1px solid #8B5CF633", borderLeft: "3px solid #8B5CF6", borderRadius: "0 12px 12px 0", padding: "12px 16px", display: "inline-flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
+                  <div style={{ width: 20, height: 20, borderRadius: "50%", background: "linear-gradient(135deg,#8B5CF6,#6D28D9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, flexShrink: 0 }}>✦</div>
+                  <span style={{ fontSize: 13, color: "#64748b" }}>Generating charts and analysis</span>
+                  <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                    {[0, 1, 2].map(i => (
+                      <span key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#8B5CF6", display: "block", animation: `typingDot 1.2s ease-in-out ${i * 0.22}s infinite` }} />
+                    ))}
+                  </div>
                 </div>
               )}
               <div ref={bottomRef} />
@@ -259,10 +263,12 @@ export default function ChatMode({ token }: ChatModeProps) {
 
         {/* ── Input bar ── */}
         <div style={{ borderTop: "1px solid #1e2130", paddingTop: 12, flexShrink: 0 }}>
-          <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", gap: 10 }}>
+          <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", gap: 8 }}>
             {messages.length > 0 && (
               <button onClick={newChat}
-                style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#64748b", cursor: "pointer", whiteSpace: "nowrap" }}>
+                style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#475569", cursor: "pointer", whiteSpace: "nowrap", transition: "all .15s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#3d4460"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#475569"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
                 Clear
               </button>
             )}
@@ -270,16 +276,16 @@ export default function ChatMode({ token }: ChatModeProps) {
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && send(input)}
               placeholder="Ask about GDP, trade flows, inflation, interest rates, any country…"
               disabled={loading}
-              style={{ flex: 1, background: "#1e2130", border: "1px solid #2d3348", borderRadius: 10, padding: "11px 16px", color: "#e2e8f0", fontSize: 13, outline: "none", transition: "border-color .15s" }}
-              onFocus={e => { (e.target as HTMLInputElement).style.borderColor = "#8B5CF6"; }}
-              onBlur={e  => { (e.target as HTMLInputElement).style.borderColor = "#2d3348"; }} />
+              style={{ flex: 1, background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: "11px 16px", color: "#e2e8f0", fontSize: 13, outline: "none", transition: "border-color .15s, box-shadow .15s" }}
+              onFocus={e => { (e.target as HTMLInputElement).style.borderColor = "#8B5CF6"; (e.target as HTMLInputElement).style.boxShadow = "0 0 0 3px #8B5CF618"; }}
+              onBlur={e  => { (e.target as HTMLInputElement).style.borderColor = "#2d3348"; (e.target as HTMLInputElement).style.boxShadow = "none"; }} />
             <button onClick={() => send(input)} disabled={loading || !input.trim()}
-              style={{ background: loading || !input.trim() ? "#1e2130" : "#8B5CF6", border: "none", borderRadius: 10, padding: "11px 20px", color: loading || !input.trim() ? "#334155" : "#fff", fontSize: 13, fontWeight: 700, cursor: loading || !input.trim() ? "not-allowed" : "pointer", transition: "all .15s", whiteSpace: "nowrap" }}>
-              {loading ? "⏳" : "Generate →"}
+              style={{ background: loading || !input.trim() ? "#161929" : "linear-gradient(135deg,#8B5CF6,#6D28D9)", border: "none", borderRadius: 10, padding: "11px 20px", color: loading || !input.trim() ? "#334155" : "#fff", fontSize: 13, fontWeight: 700, cursor: loading || !input.trim() ? "not-allowed" : "pointer", transition: "all .15s", whiteSpace: "nowrap", boxShadow: !loading && input.trim() ? "0 2px 10px #8B5CF644" : "none" }}>
+              {loading ? "…" : "Send →"}
             </button>
           </div>
-          <p style={{ textAlign: "center", fontSize: 11, color: "#334155", marginTop: 8 }}>
-            Powered by Claude · Data: World Bank · IMF · UN Comtrade · OECD · Press Enter to send
+          <p style={{ textAlign: "center", fontSize: 10, color: "#2d3348", marginTop: 8 }}>
+            Powered by Claude · World Bank · IMF · UN Comtrade · OECD · Enter to send
           </p>
         </div>
       </div>

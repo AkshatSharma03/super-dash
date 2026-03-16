@@ -15,8 +15,12 @@ interface Props {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div style={{ marginBottom: 24 }}>
-      <h3 style={{ margin: "0 0 14px", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: 1 }}>{title}</h3>
+    <div style={{ marginBottom: 26 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+        <div style={{ flex: 1, height: 1, background: "#1e2130" }} />
+        <h3 style={{ margin: 0, fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "1px", whiteSpace: "nowrap" }}>{title}</h3>
+        <div style={{ flex: 1, height: 1, background: "#1e2130" }} />
+      </div>
       {children}
     </div>
   );
@@ -91,17 +95,20 @@ export default function SettingsPanel({ user, token, onClose, onLogout }: Props)
   return (
     <>
       {/* Backdrop */}
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "#00000066", zIndex: 40 }} />
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "#00000070", zIndex: 40, animation: "fadeInUp .15s ease-out", backdropFilter: "blur(2px)" }} />
 
       {/* Panel */}
-      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 360, background: "#0a0d14", borderLeft: "1px solid #1e2130", zIndex: 50, display: "flex", flexDirection: "column", overflowY: "auto" }}>
+      <div style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 360, background: "#0a0d14", borderLeft: "1px solid #1e2130", zIndex: 50, display: "flex", flexDirection: "column", overflowY: "auto", animation: "slideInRight .22s cubic-bezier(0.4, 0, 0.2, 1)" }}>
 
         {/* Header */}
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #1e2130", display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: "#fff", flex: 1 }}>Account Settings</span>
+        <div style={{ padding: "14px 20px", borderBottom: "1px solid #1e2130", display: "flex", alignItems: "center", gap: 10, flexShrink: 0, background: "#080b10" }}>
+          <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>⚙</div>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "#fff", flex: 1, letterSpacing: "-0.2px" }}>Account Settings</span>
           <button onClick={onClose}
-            style={{ background: "transparent", border: "none", color: "#64748b", fontSize: 18, cursor: "pointer", lineHeight: 1, padding: "0 4px" }}>
-            ×
+            style={{ background: "#161929", border: "1px solid #2d3348", color: "#64748b", fontSize: 14, cursor: "pointer", lineHeight: 1, padding: "5px 8px", borderRadius: 6, transition: "all .15s" }}
+            onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = "#e2e8f0"; el.style.borderColor = "#3d4460"; }}
+            onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = "#64748b"; el.style.borderColor = "#2d3348"; }}>
+            ✕
           </button>
         </div>
 
@@ -109,18 +116,18 @@ export default function SettingsPanel({ user, token, onClose, onLogout }: Props)
 
           {/* ── Profile + Usage ── */}
           <Section title="Profile">
-            <div style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 10, padding: "14px 16px", marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+            <div style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: "16px", marginBottom: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: memberSince ? 10 : 0 }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, color: "#fff", flexShrink: 0, boxShadow: "0 0 14px #00AAFF33" }}>
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0" }}>{user.name}</div>
-                  <div style={{ fontSize: 12, color: "#64748b" }}>{user.email}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0", letterSpacing: "-0.2px" }}>{user.name}</div>
+                  <div style={{ fontSize: 12, color: "#475569" }}>{user.email}</div>
                 </div>
               </div>
               {memberSince && (
-                <div style={{ fontSize: 11, color: "#64748b" }}>Member since {memberSince}</div>
+                <div style={{ fontSize: 11, color: "#3d4460", paddingTop: 10, borderTop: "1px solid #1e2130" }}>Member since {memberSince}</div>
               )}
             </div>
 

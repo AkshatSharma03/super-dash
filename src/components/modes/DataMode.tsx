@@ -72,13 +72,13 @@ export default function DataMode() {
           onDragLeave={() => setDragOver(false)}
           onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}
           onClick={() => fileRef.current?.click()}
-          style={{ border: `2px dashed ${dragOver ? "#F59E0B" : "#2d3348"}`, borderRadius: 16, padding: "60px 24px", textAlign: "center", cursor: "pointer", transition: "all .2s", marginBottom: 16, background: dragOver ? "#F59E0B0a" : "#1e2130" }}>
+          style={{ border: `2px dashed ${dragOver ? "#F59E0B" : "#2d3348"}`, borderRadius: 16, padding: "56px 24px", textAlign: "center", cursor: "pointer", transition: "all .2s", marginBottom: 16, background: dragOver ? "#F59E0B0a" : "#161929", position: "relative", overflow: "hidden" }}>
           <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }}
             onChange={e => handleFile(e.target.files?.[0])} />
-          <div style={{ fontSize: 42, marginBottom: 12 }}>📂</div>
-          <p style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "#e2e8f0" }}>Drop your CSV file here</p>
-          <p style={{ margin: "0 0 20px", fontSize: 13, color: "#64748b" }}>or click to browse · CSV files only</p>
-          <span style={{ background: "#F59E0B22", color: "#F59E0B", border: "1px solid #F59E0B55", borderRadius: 7, padding: "8px 22px", fontSize: 13, fontWeight: 600 }}>
+          <div style={{ width: 56, height: 56, borderRadius: 14, background: dragOver ? "#F59E0B22" : "#1e2130", border: `1px solid ${dragOver ? "#F59E0B55" : "#2d3348"}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, margin: "0 auto 14px", transition: "all .2s" }}>📂</div>
+          <p style={{ margin: "0 0 6px", fontSize: 16, fontWeight: 700, color: dragOver ? "#F59E0B" : "#e2e8f0", transition: "color .2s" }}>Drop your CSV file here</p>
+          <p style={{ margin: "0 0 22px", fontSize: 13, color: "#475569" }}>or click to browse · CSV files only</p>
+          <span style={{ background: "#F59E0B18", color: "#F59E0B", border: "1px solid #F59E0B44", borderRadius: 8, padding: "8px 22px", fontSize: 13, fontWeight: 600, display: "inline-block" }}>
             Select CSV File
           </span>
         </div>
@@ -98,12 +98,12 @@ export default function DataMode() {
           </div>
 
           {/* Scrollable preview table — shows first 6 rows */}
-          <div style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 10, overflow: "auto", marginBottom: 16, maxHeight: 230 }}>
+          <div style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 10, overflow: "auto", marginBottom: 16, maxHeight: 240 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
               <thead>
                 <tr>
                   {csv.headers.map((h, i) => (
-                    <th key={i} style={{ padding: "10px 14px", textAlign: "left", color: "#00AAFF", fontWeight: 700, borderBottom: "1px solid #2d3348", background: "#161929", whiteSpace: "nowrap", position: "sticky", top: 0 }}>
+                    <th key={i} style={{ padding: "9px 14px", textAlign: "left", color: "#F59E0B", fontWeight: 700, borderBottom: "1px solid #2d3348", background: "#0f1117", whiteSpace: "nowrap", position: "sticky", top: 0, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.5px" }}>
                       {h}
                     </th>
                   ))}
@@ -111,7 +111,7 @@ export default function DataMode() {
               </thead>
               <tbody>
                 {csv.rows.slice(0, 6).map((row, ri) => (
-                  <tr key={ri} style={{ borderBottom: "1px solid #2d334833" }}>
+                  <tr key={ri} style={{ borderBottom: "1px solid #2d334830", background: ri % 2 === 0 ? "transparent" : "#ffffff04" }}>
                     {csv.headers.map((h, ci) => (
                       <td key={ci} style={{ padding: "8px 14px", color: "#94a3b8", whiteSpace: "nowrap" }}>
                         {String(row[h]).slice(0, 40)}
@@ -122,8 +122,8 @@ export default function DataMode() {
               </tbody>
             </table>
             {csv.rows.length > 6 && (
-              <p style={{ margin: 0, padding: "8px 14px", fontSize: 11, color: "#64748b" }}>
-                … and {csv.rows.length - 6} more rows
+              <p style={{ margin: 0, padding: "7px 14px", fontSize: 11, color: "#475569", borderTop: "1px solid #2d334830" }}>
+                + {csv.rows.length - 6} more rows not shown
               </p>
             )}
           </div>
@@ -141,8 +141,13 @@ export default function DataMode() {
           </div>
 
           <button onClick={generate} disabled={loading}
-            style={{ background: loading ? "#1e2130" : "#F59E0B", border: "none", borderRadius: 10, padding: "12px 28px", color: loading ? "#334155" : "#0f1117", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", transition: "all .15s" }}>
-            {loading ? "⏳ Analyzing data…" : "✨ Generate Charts"}
+            style={{ background: loading ? "#1e2130" : "#F59E0B", border: "none", borderRadius: 10, padding: "12px 28px", color: loading ? "#334155" : "#0f1117", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", transition: "all .15s", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: !loading ? "0 2px 12px #F59E0B44" : "none" }}>
+            {loading ? (
+              <>
+                <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid #334155", borderTop: "2px solid #64748b", display: "inline-block", animation: "spin 0.7s linear infinite" }} />
+                Analyzing data…
+              </>
+            ) : "✨ Generate Charts"}
           </button>
         </>
       )}

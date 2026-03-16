@@ -72,65 +72,68 @@ export default function App() {
     <div style={{ fontFamily: "Inter,sans-serif", background: "#0f1117", height: "100vh", display: "flex", flexDirection: "column", color: "#e2e8f0" }}>
 
       {/* ── Header ── */}
-      <div style={{ padding: "10px 20px", borderBottom: "1px solid #1e2130", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, flexWrap: "wrap" }}>
+      <div style={{ padding: "8px 20px", borderBottom: "1px solid #1e2130", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, flexWrap: "wrap", background: "#0a0d14" }}>
 
         {/* Brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>📊</div>
-          <span style={{ fontSize: 15, fontWeight: 800, color: "#fff" }}>EconChart</span>
+          <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, boxShadow: "0 0 12px #00AAFF44" }}>📊</div>
+          <span style={{ fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>EconChart</span>
         </div>
 
         {/* Mode tabs */}
-        <div style={{ marginLeft: 16, display: "flex", background: "#1e2130", borderRadius: 9, padding: 3, border: "1px solid #2d3348", gap: 2, flexWrap: "nowrap" }}>
+        <div style={{ marginLeft: 14, display: "flex", background: "#161929", borderRadius: 10, padding: 3, border: "1px solid #2d3348", gap: 1, flexWrap: "nowrap" }}>
           {MODES.map(([m, lbl]) => (
             <button key={m} onClick={() => setMode(m)} style={{
               background: mode === m ? MODE_META[m].color : "transparent",
-              color: mode === m ? "#fff" : "#94a3b8",
-              border: "none", borderRadius: 7, padding: "6px 13px",
-              fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all .2s", whiteSpace: "nowrap",
+              color: mode === m ? "#fff" : "#64748b",
+              border: "none", borderRadius: 7, padding: "5px 12px",
+              fontSize: 11.5, fontWeight: mode === m ? 700 : 500,
+              cursor: "pointer", transition: "all .18s", whiteSpace: "nowrap",
+              boxShadow: mode === m ? `0 2px 8px ${MODE_META[m].color}55` : "none",
             }}>{lbl}</button>
           ))}
         </div>
 
         {/* Year filter — dashboard only */}
         {mode === "dashboard" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#1e2130", border: "1px solid #2d3348", borderRadius: 8, padding: "6px 14px" }}>
-            <span style={{ fontSize: 11, color: "#64748b" }}>Years:</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "5px 14px" }}>
+            <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Years</span>
             <input type="range" min="2010" max="2024" value={yearRange[0]} onChange={e => setYearRange([+e.target.value, yearRange[1]])} style={{ width: 65, accentColor: "#00AAFF", cursor: "pointer" }} />
-            <span style={{ fontSize: 11, color: "#00AAFF", minWidth: 28 }}>{yearRange[0]}</span>
-            <span style={{ fontSize: 11, color: "#64748b" }}>–</span>
+            <span style={{ fontSize: 11, color: "#00AAFF", minWidth: 30, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{yearRange[0]}</span>
+            <span style={{ fontSize: 11, color: "#2d3348" }}>—</span>
             <input type="range" min="2010" max="2024" value={yearRange[1]} onChange={e => setYearRange([yearRange[0], +e.target.value])} style={{ width: 65, accentColor: "#00AAFF", cursor: "pointer" }} />
-            <span style={{ fontSize: 11, color: "#00AAFF", minWidth: 28 }}>{yearRange[1]}</span>
+            <span style={{ fontSize: 11, color: "#00AAFF", minWidth: 30, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{yearRange[1]}</span>
           </div>
         )}
 
         {/* User chip — click to open settings */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <button onClick={() => setSettingsOpen(true)}
-            style={{ display: "flex", alignItems: "center", gap: 8, background: "#1e2130", border: "1px solid #2d3348", borderRadius: 8, padding: "6px 12px", cursor: "pointer", transition: "all .15s" }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#8B5CF6"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
-            <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+            style={{ display: "flex", alignItems: "center", gap: 8, background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "5px 10px 5px 6px", cursor: "pointer", transition: "all .15s" }}
+            onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF6"; el.style.background = "#1e2130"; }}
+            onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.background = "#161929"; }}>
+            <div style={{ width: 24, height: 24, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
               {user.name.charAt(0).toUpperCase()}
             </div>
-            <span style={{ fontSize: 12, color: "#e2e8f0", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</span>
-            <span style={{ fontSize: 10, color: "#64748b" }}>⚙</span>
+            <span style={{ fontSize: 12, color: "#cbd5e1", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{user.name}</span>
+            <span style={{ fontSize: 9, color: "#475569" }}>▼</span>
           </button>
           <button onClick={logout}
-            style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 7, padding: "6px 12px", fontSize: 11, color: "#64748b", cursor: "pointer", transition: "all .15s" }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#EF4444"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
+            style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 7, padding: "5px 12px", fontSize: 11, color: "#64748b", cursor: "pointer", transition: "all .15s", fontWeight: 500 }}
+            onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = "#EF4444"; el.style.borderColor = "#EF444466"; }}
+            onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = "#64748b"; el.style.borderColor = "#2d3348"; }}>
             Sign out
           </button>
         </div>
       </div>
 
       {/* ── Mode badge + description ── */}
-      <div style={{ padding: "6px 20px", borderBottom: "1px solid #1e2130", flexShrink: 0, display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 11, borderRadius: 5, padding: "2px 10px", fontWeight: 600, background: color + "22", color, border: `1px solid ${color}44` }}>
+      <div style={{ padding: "5px 20px", borderBottom: "1px solid #1e2130", flexShrink: 0, display: "flex", alignItems: "center", gap: 10, background: "#0d1018" }}>
+        <div style={{ width: 3, height: 18, borderRadius: 2, background: color, flexShrink: 0 }} />
+        <span style={{ fontSize: 11, borderRadius: 4, padding: "1px 8px", fontWeight: 700, background: color + "18", color, letterSpacing: "0.3px" }}>
           {modeIcon} {label}
         </span>
-        <span style={{ fontSize: 11, color: "#64748b" }}>{desc}</span>
+        <span style={{ fontSize: 11, color: "#475569" }}>{desc}</span>
       </div>
 
       {/* ── Main content ── */}
@@ -150,13 +153,6 @@ export default function App() {
           onLogout={logout}
         />
       )}
-
-      <style>{`
-        @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
-        ::-webkit-scrollbar { width:6px }
-        ::-webkit-scrollbar-track { background:#0f1117 }
-        ::-webkit-scrollbar-thumb { background:#2d3348; border-radius:3px }
-      `}</style>
     </div>
   );
 }
