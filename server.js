@@ -783,14 +783,16 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
     if (cached) { if (IS_DEV) console.log('[cache hit] /api/chat'); return res.json(cached); }
   }
 
-  // Inject recent news into the last user message
+  // Fetch news before calling AI, inject as context and retain as explicit sources
+  let fetchedNewsSources = [];
   const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
   if (lastUserMsg) {
     try {
       const recentNews = await fetchVerifiedNews(lastUserMsg.content.slice(0, 200));
       if (recentNews.length > 0) {
-        const newsContext = `\n\nRecent Verified News:\n${JSON.stringify(recentNews)}`;
+        const newsContext = `\n\nRecent Verified News (use these for context and cite them in sources):\n${JSON.stringify(recentNews)}`;
         lastUserMsg.content = lastUserMsg.content + newsContext;
+        fetchedNewsSources = recentNews.map(a => ({ title: `${a.source}: ${a.title}`, url: a.url }));
       }
     } catch (e) {
       console.error('News fetch error in /api/chat:', e.message);
@@ -806,6 +808,14 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       parsed = validateAIResponse(raw) ?? { insight: text, charts: [], sources: [], followUps: [] };
     } catch {
       parsed = { insight: text, charts: [], sources: [], followUps: [] };
+    }
+    // Merge fetched news URLs into sources (deduplicate by URL)
+    const existingUrls = new Set((parsed.sources || []).map(s => s.url).filter(Boolean));
+    for (const ns of fetchedNewsSources) {
+      if (ns.url && !existingUrls.has(ns.url)) {
+        parsed.sources = [...(parsed.sources || []), ns];
+        existingUrls.add(ns.url);
+      }
     }
     if (ck) apiCache.put(ck, parsed, TTL_CHAT_MS);
     res.json(parsed);
@@ -825,8 +835,22 @@ app.post('/api/search', apiLimiter, async (req, res) => {
 
   let text = '', sources = [], webSearchUsed = false;
 
+  // Pre-fetch news to seed context before web search
+  let searchNewsSources = [];
   try {
-    const msgs = [{ role: 'user', content: query }];
+    const recentNews = await fetchVerifiedNews(query.slice(0, 200));
+    if (recentNews.length > 0) {
+      searchNewsSources = recentNews.map(a => ({ title: `${a.source}: ${a.title}`, url: a.url }));
+    }
+  } catch (e) {
+    console.error('News pre-fetch error in /api/search:', e.message);
+  }
+
+  try {
+    const newsPrefix = searchNewsSources.length > 0
+      ? `Recent news context (use these to inform your answer and cite them):\n${JSON.stringify(searchNewsSources.map(s => s.title))}\n\nQuestion: `
+      : '';
+    const msgs = [{ role: 'user', content: newsPrefix + query }];
     for (let turn = 0; turn < MAX_SEARCH_TURNS; turn++) {
       const data = await callAnthropic(
         { model: MODEL, max_tokens: 4000, system: SEARCH_SYSTEM, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }], messages: msgs },
@@ -862,6 +886,15 @@ app.post('/api/search', apiLimiter, async (req, res) => {
     } catch (e2) {
       console.error('/api/search fallback error:', e2.message);
       return res.status(502).json({ error: e2.message });
+    }
+  }
+
+  // Merge news sources that weren't already found by web search
+  const existingSearchUrls = new Set(sources.map(s => s.url).filter(Boolean));
+  for (const ns of searchNewsSources) {
+    if (ns.url && !existingSearchUrls.has(ns.url)) {
+      sources.push(ns);
+      existingSearchUrls.add(ns.url);
     }
   }
 
@@ -1140,7 +1173,7 @@ app.post('/api/analytics', requireAuth, apiLimiter, async (req, res) => {
   }
 
   const systemPrompt = `You are an expert econometrician and data scientist specializing in country-level economic analysis.
-The user has selected a country and run several algorithms on its data. They may provide that data as context.
+The user has selected a country and run several algorithms on its data. They may provide that data as context along with recent verified news articles.
 Respond ONLY with a valid JSON object matching this exact shape (no markdown wrapper):
 {
   "insight": "3-4 sentence expert analysis directly answering the user's question with specific figures",
@@ -1155,31 +1188,67 @@ Respond ONLY with a valid JSON object matching this exact shape (no markdown wra
       "series": [{"key":"fieldname","name":"Display Name","color":"#hex","chartType":"bar|line","stacked":false}]
     }
   ],
-  "sources": [{"title":"Source name","url":"https://... or null"}],
+  "sources": [{"title":"Source name","url":"https://..."}],
   "followUps": ["Follow-up 1","Follow-up 2","Follow-up 3"]
 }
 Rules:
 - 1-2 targeted charts that directly address the user's question using the provided data
 - Use real values from the country data context wherever possible
-- Colors: #00AAFF #F59E0B #10B981 #EF4444 #8B5CF6 #F97316`;
+- Colors: #00AAFF #F59E0B #10B981 #EF4444 #8B5CF6 #F97316
+- sources: always include deep links — use these patterns:
+  * World Bank indicator: https://data.worldbank.org/indicator/<INDICATOR_CODE>?locations=<ISO2>
+    Codes: NY.GDP.MKTP.CD (GDP), NY.GDP.MKTP.KD.ZG (GDP growth), NY.GDP.PCAP.CD (GDP per capita), NE.EXP.GNFS.CD (exports), NE.IMP.GNFS.CD (imports)
+  * IMF country report: https://www.imf.org/en/Publications/CR?country=<ISO3>
+  * IMF World Economic Outlook: https://www.imf.org/en/Publications/WEO
+  * UN Comtrade: https://comtradeplus.un.org/TradeFlow?Frequency=A&Flows=X&CommodityCodes=TOTAL&Partners=0&Reporters=<ISO3_NUMERIC>&period=<YEAR>&AggregateBy=none&BreakdownMode=plus
+  * OECD: https://data.oecd.org/<ISO3>.htm
+- Cite news articles provided in context by including their URLs in sources`;
 
-  // === NEW NEWS INJECTION LOGIC ===
-  let newsContext = '';
+  // Fetch news BEFORE calling AI so it can be used as context
+  let analyticsNewsSources = [];
   try {
     const searchTerms = `${query} economy`;
     const recentNews = await fetchVerifiedNews(searchTerms);
-
     if (recentNews.length > 0) {
-      newsContext = `\n\nRecent Verified News:\n${JSON.stringify(recentNews)}`;
+      const newsContext = `\n\nRecent Verified News (cite relevant articles in your sources array using their URLs):\n${JSON.stringify(recentNews)}`;
+      const userMessage = context
+        ? `Country economic data:\n${context}${newsContext}\n\nUser question: ${query}`
+        : `${query}${newsContext}`;
+      analyticsNewsSources = recentNews.map(a => ({ title: `${a.source}: ${a.title}`, url: a.url }));
+
+      const data = await callAnthropic({
+        model: MODEL,
+        max_tokens: 3000,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userMessage }],
+      });
+      const text = data.content?.map((b) => b.text || '').join('') || '{}';
+      let parsed;
+      try {
+        const raw = JSON.parse(text.replace(/```json|```/g, '').trim());
+        parsed = validateAIResponse(raw) ?? { insight: text, charts: [], sources: [], followUps: [] };
+      } catch {
+        parsed = { insight: text, charts: [], sources: [], followUps: [] };
+      }
+      // Merge fetched news URLs that AI didn't already include
+      const existingUrls = new Set((parsed.sources || []).map(s => s.url).filter(Boolean));
+      for (const ns of analyticsNewsSources) {
+        if (ns.url && !existingUrls.has(ns.url)) {
+          parsed.sources = [...(parsed.sources || []), ns];
+          existingUrls.add(ns.url);
+        }
+      }
+      apiCache.put(ck, parsed, TTL_CHAT_MS);
+      return res.json(parsed);
     }
   } catch (e) {
-    console.error('News fetch error:', e.message);
+    console.error('News fetch or AI error in /api/analytics:', e.message);
   }
 
+  // Fallback: call AI without news context
   const userMessage = context
-    ? `Country economic data:\n${context}${newsContext}\n\nUser question: ${query}`
-    : `${query}${newsContext}`;
-  // ================================
+    ? `Country economic data:\n${context}\n\nUser question: ${query}`
+    : query;
 
   try {
     const data = await callAnthropic({

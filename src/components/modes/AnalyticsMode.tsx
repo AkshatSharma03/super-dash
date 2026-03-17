@@ -455,13 +455,20 @@ function AIResultPanel({ result }: { result: AIResponse }) {
         </div>
       ))}
       {result.sources && result.sources.length > 0 && (
-        <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {result.sources.map((s, i) => (
-            <a key={i} href={s.url ?? undefined} target="_blank" rel="noreferrer"
-              style={{ fontSize: 10, color: "#475569", background: "#1e2130", borderRadius: 4, padding: "2px 8px", border: "1px solid #2d3348", textDecoration: "none" }}>
-              {s.title}
-            </a>
-          ))}
+        <div style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+          <span style={{ fontSize: 10, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Sources:</span>
+          {result.sources.map((s, i) =>
+            s.url ? (
+              <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: 11, color: "#00AAFF", background: "#161929", border: "1px solid #2d334870", borderRadius: 5, padding: "2px 8px", textDecoration: "none", transition: "border-color .15s" }}
+                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#00AAFF66"; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#2d334870"; }}>
+                {s.title} ↗
+              </a>
+            ) : (
+              <span key={i} style={{ fontSize: 11, color: "#475569", background: "#161929", border: "1px solid #2d3348", borderRadius: 5, padding: "2px 8px" }}>{s.title}</span>
+            )
+          )}
         </div>
       )}
       {result.followUps && result.followUps.length > 0 && (
