@@ -46,3 +46,27 @@ input[type="range"] { cursor: pointer; }
   50%  { border-top-color: #00AAFF; }
   100% { transform: rotate(360deg); border-top-color: #10B981; }
 }
+
+/* ── Mobile responsive (≤ 640px) ── */
+@media (max-width: 640px) {
+  /* Tab strip: scroll horizontally instead of overflowing */
+  .ec-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    flex-shrink: 1 !important;
+  }
+  .ec-tabs::-webkit-scrollbar { display: none; }
+
+  /* Header: allow wrapping so tabs can sit on a second line if needed */
+  .ec-header { flex-wrap: wrap; row-gap: 4px; }
+
+  /* Mode description: hide the long description text, keep the badge */
+  .ec-mode-desc { display: none; }
+
+  /* User chip: hide the username label, keep avatar + chevron */
+  .ec-user-name { display: none !important; }
+
+  /* Touch-friendly tap targets */
+  .ec-tabs button { min-width: 44px; padding: 6px 10px !important; }
+}

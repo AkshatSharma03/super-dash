@@ -127,7 +127,7 @@ export default function App() {
     <div style={{ fontFamily: "Inter,sans-serif", background: "#0f1117", height: "100vh", display: "flex", flexDirection: "column", color: "#e2e8f0" }}>
 
       {/* ── Header ── */}
-      <div style={{ padding: "8px 20px", borderBottom: "1px solid #1e2130", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, flexWrap: "wrap", background: "#0a0d14" }}>
+      <div className="ec-header" style={{ padding: "8px 20px", borderBottom: "1px solid #1e2130", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, flexWrap: "wrap", background: "#0a0d14" }}>
 
         {/* Brand */}
         <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
@@ -136,7 +136,7 @@ export default function App() {
         </div>
 
         {/* Mode tabs */}
-        <div style={{ marginLeft: 14, display: "flex", background: "#161929", borderRadius: 10, padding: 3, border: "1px solid #2d3348", gap: 1, flexWrap: "nowrap" }}>
+        <div className="ec-tabs" style={{ marginLeft: 14, display: "flex", background: "#161929", borderRadius: 10, padding: 3, border: "1px solid #2d3348", gap: 1, flexWrap: "nowrap" }}>
           {MODES.map(([m, lbl]) => {
             const isBgFetch = m === "dashboard" && fetchingInBg;
             return (
@@ -167,7 +167,7 @@ export default function App() {
             <div style={{ width: 24, height: 24, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
               {user.name.charAt(0).toUpperCase()}
             </div>
-            <span style={{ fontSize: 12, color: "#cbd5e1", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{user.name}</span>
+            <span className="ec-user-name" style={{ fontSize: 12, color: "#cbd5e1", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{user.name}</span>
             <span style={{ fontSize: 9, color: "#475569" }}>▼</span>
           </button>
           <button onClick={logout}
@@ -188,7 +188,7 @@ export default function App() {
         <span style={{ fontSize: 11, borderRadius: 4, padding: "1px 8px", fontWeight: 700, background: color + "18", color, letterSpacing: "0.3px" }}>
           {modeIcon} {label}
         </span>
-        <span style={{ fontSize: 11, color: "#475569" }}>{desc}</span>
+        <span className="ec-mode-desc" style={{ fontSize: 11, color: "#475569" }}>{desc}</span>
         {/* In-progress fetch notice visible on all tabs */}
         {fetchingInBg && (
           <span style={{ marginLeft: "auto", fontSize: 11, color: "#00AAFF", display: "flex", alignItems: "center", gap: 5 }}>

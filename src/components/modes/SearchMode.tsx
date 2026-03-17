@@ -4,6 +4,7 @@
 // Includes Trie-powered O(m) autocomplete from a weighted economic term corpus.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from "react";
+import { useMobile } from "../../utils/useMobile";
 import { SEARCH_SUGGESTIONS } from "../../data/kazakhstan";
 import { performWebSearch } from "../../utils/api";
 import { getSearchTrie } from "../../algorithms/trie";
@@ -11,6 +12,7 @@ import type { SearchResult } from "../../types";
 import { MarkdownText } from "../ui";
 
 export default function SearchMode() {
+  const isMobile = useMobile();
   // ── State
   const [query,           setQuery]           = useState("");
   const [loading,         setLoading]         = useState(false);
@@ -64,7 +66,7 @@ export default function SearchMode() {
 
       {/* ── Search bar with Trie autocomplete dropdown ── */}
       <div style={{ position: "relative", marginBottom: 18 }}>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexDirection: isMobile ? "column" : "row" }}>
           <input
             value={query}
             onChange={e => handleQueryChange(e.target.value)}
@@ -107,7 +109,7 @@ export default function SearchMode() {
       {!result && !loading && !error && (
         <>
           <p style={{ fontSize: 10, color: "#475569", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px" }}>Suggested searches</p>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 7, marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 7, marginBottom: 24 }}>
             {SEARCH_SUGGESTIONS.map((s, i) => (
               <button key={i} onClick={() => doSearch(s)}
                 style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#64748b", cursor: "pointer", textAlign: "left", lineHeight: 1.45, transition: "all .15s" }}
@@ -191,7 +193,7 @@ export default function SearchMode() {
           {/* Follow-up search bar */}
           <div style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: 14 }}>
             <p style={{ margin: "0 0 8px", fontSize: 10, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px" }}>Refine or follow up</p>
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: 8, flexDirection: isMobile ? "column" : "row" }}>
               <input value={followQuery} onChange={e => setFollowQuery(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && doSearch(followQuery)}
                 disabled={loading}

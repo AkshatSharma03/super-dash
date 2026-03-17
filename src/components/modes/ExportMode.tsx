@@ -10,6 +10,7 @@
 //                         Algorithms are re-run fresh from the loaded dataset.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useRef, useState, useEffect, useCallback } from "react";
+import { useMobile } from "../../utils/useMobile";
 import {
   LineChart, BarChart, ComposedChart,
   Bar, Line, Area, AreaChart,
@@ -308,6 +309,7 @@ interface ExportModeProps {
 export default function ExportMode({ dashDataset, analyticsDataset }: ExportModeProps) {
   const [toast, setToast]         = useState<string | null>(null);
   const [generating, setGenerating] = useState<"dash" | "analytics" | null>(null);
+  const isMobile = useMobile();
 
   // Refs for off-screen chart SVG extraction
   const chartRefs = {
@@ -476,7 +478,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
       </div>
 
       {/* ── Two-panel layout ── */}
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexDirection: isMobile ? "column" : "row" }}>
 
         {/* ── Panel 1: Country Data ── */}
         <Panel title="Country Data" icon="🌍" color="#00AAFF"
@@ -618,7 +620,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
       {/* ── Format reference ── */}
       <div style={{ marginTop: 20, background: "#0d1018", border: "1px solid #1e2130", borderRadius: 10, padding: "16px 20px" }}>
         <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.6px" }}>File Formats</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 10 }}>
           {[
             { fmt: "CSV", desc: "Comma-separated values — opens in Excel, Google Sheets, pandas, R, etc.", color: "#10b981" },
             { fmt: "JSON", desc: "Structured object — all fields included, suitable for API ingestion or archiving.", color: "#f59e0b" },

@@ -6,6 +6,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useRef, useEffect } from "react";
 import { CHAT_SUGGESTIONS } from "../../data/kazakhstan";
+import { useMobile } from "../../utils/useMobile";
 import { askClaude, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
 import type { Message, AIResponse, ChatSession } from "../../types";
 import { DynChart } from "../ui";
@@ -90,6 +91,8 @@ export default function ChatMode({ token }: ChatModeProps) {
   const [activeSessionId,  setActiveSessionId]  = useState<string | null>(null);
   const [sessionsLoading,  setSessionsLoading]  = useState(true);
   const [hoveredSession,   setHoveredSession]   = useState<string | null>(null);
+  const [sidebarOpen,      setSidebarOpen]      = useState(false);
+  const isMobile = useMobile();
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef  = useRef<HTMLInputElement>(null);
 
@@ -173,15 +176,37 @@ export default function ChatMode({ token }: ChatModeProps) {
   return (
     <div style={{ display: "flex", height: "100%", gap: 0, overflow: "hidden" }}>
 
-      {/* ── Left sidebar: session history ── */}
-      <div style={{ width: 210, flexShrink: 0, display: "flex", flexDirection: "column", borderRight: "1px solid #1e2130", paddingRight: 0, marginRight: 16 }}>
+      {/* Mobile sidebar backdrop */}
+      {isMobile && sidebarOpen && (
+        <div onClick={() => setSidebarOpen(false)}
+          style={{ position: "fixed", inset: 0, background: "#000000aa", zIndex: 99 }} />
+      )}
 
-        <button onClick={newChat}
-          style={{ margin: "0 0 10px", background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "9px 14px", fontSize: 12, fontWeight: 600, color: "#cbd5e1", cursor: "pointer", textAlign: "left", transition: "all .15s", display: "flex", alignItems: "center", gap: 7 }}
-          onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF666"; el.style.background = "#1a1d2e"; }}
-          onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.background = "#161929"; }}>
-          <span style={{ fontSize: 13 }}>✦</span> New chat
-        </button>
+      {/* ── Left sidebar: session history ── */}
+      <div style={isMobile ? {
+        position: "fixed", top: 0, left: sidebarOpen ? 0 : -260, width: 260,
+        height: "100%", background: "#0a0d14", borderRight: "1px solid #1e2130",
+        zIndex: 100, display: "flex", flexDirection: "column",
+        padding: "12px 12px", transition: "left .25s ease",
+      } : {
+        width: 210, flexShrink: 0, display: "flex", flexDirection: "column",
+        borderRight: "1px solid #1e2130", paddingRight: 0, marginRight: 16,
+      }}>
+
+        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+          <button onClick={newChat}
+            style={{ flex: 1, background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "9px 14px", fontSize: 12, fontWeight: 600, color: "#cbd5e1", cursor: "pointer", textAlign: "left", transition: "all .15s", display: "flex", alignItems: "center", gap: 7 }}
+            onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF666"; el.style.background = "#1a1d2e"; }}
+            onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.background = "#161929"; }}>
+            <span style={{ fontSize: 13 }}>✦</span> New chat
+          </button>
+          {isMobile && (
+            <button onClick={() => setSidebarOpen(false)}
+              style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 8, padding: "9px 12px", fontSize: 16, color: "#475569", cursor: "pointer" }}>
+              ✕
+            </button>
+          )}
+        </div>
 
         <div style={{ flex: 1, overflowY: "auto" }}>
           {sessionsLoading ? (
@@ -229,7 +254,7 @@ export default function ChatMode({ token }: ChatModeProps) {
                   Ask about any country, sector, or time period.
                 </p>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
                 {CHAT_SUGGESTIONS.map((s, i) => (
                   <button key={i} onClick={() => send(s)}
                     style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: "12px 14px", fontSize: 12, color: "#64748b", cursor: "pointer", textAlign: "left", lineHeight: 1.5, transition: "all .15s" }}
@@ -264,6 +289,13 @@ export default function ChatMode({ token }: ChatModeProps) {
         {/* ── Input bar ── */}
         <div style={{ borderTop: "1px solid #1e2130", paddingTop: 12, flexShrink: 0 }}>
           <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", gap: 8 }}>
+            {isMobile && (
+              <button onClick={() => setSidebarOpen(true)}
+                style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 12px", fontSize: 15, color: "#475569", cursor: "pointer", flexShrink: 0 }}
+                title="Chat history">
+                ☰
+              </button>
+            )}
             {messages.length > 0 && (
               <button onClick={newChat}
                 style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#475569", cursor: "pointer", whiteSpace: "nowrap", transition: "all .15s" }}
