@@ -11,6 +11,7 @@
 //   Pearson Correlation Matrix · Trade Openness Index
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useMobile } from "../../utils/useMobile";
 import {
   ComposedChart, Bar, Line, Area, BarChart,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
@@ -267,7 +268,7 @@ function HPPanel({ dataset }: { dataset: CountryDataset }) {
     <AnalyticsCard title={`${dataset.name} Business Cycle — HP Filter`}
       subtitle="Decomposes GDP into trend τ and cycle c = y − τ  (λ = 100 for annual data)"
       badge="HP Filter" badgeColor="#F97316">
-      <div style={{ display: "flex", gap: 24, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 16, marginBottom: 14, flexWrap: "wrap" }}>
         <Stat label="λ"           value="100"                              color="#F97316" />
         <Stat label="Avg |cycle|" value={`$${result.avgCycleAmplitude}B`}  color="#EF4444" />
         <Stat label="Points"      value={String(result.points.length)}      color="#94a3b8" />
@@ -417,7 +418,7 @@ function OpennessPanel({ dataset }: { dataset: CountryDataset }) {
     <AnalyticsCard title={`${dataset.name} Trade Openness`}
       subtitle="Openness = (Exports + Imports) / GDP × 100  ·  > 100% = highly globalised economy"
       badge="Openness" badgeColor="#A78BFA">
-      <div style={{ display: "flex", gap: 24, marginBottom: 14 }}>
+      <div style={{ display: "flex", gap: 16, marginBottom: 14, flexWrap: "wrap" }}>
         <Stat label="Latest"  value={latest ? `${latest.openness}%` : "—"} color="#A78BFA" />
         <Stat label="Average" value={`${avg}%`}                             color="#94a3b8" />
       </div>
@@ -607,6 +608,7 @@ interface Props {
 
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function AnalyticsMode({ token, dataset, loading, error, onSelectCountry }: Props) {
+  const isMobile = useMobile();
   const [activeAlgos, setActiveAlgos] = useState<Set<string>>(DEFAULT_ALGOS);
   const [query,       setQuery]       = useState("");
   const [aiResult,    setAIResult]    = useState<AIResponse | null>(null);
@@ -693,7 +695,7 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       {/* ── AI query ── */}
       <div style={{ background: "#161929", borderRadius: 12, padding: 16, border: "1px solid #2d3348", marginBottom: 18 }}>
         <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>AI Economic Query</p>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexDirection: isMobile ? "column" : "row" }}>
           <input value={query} onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runQuery(); } }}
             placeholder={dataset ? `Ask about ${dataset.name}'s economy…` : "Select a country above, then ask a question…"}
@@ -734,7 +736,7 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       ) : dataset && enabledAlgos.length === 0 ? (
         <div style={{ textAlign: "center", padding: "32px", color: "#475569", fontSize: 13 }}>No algorithms selected. Toggle some above.</div>
       ) : dataset ? (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18 }}>
           {activeAlgos.has("regression")  && <RegressionPanel  dataset={dataset} />}
           {activeAlgos.has("hhi")         && <HHIPanel         dataset={dataset} />}
           {activeAlgos.has("kmeans")      && <KMeansPanel      dataset={dataset} />}

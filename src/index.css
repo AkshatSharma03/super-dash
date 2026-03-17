@@ -49,24 +49,41 @@ input[type="range"] { cursor: pointer; }
 
 /* ── Mobile responsive (≤ 640px) ── */
 @media (max-width: 640px) {
-  /* Tab strip: scroll horizontally instead of overflowing */
+  /* Header: two-row layout —
+     Row 1: Brand (left) + User chip (right)
+     Row 2: Tab strip (full width) */
+  .ec-header {
+    flex-wrap: wrap;
+    row-gap: 6px;
+    padding: 8px 12px !important;
+  }
+
+  /* Tab strip: full-width second row, scrollable, no scrollbar */
   .ec-tabs {
+    order: 3;
+    flex-basis: 100%;
+    width: 100%;
+    margin-left: 0 !important;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    flex-shrink: 1 !important;
   }
   .ec-tabs::-webkit-scrollbar { display: none; }
 
-  /* Header: allow wrapping so tabs can sit on a second line if needed */
-  .ec-header { flex-wrap: wrap; row-gap: 4px; }
+  /* User chip: pushed to end of row 1 */
+  .ec-user-chip { margin-left: auto; }
 
-  /* Mode description: hide the long description text, keep the badge */
+  /* Tab buttons: show emoji only, hide text label */
+  .ec-tab-text { display: none; }
+  .ec-tabs button {
+    min-width: 40px;
+    padding: 6px 10px !important;
+    font-size: 16px !important;
+  }
+
+  /* Mode description bar: hide the long description text */
   .ec-mode-desc { display: none; }
 
-  /* User chip: hide the username label, keep avatar + chevron */
+  /* User chip: hide username label, keep avatar + chevron */
   .ec-user-name { display: none !important; }
-
-  /* Touch-friendly tap targets */
-  .ec-tabs button { min-width: 44px; padding: 6px 10px !important; }
 }

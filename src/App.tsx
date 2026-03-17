@@ -7,6 +7,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useCallback } from "react";
 import type { Mode, User, CountryDataset } from "./types";
+import { useMobile } from "./utils/useMobile";
 import { fetchMe, getCountryData, refreshCountryData } from "./utils/api";
 import AuthPage      from "./components/auth/AuthPage";
 import SettingsPanel from "./components/auth/SettingsPanel";
@@ -41,6 +42,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [mode,         setMode]         = useState<Mode>("chat");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const isMobile = useMobile();
 
   // ── Country data — lives here so fetches survive tab switches ───────────────
   const [countryData,    setCountryData]    = useState<CountryDataset | null>(null);
@@ -139,6 +141,7 @@ export default function App() {
         <div className="ec-tabs" style={{ marginLeft: 14, display: "flex", background: "#161929", borderRadius: 10, padding: 3, border: "1px solid #2d3348", gap: 1, flexWrap: "nowrap" }}>
           {MODES.map(([m, lbl]) => {
             const isBgFetch = m === "dashboard" && fetchingInBg;
+            const [emoji, ...words] = lbl.split(" ");
             return (
               <button key={m} onClick={() => setMode(m)} style={{
                 background: mode === m ? MODE_META[m].color : "transparent",
@@ -147,11 +150,12 @@ export default function App() {
                 fontSize: 11.5, fontWeight: mode === m ? 700 : 500,
                 cursor: "pointer", transition: "all .18s", whiteSpace: "nowrap",
                 boxShadow: mode === m ? `0 2px 8px ${MODE_META[m].color}55` : "none",
-                display: "flex", alignItems: "center", gap: 5,
+                display: "flex", alignItems: "center", gap: isMobile ? 0 : 5,
               }}>
-                {lbl}
+                <span>{emoji}</span>
+                <span className="ec-tab-text"> {words.join(" ")}</span>
                 {isBgFetch && (
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00AAFF", display: "inline-block", animation: "ecPulse 1.2s ease-in-out infinite" }} />
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00AAFF", display: "inline-block", animation: "ecPulse 1.2s ease-in-out infinite", marginLeft: 4 }} />
                 )}
               </button>
             );
@@ -159,7 +163,7 @@ export default function App() {
         </div>
 
         {/* User chip */}
-        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="ec-user-chip" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <button onClick={() => setSettingsOpen(true)}
             style={{ display: "flex", alignItems: "center", gap: 8, background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "5px 10px 5px 6px", cursor: "pointer", transition: "all .15s" }}
             onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF6"; el.style.background = "#1e2130"; }}
