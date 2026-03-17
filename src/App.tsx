@@ -18,7 +18,7 @@ const MODES: [Mode, string][] = [
   ["search",    "🔍 Search"],
   ["data",      "📁 Data"],
   ["analytics", "🧮 Analytics"],
-  ["dashboard", "🇰🇿 KZ Data"],
+  ["dashboard", "🌍 Country Data"],
 ];
 
 const MODE_META: Record<Mode, { label: string; desc: string; color: string }> = {
@@ -26,7 +26,7 @@ const MODE_META: Record<Mode, { label: string; desc: string; color: string }> = 
   search:    { label: "Web Search",         color: "#10B981", desc: "Live web search · Claude pulls and summarises current data from authoritative sources" },
   data:      { label: "Data Upload",        color: "#F59E0B", desc: "Upload a CSV file · Claude analyses your data and creates charts automatically" },
   analytics: { label: "Analytics",          color: "#EF4444", desc: "Algorithms from scratch: OLS Regression · HHI Concentration · K-Means Clustering · Z-Score Anomaly Detection" },
-  dashboard: { label: "Kazakhstan Data",    color: "#00AAFF", desc: "Pre-built charts with 15 years of Kazakhstan economic data — GDP, trade, exports, imports" },
+  dashboard: { label: "Country Data",       color: "#00AAFF", desc: "Select any country — real GDP & trade data from World Bank, cached locally · sector breakdown AI-estimated" },
 };
 
 export default function App() {
@@ -34,7 +34,6 @@ export default function App() {
   const [token,     setToken]     = useState<string | null>(null);
   const [authReady, setAuthReady] = useState(false);   // prevents flash of auth page on refresh
   const [mode,         setMode]         = useState<Mode>("chat");
-  const [yearRange,    setYearRange]    = useState<[number, number]>([2010, 2024]);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   // On mount: restore session from localStorage and validate the token
@@ -94,17 +93,6 @@ export default function App() {
           ))}
         </div>
 
-        {/* Year filter — dashboard only */}
-        {mode === "dashboard" && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "5px 14px" }}>
-            <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Years</span>
-            <input type="range" min="2010" max="2024" value={yearRange[0]} onChange={e => setYearRange([+e.target.value, yearRange[1]])} style={{ width: 65, accentColor: "#00AAFF", cursor: "pointer" }} />
-            <span style={{ fontSize: 11, color: "#00AAFF", minWidth: 30, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{yearRange[0]}</span>
-            <span style={{ fontSize: 11, color: "#2d3348" }}>—</span>
-            <input type="range" min="2010" max="2024" value={yearRange[1]} onChange={e => setYearRange([yearRange[0], +e.target.value])} style={{ width: 65, accentColor: "#00AAFF", cursor: "pointer" }} />
-            <span style={{ fontSize: 11, color: "#00AAFF", minWidth: 30, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{yearRange[1]}</span>
-          </div>
-        )}
 
         {/* User chip — click to open settings */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
@@ -142,7 +130,7 @@ export default function App() {
         {mode === "search"     && <SearchMode />}
         {mode === "data"       && <DataMode />}
         {mode === "analytics"  && <AnalyticsMode />}
-        {mode === "dashboard"  && <div style={{ maxWidth: 1100, margin: "0 auto" }}><DashboardMode yearRange={yearRange} setYearRange={setYearRange} /></div>}
+        {mode === "dashboard"  && <div style={{ maxWidth: 1100, margin: "0 auto" }}><DashboardMode token={token} /></div>}
       </div>
 
       {settingsOpen && (

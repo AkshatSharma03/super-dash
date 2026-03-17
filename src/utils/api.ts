@@ -3,7 +3,7 @@
 // The Express server (server.js) holds the ANTHROPIC_API_KEY; the client
 // bundle never sees it. All requests go to /api/*.
 // ─────────────────────────────────────────────────────────────────────────────
-import type { AIResponse, SearchResult, ParsedCSV, User, ChatSession, ChatSessionFull } from "../types";
+import type { AIResponse, SearchResult, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult } from "../types";
 
 /** Helper: POST to an endpoint, throw on non-2xx, return typed JSON. */
 async function post<T>(path: string, body: unknown, token?: string): Promise<T> {
@@ -129,4 +129,29 @@ export function analyzeCSVData(
   context: string,
 ): Promise<AIResponse> {
   return post<AIResponse>("/api/analyze-csv", { headers, rows, context });
+}
+
+// ── Country data ──────────────────────────────────────────────────────────────
+
+/**
+ * Search for countries by name (proxied to World Bank country list).
+ * Returns up to 15 matches with ISO-2 code, name, flag, and region.
+ */
+export function searchCountries(q: string, token: string): Promise<CountrySearchResult[]> {
+  return get<CountrySearchResult[]>(`/api/country/search?q=${encodeURIComponent(q)}`, token);
+}
+
+/**
+ * Get a country's full economic dataset.
+ * Served from SQLite cache (7-day TTL); fetched fresh from World Bank + Claude if stale.
+ */
+export function getCountryData(code: string, token: string): Promise<CountryDataset> {
+  return get<CountryDataset>(`/api/country/${code}`, token);
+}
+
+/**
+ * Force a re-fetch of a country's data from World Bank + Claude, bypassing the cache.
+ */
+export function refreshCountryData(code: string, token: string): Promise<CountryDataset> {
+  return post<CountryDataset>(`/api/country/${code}/refresh`, {}, token);
 }

@@ -147,6 +147,12 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS country_cache (
+    code       TEXT PRIMARY KEY,
+    data_json  TEXT NOT NULL,
+    cached_at  INTEGER NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS users (
     id              TEXT PRIMARY KEY,
     email           TEXT UNIQUE NOT NULL,
@@ -167,7 +173,15 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON chat_sessions(user_id);
 `);
 
+// ── Country cache TTL ─────────────────────────────────────────────────────────
+const COUNTRY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 // ── Prepared statements (compiled once, reused on every request) ──────────────
+const stmtCountry = {
+  get:    db.prepare('SELECT data_json, cached_at FROM country_cache WHERE code = ?'),
+  upsert: db.prepare('INSERT OR REPLACE INTO country_cache (code, data_json, cached_at) VALUES (?, ?, ?)'),
+};
+
 const stmt = {
   userByEmail:     db.prepare('SELECT * FROM users WHERE email = ?'),
   userById:        db.prepare('SELECT id, email, name FROM users WHERE id = ?'),
@@ -681,6 +695,235 @@ app.delete('/api/sessions/:id', requireAuth, (req, res) => {
   if (!row) return res.status(404).json({ error: 'Session not found' });
   stmt.deleteSession.run(req.params.id, req.user.id);
   res.json({ ok: true });
+});
+
+// ── Country data helpers ──────────────────────────────────────────────────────
+
+/** Convert ISO-2 code to a flag emoji (regional indicator symbols). */
+function iso2ToFlag(code) {
+  return [...code.toUpperCase()]
+    .map(c => String.fromCodePoint(c.charCodeAt(0) - 65 + 0x1F1E6))
+    .join('');
+}
+
+/** Fetch a single World Bank indicator time series for one country. */
+async function fetchWBIndicator(isoCode, indicator) {
+  const url = `https://api.worldbank.org/v2/country/${isoCode}/indicator/${indicator}?date=2010:2024&format=json&per_page=30`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+  if (!res.ok) throw new Error(`World Bank API ${res.status} for ${indicator}`);
+  const data = await res.json();
+  if (!Array.isArray(data) || !Array.isArray(data[1]))
+    throw new Error(`Unexpected World Bank response for ${indicator}`);
+  return data[1].filter(e => e.value !== null).sort((a, b) => +a.date - +b.date);
+}
+
+/** Fetch country metadata (name, region) from World Bank. */
+async function fetchWBCountryInfo(isoCode) {
+  const url = `https://api.worldbank.org/v2/country/${isoCode}?format=json`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`World Bank country info ${res.status}`);
+  const data = await res.json();
+  const info = data?.[1]?.[0];
+  if (!info || !info.name) throw new Error(`Country not found: ${isoCode}`);
+  return info;
+}
+
+/**
+ * Build a CountryDataset by:
+ *   1. Fetching real GDP + trade totals from World Bank
+ *   2. Asking Claude to generate sector/partner breakdown anchored to those totals
+ */
+async function buildCountryDataset(isoCode) {
+  const code = isoCode.toUpperCase().trim();
+
+  // 1. Country metadata
+  const info        = await fetchWBCountryInfo(code);
+  const countryName = info.name;
+  const region      = info.region?.value ?? 'Unknown';
+
+  // 2. WB indicators (parallel)
+  const [gdpRaw, growthRaw, perCapRaw, exportRaw, importRaw] = await Promise.all([
+    fetchWBIndicator(code, 'NY.GDP.MKTP.CD'),
+    fetchWBIndicator(code, 'NY.GDP.MKTP.KD.ZG'),
+    fetchWBIndicator(code, 'NY.GDP.PCAP.CD'),
+    fetchWBIndicator(code, 'NE.EXP.GNFS.CD'),
+    fetchWBIndicator(code, 'NE.IMP.GNFS.CD'),
+  ]);
+
+  const toMap = arr => Object.fromEntries(arr.map(e => [+e.date, e.value]));
+  const gdpMap    = toMap(gdpRaw);
+  const growthMap = toMap(growthRaw);
+  const perCapMap = toMap(perCapRaw);
+  const expMap    = toMap(exportRaw);
+  const impMap    = toMap(importRaw);
+
+  // Years with at least GDP data
+  const years = [...new Set([
+    ...Object.keys(gdpMap), ...Object.keys(growthMap), ...Object.keys(perCapMap),
+  ].map(Number))].filter(y => y >= 2010 && y <= 2024).sort((a, b) => a - b);
+
+  const gdpData = years.map(year => ({
+    year,
+    gdp_bn:         gdpMap[year]    ? +(gdpMap[year]    / 1e9).toFixed(1) : null,
+    gdp_growth:     growthMap[year] ? +growthMap[year].toFixed(2)         : null,
+    gdp_per_capita: perCapMap[year] ? +perCapMap[year].toFixed(0)         : null,
+  })).filter(d => d.gdp_bn !== null);
+
+  // Trade year totals (USD billions, 1 dp)
+  const tradeYears = [...new Set([...Object.keys(expMap), ...Object.keys(impMap)].map(Number))]
+    .filter(y => y >= 2010 && y <= 2024).sort((a, b) => a - b);
+  const exportTotals = Object.fromEntries(tradeYears.filter(y => expMap[y]).map(y => [y, +(expMap[y] / 1e9).toFixed(1)]));
+  const importTotals = Object.fromEntries(tradeYears.filter(y => impMap[y]).map(y => [y, +(impMap[y] / 1e9).toFixed(1)]));
+
+  // 3. Claude: sector / partner breakdown + digital_pct estimates
+  const breakdownPrompt = `Generate trade composition breakdown for ${countryName} (ISO-2: ${code}).
+
+Real World Bank total exports (USD billions):
+${JSON.stringify(exportTotals)}
+
+Real World Bank total imports (USD billions):
+${JSON.stringify(importTotals)}
+
+Return ONLY this JSON (no markdown, no explanation):
+{
+  "exportSectors":  [{"key":"snake_key","label":"Label","color":"#hex"}, ...],
+  "importPartners": [{"key":"snake_key","label":"Label","color":"#hex"}, ...],
+  "exportData": [{"year":2010,"total":X,"<sector_key>":X,...}, ...],
+  "importData": [{"year":2010,"total":X,"<partner_key>":X,...}, ...],
+  "pieExports": [{"name":"Label","value":X}, ...],
+  "pieImports": [{"name":"Label","value":X}, ...],
+  "digitalPctByYear": {"2010":1.2,"2011":1.4,...}
+}
+
+Rules:
+1. 5–6 export sectors; last key must be "other".
+2. 5–6 import partners/regions; last key must be "other".
+3. Sector/partner values must SUM to match the provided total for each year (±0.2 rounding OK).
+4. "total" field in each row = exactly the World Bank value given.
+5. Include ONLY years present in the provided export/import totals.
+6. Export sector colors (in order): #F59E0B #94a3b8 #10B981 #8B5CF6 #06B6D4 #64748b
+7. Import partner colors (in order): #EF4444 #F59E0B #10B981 #F97316 #8B5CF6 #64748b
+8. pieExports/pieImports use the most recent year available.
+9. digitalPctByYear: estimate for ALL years 2010–2024 (annual).`;
+
+  const bdRes = await callAnthropic({
+    model: MODEL, max_tokens: 4000,
+    system: 'Return only valid JSON matching the schema given. No markdown, no explanation.',
+    messages: [{ role: 'user', content: breakdownPrompt }],
+  });
+  const bdText = bdRes.content?.map(b => b.text || '').join('') || '{}';
+  let bd;
+  try { bd = JSON.parse(bdText.replace(/```json|```/g, '').trim()); }
+  catch { throw new Error(`Claude breakdown parse failed for ${code}: ${bdText.slice(0, 200)}`); }
+
+  // 4. Merge digital_pct into gdpData
+  const digMap = bd.digitalPctByYear ?? {};
+  const gdpDataFinal = gdpData.map(d => ({
+    ...d,
+    digital_pct: digMap[String(d.year)] != null ? +Number(digMap[String(d.year)]).toFixed(1) : undefined,
+  }));
+
+  // 5. Build KPIs from real data
+  const lastGDP  = gdpDataFinal[gdpDataFinal.length - 1];
+  const prevGDP  = gdpDataFinal[gdpDataFinal.length - 2];
+  const sortedExpYears = Object.entries(exportTotals).sort((a, b) => +b[0] - +a[0]);
+  const sortedImpYears = Object.entries(importTotals).sort((a, b) => +b[0] - +a[0]);
+  const expTotal = sortedExpYears[0] ? +sortedExpYears[0][1] : 0;
+  const impTotal = sortedImpYears[0] ? +sortedImpYears[0][1] : 0;
+  const expYear  = sortedExpYears[0]?.[0] ?? '';
+  const balance  = +(expTotal - impTotal).toFixed(1);
+  const gdpDelta = lastGDP && prevGDP ? +(lastGDP.gdp_bn - prevGDP.gdp_bn).toFixed(1) : null;
+  const topPartner = (bd.importPartners ?? []).find(p => p.key !== 'other');
+  const topPie     = (bd.pieImports   ?? []).find(p => p.name !== 'Other' && p.name !== 'other');
+  const topPct     = topPie && impTotal > 0 ? Math.round((topPie.value / impTotal) * 100) : null;
+  const lastDigPct = digMap[String(lastGDP?.year)];
+
+  const kpis = [
+    { label: `GDP ${lastGDP?.year ?? ''}`, value: `$${lastGDP?.gdp_bn}B`,
+      sub: 'Nominal USD', trend: gdpDelta != null ? `${gdpDelta >= 0 ? '+' : ''}$${gdpDelta}B YoY` : null, color: '#00AAFF' },
+    { label: 'GDP Growth', value: `${lastGDP?.gdp_growth ?? 'N/A'}%`,
+      sub: `Real ${lastGDP?.year ?? ''}`, trend: null, color: '#10B981' },
+    { label: 'GDP/Capita', value: lastGDP?.gdp_per_capita ? `$${Number(lastGDP.gdp_per_capita).toLocaleString()}` : 'N/A',
+      sub: `${lastGDP?.year ?? ''} estimate`, trend: null, color: '#8B5CF6' },
+    { label: 'Total Exports', value: `$${expTotal}B`, sub: expYear, trend: null, color: '#F59E0B' },
+    { label: 'Total Imports', value: `$${impTotal}B`, sub: expYear, trend: null, color: '#EF4444' },
+    { label: 'Trade Balance', value: `${balance >= 0 ? '+' : ''}$${balance}B`, sub: expYear,
+      trend: balance >= 0 ? '↑ Surplus' : '↓ Deficit', color: '#06B6D4' },
+    { label: 'Digital GDP%', value: lastDigPct != null ? `${lastDigPct}%` : 'N/A',
+      sub: 'of total GDP', trend: null, color: '#F97316' },
+    { label: '#1 Importer', value: topPartner?.label ?? 'N/A',
+      sub: topPie && topPct != null ? `$${topPie.value}B · ${topPct}% share` : '',
+      trend: null, color: '#EF4444' },
+  ];
+
+  return {
+    code, name: countryName, flag: iso2ToFlag(code), region,
+    gdpData: gdpDataFinal,
+    exportData:    bd.exportData    ?? [],
+    importData:    bd.importData    ?? [],
+    exportSectors: bd.exportSectors ?? [],
+    importPartners:bd.importPartners?? [],
+    kpis,
+    pieExports: bd.pieExports ?? [],
+    pieImports: bd.pieImports ?? [],
+    _meta: {
+      sources: ['World Bank Open Data (GDP & trade totals)', 'AI-estimated sector / partner breakdown'],
+      cachedAt: Date.now(),
+    },
+  };
+}
+
+// GET /api/country/search?q=name
+// Returns up to 15 matching countries from World Bank country list.
+app.get('/api/country/search', requireAuth, apiLimiter, async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 100);
+  if (q.length < 2) return res.json([]);
+  try {
+    const r    = await fetch('https://api.worldbank.org/v2/country?format=json&per_page=300', { signal: AbortSignal.timeout(10_000) });
+    const data = await r.json();
+    const hits = (data[1] ?? [])
+      .filter(c => c.capitalCity && c.name.toLowerCase().includes(q.toLowerCase()))
+      .slice(0, 15)
+      .map(c => ({ code: c.iso2Code, name: c.name, flag: iso2ToFlag(c.iso2Code), region: c.region?.value ?? '' }));
+    res.json(hits);
+  } catch (e) {
+    console.error('/api/country/search:', e.message);
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// GET /api/country/:code
+// Returns cached CountryDataset; fetches fresh if cache is missing or expired.
+app.get('/api/country/:code', requireAuth, apiLimiter, async (req, res) => {
+  const code = req.params.code.toUpperCase().replace(/[^A-Z]/g, '');
+  if (code.length !== 2) return res.status(400).json({ error: 'Expected ISO 2-letter country code' });
+  const row = stmtCountry.get.get(code);
+  if (row && (Date.now() - row.cached_at) < COUNTRY_CACHE_TTL_MS)
+    return res.json(JSON.parse(row.data_json));
+  try {
+    const dataset = await buildCountryDataset(code);
+    stmtCountry.upsert.run(code, JSON.stringify(dataset), Date.now());
+    res.json(dataset);
+  } catch (e) {
+    console.error(`/api/country/${code}:`, e.message);
+    if (row) return res.json({ ...JSON.parse(row.data_json), _meta: { ...JSON.parse(row.data_json)._meta, stale: true } });
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// POST /api/country/:code/refresh
+// Force re-fetch, bypassing cache.
+app.post('/api/country/:code/refresh', requireAuth, apiLimiter, async (req, res) => {
+  const code = req.params.code.toUpperCase().replace(/[^A-Z]/g, '');
+  if (code.length !== 2) return res.status(400).json({ error: 'Expected ISO 2-letter country code' });
+  try {
+    const dataset = await buildCountryDataset(code);
+    stmtCountry.upsert.run(code, JSON.stringify(dataset), Date.now());
+    res.json(dataset);
+  } catch (e) {
+    console.error(`/api/country/${code}/refresh:`, e.message);
+    res.status(502).json({ error: e.message });
+  }
 });
 
 // ── Static file serving ───────────────────────────────────────────────────────
