@@ -22,6 +22,8 @@ const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-202505
 const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const IS_DEV            = process.env.NODE_ENV !== 'production';
+const NEWS_API_KEY      = process.env.NEWS_API_KEY; 
+const TRUSTED_NEWS_DOMAINS = 'reuters.com,bloomberg.com,ft.com,wsj.com,economist.com,apnews.com';
 
 // LRU cache
 const CACHE_CAP         = 200;
@@ -186,6 +188,8 @@ const stmt = {
 };
 
 // ── Validation and utilities ─────────────────────────────────────────────────
+
+
 function validateAIResponse(parsed) {
   if (typeof parsed !== 'object' || parsed === null) return null;
   const rawSources = Array.isArray(parsed.sources) ? parsed.sources : [];
@@ -218,6 +222,38 @@ function iso2ToFlag(code) {
   return [...code.toUpperCase()]
     .map(c => String.fromCodePoint(c.charCodeAt(0) - 65 + 0x1F1E6))
     .join('');
+}
+
+async function fetchVerifiedNews(query) {
+  if (!NEWS_API_KEY) return [];
+
+  const url = new URL('https://newsapi.org/v2/everything');
+  url.searchParams.append('q', query);
+  url.searchParams.append('domains', TRUSTED_NEWS_DOMAINS);
+  url.searchParams.append('sortBy', 'publishedAt');
+  url.searchParams.append('language', 'en');
+  url.searchParams.append('pageSize', '5'); // Get top 5 most recent articles
+
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { 'X-Api-Key': NEWS_API_KEY },
+      signal: AbortSignal.timeout(10_000)
+    });
+
+    if (!res.ok) throw new Error(`NewsAPI Error: ${res.status}`);
+    
+    const data = await res.json();
+    return (data.articles || []).map((article) => ({
+      title: article.title,
+      source: article.source.name,
+      date: article.publishedAt,
+      summary: article.description,
+      url: article.url
+    }));
+  } catch (error) {
+    console.error('Failed to fetch news:', error.message);
+    return [];
+  }
 }
 
 // ── Multi-source data fetching with fallback ──────────────────────────────────
@@ -1074,13 +1110,20 @@ app.post('/api/country/:code/refresh', requireAuth, apiLimiter, async (req, res)
 });
 
 app.post('/api/analytics', requireAuth, apiLimiter, async (req, res) => {
-  const query   = String(req.body.query   || '').trim().slice(0, MAX_MSG_CHARS);
-  const context = String(req.body.context || '').trim().slice(0, 8_000);
+  const query = String(req.body.query || '')
+    .trim()
+    .slice(0, MAX_MSG_CHARS);
+  const context = String(req.body.context || '')
+    .trim()
+    .slice(0, 8_000);
   if (!query) return res.status(400).json({ error: 'query is required' });
 
   const ck = cacheKey('/analytics', { query, context: context.slice(0, 500) });
   const cached = apiCache.get(ck);
-  if (cached) { if (IS_DEV) console.log('[cache hit] /api/analytics'); return res.json(cached); }
+  if (cached) {
+    if (IS_DEV) console.log('[cache hit] /api/analytics');
+    return res.json(cached);
+  }
 
   const systemPrompt = `You are an expert econometrician and data scientist specializing in country-level economic analysis.
 The user has selected a country and run several algorithms on its data. They may provide that data as context.
@@ -1106,21 +1149,41 @@ Rules:
 - Use real values from the country data context wherever possible
 - Colors: #00AAFF #F59E0B #10B981 #EF4444 #8B5CF6 #F97316`;
 
+  // === NEW NEWS INJECTION LOGIC ===
+  let newsContext = '';
+  try {
+    const searchTerms = `${query} economy`;
+    const recentNews = await fetchVerifiedNews(searchTerms);
+
+    if (recentNews.length > 0) {
+      newsContext = `\n\nRecent Verified News:\n${JSON.stringify(recentNews)}`;
+    }
+  } catch (e) {
+    console.error('News fetch error:', e.message);
+  }
+
   const userMessage = context
-    ? `Country economic data:\n${context}\n\nUser question: ${query}`
-    : query;
+    ? `Country economic data:\n${context}${newsContext}\n\nUser question: ${query}`
+    : `${query}${newsContext}`;
+  // ================================
 
   try {
     const data = await callAnthropic({
-      model: MODEL, max_tokens: 3000,
+      model: MODEL,
+      max_tokens: 3000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
     });
-    const text = data.content?.map(b => b.text || '').join('') || '{}';
+    const text = data.content?.map((b) => b.text || '').join('') || '{}';
     let parsed;
     try {
       const raw = JSON.parse(text.replace(/```json|```/g, '').trim());
-      parsed = validateAIResponse(raw) ?? { insight: text, charts: [], sources: [], followUps: [] };
+      parsed = validateAIResponse(raw) ?? {
+        insight: text,
+        charts: [],
+        sources: [],
+        followUps: [],
+      };
     } catch {
       parsed = { insight: text, charts: [], sources: [], followUps: [] };
     }
@@ -1131,7 +1194,6 @@ Rules:
     res.status(502).json({ error: e.message });
   }
 });
-
 // ── Static file serving ───────────────────────────────────────────────────────
 const DIST = join(__dirname, 'dist');
 app.use(staticLimiter);
