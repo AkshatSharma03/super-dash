@@ -11,9 +11,9 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import countries from 'i18n-iso-countries';
 
-// Initialize i18n-iso-countries with English
-countries.registerLocale(require('i18n-iso-countries/langs/en.json'));
+import enLocale from 'i18n-iso-countries/langs/en.json' with { type: 'json' };
 
+countries.registerLocale(enLocale);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Configuration ─────────────────────────────────────────────────────────────
