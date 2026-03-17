@@ -162,24 +162,24 @@ export const KPI_SUMMARY: KPIEntry[] = [
 
 // ── AI CHAT SUGGESTIONS ───────────────────────────────────────────────────────
 export const CHAT_SUGGESTIONS: string[] = [
-  "Show Kazakhstan's GDP growth vs oil prices 2010–2024",
-  "Compare imports from China, Russia and EU over time",
-  "What are Kazakhstan's top export sectors?",
-  "How has China's import share grown vs Russia's decline?",
-  "Show Kazakhstan's digital economy trajectory",
-  "Analyze Central Asia economic competitiveness",
-  "Trade balance surplus trend and drivers",
-  "Kazakhstan AI governance and tech investment outlook",
+  "Compare US, China and EU GDP growth over the last decade",
+  "Show China's trade balance with the US 2010–2024",
+  "How has the EU's export composition shifted since 2015?",
+  "Compare inflation trends across G7 economies",
+  "What drives the US trade deficit with China?",
+  "Analyze Japan vs South Korea export competitiveness",
+  "Show India's GDP per capita growth vs China",
+  "Which economies have the highest trade openness ratio?",
 ];
 
 // ── WEB SEARCH SUGGESTIONS ────────────────────────────────────────────────────
 export const SEARCH_SUGGESTIONS: string[] = [
-  "Kazakhstan GDP growth forecast 2025",
-  "Kazakhstan oil and gas exports latest data",
-  "Foreign direct investment Kazakhstan 2024",
-  "China Kazakhstan trade relationship growth",
-  "Kazakhstan inflation and interest rate policy",
-  "Kazakhstan digital economy and fintech sector",
-  "Central Asia Belt and Road Initiative economic impact",
-  "Kazakhstan sovereign wealth fund and capital markets",
+  "US GDP growth forecast 2025",
+  "China exports and trade surplus latest data",
+  "EU foreign direct investment trends 2024",
+  "US China trade war tariffs economic impact",
+  "Federal Reserve interest rate policy outlook",
+  "India economic growth and manufacturing boom",
+  "G7 inflation and monetary policy comparison",
+  "Global supply chain shifts and nearshoring trends",
 ];
