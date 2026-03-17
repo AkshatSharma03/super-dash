@@ -118,8 +118,8 @@ export interface CountryHistoryEntry { code: string; name: string; flag: string;
 
 // ── App types ─────────────────────────────────────────────────────────────────
 
-/** The five top-level navigation modes. */
-export type Mode = "dashboard" | "chat" | "search" | "data" | "analytics";
+/** The six top-level navigation modes. */
+export type Mode = "dashboard" | "chat" | "search" | "data" | "analytics" | "export";
 
 /** Header strip metadata for the currently active mode. */
 export interface ModeMeta { label: string; desc: string; color: string; }
