@@ -15,6 +15,7 @@ import ChatMode      from "./components/modes/ChatMode";
 import SearchMode    from "./components/modes/SearchMode";
 import DataMode      from "./components/modes/DataMode";
 import AnalyticsMode from "./components/modes/AnalyticsMode";
+import ExportMode    from "./components/modes/ExportMode";
 
 const MODES: [Mode, string][] = [
   ["chat",      "💬 AI Chat"],
@@ -22,6 +23,7 @@ const MODES: [Mode, string][] = [
   ["data",      "📁 Data"],
   ["analytics", "🧮 Analytics"],
   ["dashboard", "🌍 Country Data"],
+  ["export",    "📤 Export"],
 ];
 
 const MODE_META: Record<Mode, { label: string; desc: string; color: string }> = {
@@ -30,6 +32,7 @@ const MODE_META: Record<Mode, { label: string; desc: string; color: string }> = 
   data:      { label: "Data Upload",   color: "#F59E0B", desc: "Upload a CSV file · Claude analyses your data and creates charts automatically" },
   analytics: { label: "Analytics",    color: "#EF4444", desc: "Algorithms from scratch: OLS Regression · HHI Concentration · K-Means Clustering · Z-Score Anomaly Detection" },
   dashboard: { label: "Country Data", color: "#00AAFF", desc: "Select any country — real GDP & trade data from World Bank, cached locally · sector breakdown AI-estimated" },
+  export:    { label: "Export",        color: "#10B981", desc: "Download data as CSV / JSON · Generate standalone HTML reports with embedded SVG charts · Print to PDF" },
 };
 
 export default function App() {
@@ -219,6 +222,11 @@ export default function App() {
               onSelectCountry={code => loadCountry(code, token)}
               onRefresh={() => countryData && handleRefreshCountry(token, countryData.code)}
             />
+          </div>
+        )}
+        {mode === "export" && (
+          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+            <ExportMode dashDataset={countryData} analyticsDataset={analyticsData} />
           </div>
         )}
       </div>
