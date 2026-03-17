@@ -100,3 +100,36 @@ export function detectAllAnomalies(input: MultiSeriesInput): AnomalyPoint[] {
     return true;
   }).sort((a, b) => Math.abs(b.zScore) - Math.abs(a.zScore));
 }
+
+// ── Generic version — works with any CountryDataset ───────────────────────────
+import type { CountryGDPEntry, TradeEntry } from "../types";
+
+export function detectAllAnomaliesGeneric(
+  gdpData:    CountryGDPEntry[],
+  exportData: TradeEntry[],
+  importData: TradeEntry[],
+): AnomalyPoint[] {
+  const expMap = new Map(exportData.map(d => [d.year, d.total]));
+  const impMap = new Map(importData.map(d => [d.year, d.total]));
+
+  const tradeBalanceSeries = gdpData
+    .map(d => ({ year: d.year, value: (expMap.get(d.year) ?? 0) - (impMap.get(d.year) ?? 0) }))
+    .filter(d => d.value !== 0);
+
+  const results: AnomalyPoint[] = [
+    ...detectAnomalies(gdpData.map(d => ({ year: d.year, value: d.gdp_growth })),     "GDP Growth (%)",     1.5),
+    ...detectAnomalies(gdpData.map(d => ({ year: d.year, value: d.gdp_bn })),          "Nominal GDP ($B)",   1.6),
+    ...detectAnomalies(gdpData.map(d => ({ year: d.year, value: d.gdp_per_capita })),  "GDP per Capita ($)", 1.6),
+    ...detectAnomalies(exportData.map(d => ({ year: d.year, value: d.total })),        "Total Exports ($B)", 1.6),
+    ...detectAnomalies(importData.map(d => ({ year: d.year, value: d.total })),        "Total Imports ($B)", 1.6),
+    ...detectAnomalies(tradeBalanceSeries,                                              "Trade Balance ($B)", 1.6),
+  ];
+
+  const seen = new Set<string>();
+  return results.filter(a => {
+    const key = `${a.year}:${a.metric}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((a, b) => Math.abs(b.zScore) - Math.abs(a.zScore));
+}

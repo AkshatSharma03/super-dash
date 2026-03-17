@@ -79,3 +79,46 @@ export function buildHHITimeSeries(
     };
   });
 }
+
+// ── Generic version — works with any CountryDataset ───────────────────────────
+// TradeEntry rows have year + total + dynamic sector/partner keys.
+// Sector/partner labels come from TradeSeries[].key.
+import type { TradeEntry, TradeSeries } from "../types";
+
+export function buildGenericHHITimeSeries(
+  exportData: TradeEntry[],
+  importData: TradeEntry[],
+  exportSectors: TradeSeries[],
+  importPartners: TradeSeries[],
+): HHITimePoint[] {
+  const expKeys = exportSectors.map(s => s.key);
+  const impKeys = importPartners.map(s => s.key);
+
+  const expMap = new Map(exportData.map(d => [d.year, d]));
+  const impMap = new Map(importData.map(d => [d.year, d]));
+  const years  = [...new Set([...exportData, ...importData].map(d => d.year))].sort((a, b) => a - b);
+
+  return years
+    .filter(y => expMap.has(y) && impMap.has(y))
+    .map(y => {
+      const exp = expMap.get(y)!;
+      const imp = impMap.get(y)!;
+
+      const expComponents: Record<string, number> = {};
+      for (const k of expKeys) if (typeof exp[k] === "number") expComponents[k] = exp[k] as number;
+
+      const impComponents: Record<string, number> = {};
+      for (const k of impKeys) if (typeof imp[k] === "number") impComponents[k] = imp[k] as number;
+
+      const expResult = computeHHI(expComponents);
+      const impResult = computeHHI(impComponents);
+
+      return {
+        year: y,
+        exportHHI: expResult.hhi,
+        importHHI: impResult.hhi,
+        exportLevel: expResult.level,
+        importLevel: impResult.level,
+      };
+    });
+}

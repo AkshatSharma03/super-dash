@@ -44,6 +44,11 @@ export default function App() {
   const [countryLoading, setCountryLoading] = useState(false);
   const [countryError,   setCountryError]   = useState<string | null>(null);
 
+  // Analytics tab has its own independent country selection
+  const [analyticsData,    setAnalyticsData]    = useState<CountryDataset | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError,   setAnalyticsError]   = useState<string | null>(null);
+
   const loadCountry = useCallback(async (code: string, tok: string) => {
     setCountryLoading(true);
     setCountryError(null);
@@ -54,6 +59,19 @@ export default function App() {
       setCountryError(e instanceof Error ? e.message : "Failed to load country data");
     } finally {
       setCountryLoading(false);
+    }
+  }, []);
+
+  const loadAnalyticsCountry = useCallback(async (code: string, tok: string) => {
+    setAnalyticsLoading(true);
+    setAnalyticsError(null);
+    try {
+      const data = await getCountryData(code, tok);
+      setAnalyticsData(data);
+    } catch (e) {
+      setAnalyticsError(e instanceof Error ? e.message : "Failed to load country data");
+    } finally {
+      setAnalyticsLoading(false);
     }
   }, []);
 
@@ -182,7 +200,15 @@ export default function App() {
         {mode === "chat"      && <div style={{ maxWidth: 1060, margin: "0 auto", height: "100%", display: "flex", flexDirection: "column" }}><ChatMode token={token} /></div>}
         {mode === "search"    && <SearchMode />}
         {mode === "data"      && <DataMode />}
-        {mode === "analytics" && <AnalyticsMode />}
+        {mode === "analytics" && (
+          <AnalyticsMode
+            token={token}
+            dataset={analyticsData}
+            loading={analyticsLoading}
+            error={analyticsError}
+            onSelectCountry={code => loadAnalyticsCountry(code, token)}
+          />
+        )}
         {mode === "dashboard" && (
           <div style={{ maxWidth: 1100, margin: "0 auto" }}>
             <DashboardMode

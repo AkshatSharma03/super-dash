@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeHHI, buildHHITimeSeries } from "../hhi";
+import { computeHHI, buildHHITimeSeries, buildGenericHHITimeSeries } from "../hhi";
 
 // ── computeHHI ────────────────────────────────────────────────────────────────
 
@@ -148,5 +148,65 @@ describe("buildHHITimeSeries", () => {
   it("growing China share increases import HHI over time", () => {
     const series = buildHHITimeSeries(mockImports, mockExports);
     expect(series[2].importHHI).toBeGreaterThanOrEqual(series[0].importHHI);
+  });
+});
+
+// ── buildGenericHHITimeSeries ─────────────────────────────────────────────────
+
+describe("buildGenericHHITimeSeries", () => {
+  const exportSectors = [
+    { key: "oil",   label: "Oil & Gas", color: "#F59E0B" },
+    { key: "metals",label: "Metals",    color: "#94a3b8" },
+    { key: "other", label: "Other",     color: "#64748b" },
+  ];
+  const importPartners = [
+    { key: "china",  label: "China",  color: "#EF4444" },
+    { key: "russia", label: "Russia", color: "#F59E0B" },
+    { key: "other",  label: "Other",  color: "#64748b" },
+  ];
+
+  const exportData = [
+    { year: 2020, total: 60, oil: 45, metals: 10, other: 5 },
+    { year: 2021, total: 65, oil: 50, metals: 10, other: 5 },
+    { year: 2022, total: 70, oil: 55, metals: 10, other: 5 },
+  ];
+  const importData = [
+    { year: 2020, total: 40, china: 18, russia: 12, other: 10 },
+    { year: 2021, total: 42, china: 20, russia: 12, other: 10 },
+    { year: 2022, total: 45, china: 22, russia: 12, other: 11 },
+  ];
+
+  it("returns one point per aligned year", () => {
+    const s = buildGenericHHITimeSeries(exportData, importData, exportSectors, importPartners);
+    expect(s).toHaveLength(3);
+  });
+
+  it("years are in ascending order", () => {
+    const s = buildGenericHHITimeSeries(exportData, importData, exportSectors, importPartners);
+    expect(s.map(p => p.year)).toEqual([2020, 2021, 2022]);
+  });
+
+  it("exportLevel is Concentrated due to oil dominance (>75%)", () => {
+    const s = buildGenericHHITimeSeries(exportData, importData, exportSectors, importPartners);
+    s.forEach(p => expect(p.exportLevel).toBe("Concentrated"));
+  });
+
+  it("importHHI and exportHHI are positive", () => {
+    const s = buildGenericHHITimeSeries(exportData, importData, exportSectors, importPartners);
+    s.forEach(p => {
+      expect(p.importHHI).toBeGreaterThan(0);
+      expect(p.exportHHI).toBeGreaterThan(0);
+    });
+  });
+
+  it("only returns years present in both export and import data", () => {
+    const partialExport = exportData.slice(0, 2); // 2020, 2021 only
+    const s = buildGenericHHITimeSeries(partialExport, importData, exportSectors, importPartners);
+    expect(s.map(p => p.year)).toEqual([2020, 2021]);
+  });
+
+  it("growing China share increases import HHI over time", () => {
+    const s = buildGenericHHITimeSeries(exportData, importData, exportSectors, importPartners);
+    expect(s[2].importHHI).toBeGreaterThanOrEqual(s[0].importHHI);
   });
 });

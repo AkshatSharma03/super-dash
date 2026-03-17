@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectAnomalies, detectAllAnomalies } from "../anomaly";
+import { detectAnomalies, detectAllAnomalies, detectAllAnomaliesGeneric } from "../anomaly";
 
 // ── detectAnomalies ───────────────────────────────────────────────────────────
 
@@ -189,6 +189,69 @@ describe("detectAllAnomalies", () => {
   it("all returned points have valid severity values", () => {
     const valid = new Set(["moderate", "strong", "extreme"]);
     detectAllAnomalies(mockInput).forEach(r =>
+      expect(valid.has(r.severity)).toBe(true),
+    );
+  });
+});
+
+// ── detectAllAnomaliesGeneric ─────────────────────────────────────────────────
+
+describe("detectAllAnomaliesGeneric", () => {
+  const genericYears = Array.from({ length: 12 }, (_, i) => 2010 + i);
+
+  const gdpData = genericYears.map((year, i) => ({
+    year,
+    gdp_bn:         100 + i * 8 + (i === 6 ? 200 : 0), // spike at 2016
+    gdp_growth:     5   + (i === 4 ? -10  : 0),         // crash at 2014
+    gdp_per_capita: 5000 + i * 200,
+  }));
+
+  const exportData = genericYears.map((year, i) => ({
+    year,
+    total: 50 + i * 3,
+  }));
+
+  const importData = genericYears.map((year, i) => ({
+    year,
+    total: 40 + i * 2,
+  }));
+
+  it("returns an array", () => {
+    expect(Array.isArray(detectAllAnomaliesGeneric(gdpData, exportData, importData))).toBe(true);
+  });
+
+  it("no duplicate year+metric pairs", () => {
+    const result = detectAllAnomaliesGeneric(gdpData, exportData, importData);
+    const keys = result.map(r => `${r.year}:${r.metric}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("results are sorted by |zScore| descending", () => {
+    const result = detectAllAnomaliesGeneric(gdpData, exportData, importData);
+    for (let i = 1; i < result.length; i++) {
+      expect(Math.abs(result[i - 1].zScore)).toBeGreaterThanOrEqual(
+        Math.abs(result[i].zScore),
+      );
+    }
+  });
+
+  it("detects the GDP growth crash at 2014", () => {
+    const result = detectAllAnomaliesGeneric(gdpData, exportData, importData);
+    const crash = result.find(r => r.metric === "GDP Growth (%)" && r.year === 2014);
+    expect(crash).toBeDefined();
+    expect(crash?.direction).toBe("low");
+  });
+
+  it("detects the GDP spike at 2016", () => {
+    const result = detectAllAnomaliesGeneric(gdpData, exportData, importData);
+    const spike = result.find(r => r.metric === "Nominal GDP ($B)" && r.year === 2016);
+    expect(spike).toBeDefined();
+    expect(spike?.direction).toBe("high");
+  });
+
+  it("all points have valid severity values", () => {
+    const valid = new Set(["moderate", "strong", "extreme"]);
+    detectAllAnomaliesGeneric(gdpData, exportData, importData).forEach(r =>
       expect(valid.has(r.severity)).toBe(true),
     );
   });

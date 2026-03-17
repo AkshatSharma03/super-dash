@@ -131,6 +131,17 @@ export function analyzeCSVData(
   return post<AIResponse>("/api/analyze-csv", { headers, rows, context });
 }
 
+// ── Analytics ─────────────────────────────────────────────────────────────────
+
+/**
+ * Send a free-text query about a country's economic data to Claude.
+ * `context` is a pre-formatted text summary of the country dataset.
+ * Returns an AIResponse with insight, charts, sources, and follow-ups.
+ */
+export function queryAnalytics(query: string, context: string, token: string): Promise<AIResponse> {
+  return post<AIResponse>("/api/analytics", { query, context }, token);
+}
+
 // ── Country data ──────────────────────────────────────────────────────────────
 
 /**
