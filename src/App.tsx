@@ -1,10 +1,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // APP SHELL  —  top-level layout: auth gate, header, mode navigation.
 // Shows AuthPage when the user is not logged in; the full dashboard otherwise.
+//
+// Country data state lives here (not in DashboardMode) so that a fetch started
+// in one tab continues running even after the user switches to another tab.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect } from "react";
-import type { Mode, User } from "./types";
-import { fetchMe } from "./utils/api";
+import { useState, useEffect, useCallback } from "react";
+import type { Mode, User, CountryDataset } from "./types";
+import { fetchMe, getCountryData, refreshCountryData } from "./utils/api";
 import AuthPage      from "./components/auth/AuthPage";
 import SettingsPanel from "./components/auth/SettingsPanel";
 import DashboardMode from "./components/modes/DashboardMode";
@@ -22,19 +25,50 @@ const MODES: [Mode, string][] = [
 ];
 
 const MODE_META: Record<Mode, { label: string; desc: string; color: string }> = {
-  chat:      { label: "AI Chat",            color: "#8B5CF6", desc: "Ask any economic question — Claude generates interactive charts and analysis from your query" },
-  search:    { label: "Web Search",         color: "#10B981", desc: "Live web search · Claude pulls and summarises current data from authoritative sources" },
-  data:      { label: "Data Upload",        color: "#F59E0B", desc: "Upload a CSV file · Claude analyses your data and creates charts automatically" },
-  analytics: { label: "Analytics",          color: "#EF4444", desc: "Algorithms from scratch: OLS Regression · HHI Concentration · K-Means Clustering · Z-Score Anomaly Detection" },
-  dashboard: { label: "Country Data",       color: "#00AAFF", desc: "Select any country — real GDP & trade data from World Bank, cached locally · sector breakdown AI-estimated" },
+  chat:      { label: "AI Chat",       color: "#8B5CF6", desc: "Ask any economic question — Claude generates interactive charts and analysis from your query" },
+  search:    { label: "Web Search",    color: "#10B981", desc: "Live web search · Claude pulls and summarises current data from authoritative sources" },
+  data:      { label: "Data Upload",   color: "#F59E0B", desc: "Upload a CSV file · Claude analyses your data and creates charts automatically" },
+  analytics: { label: "Analytics",    color: "#EF4444", desc: "Algorithms from scratch: OLS Regression · HHI Concentration · K-Means Clustering · Z-Score Anomaly Detection" },
+  dashboard: { label: "Country Data", color: "#00AAFF", desc: "Select any country — real GDP & trade data from World Bank, cached locally · sector breakdown AI-estimated" },
 };
 
 export default function App() {
   const [user,      setUser]      = useState<User | null>(null);
   const [token,     setToken]     = useState<string | null>(null);
-  const [authReady, setAuthReady] = useState(false);   // prevents flash of auth page on refresh
+  const [authReady, setAuthReady] = useState(false);
   const [mode,         setMode]         = useState<Mode>("chat");
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // ── Country data — lives here so fetches survive tab switches ───────────────
+  const [countryData,    setCountryData]    = useState<CountryDataset | null>(null);
+  const [countryLoading, setCountryLoading] = useState(false);
+  const [countryError,   setCountryError]   = useState<string | null>(null);
+
+  const loadCountry = useCallback(async (code: string, tok: string) => {
+    setCountryLoading(true);
+    setCountryError(null);
+    try {
+      const data = await getCountryData(code, tok);
+      setCountryData(data);
+    } catch (e) {
+      setCountryError(e instanceof Error ? e.message : "Failed to load country data");
+    } finally {
+      setCountryLoading(false);
+    }
+  }, []);
+
+  const handleRefreshCountry = useCallback(async (tok: string, currentCode: string) => {
+    setCountryLoading(true);
+    setCountryError(null);
+    try {
+      const data = await refreshCountryData(currentCode, tok);
+      setCountryData(data);
+    } catch (e) {
+      setCountryError(e instanceof Error ? e.message : "Refresh failed");
+    } finally {
+      setCountryLoading(false);
+    }
+  }, []);
 
   // On mount: restore session from localStorage and validate the token
   useEffect(() => {
@@ -56,16 +90,17 @@ export default function App() {
     localStorage.removeItem("ec_token");
     setToken(null);
     setUser(null);
+    setCountryData(null);
   };
 
-  // Don't render until we've checked localStorage (avoids auth page flash)
   if (!authReady) return null;
-
-  // Unauthenticated: show landing + login/register
   if (!user || !token) return <AuthPage onAuth={handleAuth} />;
 
   const { label, desc, color } = MODE_META[mode];
   const modeIcon = MODES.find(m => m[0] === mode)?.[1].split(" ")[0] ?? "";
+
+  // Show a pulsing dot on the Country Data tab when a fetch is running in the background
+  const fetchingInBg = countryLoading && mode !== "dashboard";
 
   return (
     <div style={{ fontFamily: "Inter,sans-serif", background: "#0f1117", height: "100vh", display: "flex", flexDirection: "column", color: "#e2e8f0" }}>
@@ -81,20 +116,28 @@ export default function App() {
 
         {/* Mode tabs */}
         <div style={{ marginLeft: 14, display: "flex", background: "#161929", borderRadius: 10, padding: 3, border: "1px solid #2d3348", gap: 1, flexWrap: "nowrap" }}>
-          {MODES.map(([m, lbl]) => (
-            <button key={m} onClick={() => setMode(m)} style={{
-              background: mode === m ? MODE_META[m].color : "transparent",
-              color: mode === m ? "#fff" : "#64748b",
-              border: "none", borderRadius: 7, padding: "5px 12px",
-              fontSize: 11.5, fontWeight: mode === m ? 700 : 500,
-              cursor: "pointer", transition: "all .18s", whiteSpace: "nowrap",
-              boxShadow: mode === m ? `0 2px 8px ${MODE_META[m].color}55` : "none",
-            }}>{lbl}</button>
-          ))}
+          {MODES.map(([m, lbl]) => {
+            const isBgFetch = m === "dashboard" && fetchingInBg;
+            return (
+              <button key={m} onClick={() => setMode(m)} style={{
+                background: mode === m ? MODE_META[m].color : "transparent",
+                color: mode === m ? "#fff" : "#64748b",
+                border: "none", borderRadius: 7, padding: "5px 12px",
+                fontSize: 11.5, fontWeight: mode === m ? 700 : 500,
+                cursor: "pointer", transition: "all .18s", whiteSpace: "nowrap",
+                boxShadow: mode === m ? `0 2px 8px ${MODE_META[m].color}55` : "none",
+                display: "flex", alignItems: "center", gap: 5,
+              }}>
+                {lbl}
+                {isBgFetch && (
+                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00AAFF", display: "inline-block", animation: "ecPulse 1.2s ease-in-out infinite" }} />
+                )}
+              </button>
+            );
+          })}
         </div>
 
-
-        {/* User chip — click to open settings */}
+        {/* User chip */}
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
           <button onClick={() => setSettingsOpen(true)}
             style={{ display: "flex", alignItems: "center", gap: 8, background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "5px 10px 5px 6px", cursor: "pointer", transition: "all .15s" }}
@@ -115,6 +158,9 @@ export default function App() {
         </div>
       </div>
 
+      {/* Keyframe for pulsing background-fetch indicator */}
+      <style>{`@keyframes ecPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }`}</style>
+
       {/* ── Mode badge + description ── */}
       <div style={{ padding: "5px 20px", borderBottom: "1px solid #1e2130", flexShrink: 0, display: "flex", alignItems: "center", gap: 10, background: "#0d1018" }}>
         <div style={{ width: 3, height: 18, borderRadius: 2, background: color, flexShrink: 0 }} />
@@ -122,15 +168,33 @@ export default function App() {
           {modeIcon} {label}
         </span>
         <span style={{ fontSize: 11, color: "#475569" }}>{desc}</span>
+        {/* In-progress fetch notice visible on all tabs */}
+        {fetchingInBg && (
+          <span style={{ marginLeft: "auto", fontSize: 11, color: "#00AAFF", display: "flex", alignItems: "center", gap: 5 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00AAFF", display: "inline-block", animation: "ecPulse 1.2s ease-in-out infinite" }} />
+            Fetching country data in background…
+          </span>
+        )}
       </div>
 
       {/* ── Main content ── */}
       <div style={{ flex: 1, overflowY: mode === "chat" ? "hidden" : "auto", padding: mode === "chat" ? "16px 20px 0" : "20px 20px" }}>
-        {mode === "chat"       && <div style={{ maxWidth: 1060, margin: "0 auto", height: "100%", display: "flex", flexDirection: "column" }}><ChatMode token={token} /></div>}
-        {mode === "search"     && <SearchMode />}
-        {mode === "data"       && <DataMode />}
-        {mode === "analytics"  && <AnalyticsMode />}
-        {mode === "dashboard"  && <div style={{ maxWidth: 1100, margin: "0 auto" }}><DashboardMode token={token} /></div>}
+        {mode === "chat"      && <div style={{ maxWidth: 1060, margin: "0 auto", height: "100%", display: "flex", flexDirection: "column" }}><ChatMode token={token} /></div>}
+        {mode === "search"    && <SearchMode />}
+        {mode === "data"      && <DataMode />}
+        {mode === "analytics" && <AnalyticsMode />}
+        {mode === "dashboard" && (
+          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+            <DashboardMode
+              token={token}
+              dataset={countryData}
+              loading={countryLoading}
+              error={countryError}
+              onSelectCountry={code => loadCountry(code, token)}
+              onRefresh={() => countryData && handleRefreshCountry(token, countryData.code)}
+            />
+          </div>
+        )}
       </div>
 
       {settingsOpen && (

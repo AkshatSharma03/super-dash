@@ -113,6 +113,9 @@ export interface CountryDataset {
 /** Country search result from /api/country/search. */
 export interface CountrySearchResult { code: string; name: string; flag: string; region: string; }
 
+/** Entry in the local fetch history from /api/country/history. */
+export interface CountryHistoryEntry { code: string; name: string; flag: string; region: string; cachedAt: number; }
+
 // ── App types ─────────────────────────────────────────────────────────────────
 
 /** The five top-level navigation modes. */

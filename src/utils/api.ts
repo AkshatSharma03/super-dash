@@ -3,7 +3,7 @@
 // The Express server (server.js) holds the ANTHROPIC_API_KEY; the client
 // bundle never sees it. All requests go to /api/*.
 // ─────────────────────────────────────────────────────────────────────────────
-import type { AIResponse, SearchResult, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult } from "../types";
+import type { AIResponse, SearchResult, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../types";
 
 /** Helper: POST to an endpoint, throw on non-2xx, return typed JSON. */
 async function post<T>(path: string, body: unknown, token?: string): Promise<T> {
@@ -154,4 +154,11 @@ export function getCountryData(code: string, token: string): Promise<CountryData
  */
 export function refreshCountryData(code: string, token: string): Promise<CountryDataset> {
   return post<CountryDataset>(`/api/country/${code}/refresh`, {}, token);
+}
+
+/**
+ * Return metadata for every country already stored in the local cache, newest first.
+ */
+export function getCountryHistory(token: string): Promise<CountryHistoryEntry[]> {
+  return get<CountryHistoryEntry[]>("/api/country/history", token);
 }
