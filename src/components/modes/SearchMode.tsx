@@ -5,7 +5,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from "react";
 import { useMobile } from "../../utils/useMobile";
-import { SEARCH_SUGGESTIONS } from "../../data/kazakhstan";
+import { SEARCH_SUGGESTIONS } from "../../data/suggestions";
 import { performWebSearch } from "../../utils/api";
 import { getSearchTrie } from "../../algorithms/trie";
 import type { SearchResult } from "../../types";
