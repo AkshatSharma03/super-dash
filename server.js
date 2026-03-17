@@ -873,6 +873,19 @@ Rules:
   };
 }
 
+// GET /api/country/history
+// Returns metadata for every country already in the local cache, newest first.
+app.get('/api/country/history', requireAuth, (req, res) => {
+  const rows = db.prepare('SELECT code, data_json, cached_at FROM country_cache ORDER BY cached_at DESC').all();
+  const history = rows.map(r => {
+    try {
+      const d = JSON.parse(r.data_json);
+      return { code: d.code, name: d.name, flag: d.flag, region: d.region, cachedAt: r.cached_at };
+    } catch { return null; }
+  }).filter(Boolean);
+  res.json(history);
+});
+
 // GET /api/country/search?q=name
 // Returns up to 15 matching countries from World Bank country list.
 app.get('/api/country/search', requireAuth, apiLimiter, async (req, res) => {
