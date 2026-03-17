@@ -939,6 +939,69 @@ app.post('/api/country/:code/refresh', requireAuth, apiLimiter, async (req, res)
   }
 });
 
+// POST /api/analytics
+// Accepts: { query: string, context: string }
+// context is a pre-formatted text summary of the selected country's data.
+// Returns: AIResponse — same shape as /api/chat so the client can reuse DynChart.
+app.post('/api/analytics', requireAuth, apiLimiter, async (req, res) => {
+  const query   = String(req.body.query   || '').trim().slice(0, MAX_MSG_CHARS);
+  const context = String(req.body.context || '').trim().slice(0, 8_000);
+  if (!query) return res.status(400).json({ error: 'query is required' });
+
+  const ck = cacheKey('/analytics', { query, context: context.slice(0, 500) });
+  const cached = apiCache.get(ck);
+  if (cached) { if (IS_DEV) console.log('[cache hit] /api/analytics'); return res.json(cached); }
+
+  const systemPrompt = `You are an expert econometrician and data scientist specializing in country-level economic analysis.
+The user has selected a country and run several algorithms on its data. They may provide that data as context.
+Respond ONLY with a valid JSON object matching this exact shape (no markdown wrapper):
+{
+  "insight": "3-4 sentence expert analysis directly answering the user's question with specific figures",
+  "charts": [
+    {
+      "id": "unique_id",
+      "title": "Chart title",
+      "type": "line|bar|area|pie|composed",
+      "description": "One sentence",
+      "data": [...],
+      "xKey": "year",
+      "series": [{"key":"fieldname","name":"Display Name","color":"#hex","chartType":"bar|line","stacked":false}]
+    }
+  ],
+  "sources": [{"title":"Source name","url":"https://... or null"}],
+  "followUps": ["Follow-up 1","Follow-up 2","Follow-up 3"]
+}
+Rules:
+- 1-2 targeted charts that directly address the user's question using the provided data
+- Use real values from the country data context wherever possible
+- Colors: #00AAFF #F59E0B #10B981 #EF4444 #8B5CF6 #F97316`;
+
+  const userMessage = context
+    ? `Country economic data:\n${context}\n\nUser question: ${query}`
+    : query;
+
+  try {
+    const data = await callAnthropic({
+      model: MODEL, max_tokens: 3000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    });
+    const text = data.content?.map(b => b.text || '').join('') || '{}';
+    let parsed;
+    try {
+      const raw = JSON.parse(text.replace(/```json|```/g, '').trim());
+      parsed = validateAIResponse(raw) ?? { insight: text, charts: [], sources: [], followUps: [] };
+    } catch {
+      parsed = { insight: text, charts: [], sources: [], followUps: [] };
+    }
+    apiCache.put(ck, parsed, TTL_CHAT_MS);
+    res.json(parsed);
+  } catch (e) {
+    console.error('/api/analytics error:', e.message);
+    res.status(502).json({ error: e.message });
+  }
+});
+
 // ── Static file serving ───────────────────────────────────────────────────────
 // In production, Express serves the Vite-built dist/ folder.
 // SPA fallback: all non-API routes return index.html so React Router works.
