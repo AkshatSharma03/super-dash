@@ -33,14 +33,14 @@ import type { AnomalyPoint }           from "../../algorithms/anomaly";
 
 // ── Popular quick-picks ───────────────────────────────────────────────────────
 const POPULAR: CountrySearchResult[] = [
-  { code: "KZ", name: "Kazakhstan",    flag: "🇰🇿", region: "Central Asia" },
-  { code: "UZ", name: "Uzbekistan",    flag: "🇺🇿", region: "Central Asia" },
-  { code: "DE", name: "Germany",       flag: "🇩🇪", region: "Europe" },
   { code: "US", name: "United States", flag: "🇺🇸", region: "North America" },
   { code: "CN", name: "China",         flag: "🇨🇳", region: "East Asia" },
+  { code: "DE", name: "Germany",       flag: "🇩🇪", region: "Europe" },
+  { code: "JP", name: "Japan",         flag: "🇯🇵", region: "East Asia" },
+  { code: "GB", name: "United Kingdom",flag: "🇬🇧", region: "Europe" },
   { code: "IN", name: "India",         flag: "🇮🇳", region: "South Asia" },
   { code: "BR", name: "Brazil",        flag: "🇧🇷", region: "Latin America" },
-  { code: "JP", name: "Japan",         flag: "🇯🇵", region: "East Asia" },
+  { code: "FR", name: "France",        flag: "🇫🇷", region: "Europe" },
 ];
 
 // ── Algorithm catalogue ───────────────────────────────────────────────────────

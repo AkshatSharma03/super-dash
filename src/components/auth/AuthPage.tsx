@@ -15,7 +15,7 @@ const FEATURES = [
   ["🔍", "Live web search",   "Pull current data directly from World Bank, IMF, OECD, and national statistics offices"],
   ["📁", "Your own data",     "Upload any CSV and get instant AI-powered charts and expert analysis"],
   ["🧮", "Deep analytics",    "OLS regression, K-Means clustering, HHI concentration, and anomaly detection on real data"],
-  ["🇰🇿", "Kazakhstan data",   "Pre-built dashboard with 15 years of Kazakhstan economic data — GDP, trade, exports, imports"],
+  ["🌍", "Global dashboards",  "Instant dashboards for any country — US, China, EU, Japan and more — 15+ years of GDP, trade, and sector data"],
 ];
 
 export default function AuthPage({ onAuth }: AuthPageProps) {
