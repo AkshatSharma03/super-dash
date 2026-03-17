@@ -76,7 +76,7 @@ export default function SearchMode() {
             onBlur={e => { e.currentTarget.style.borderColor = "#2d3348"; e.currentTarget.style.boxShadow = "none"; setTimeout(() => setShowSuggestions(false), 150); }}
             onFocus={e => { e.currentTarget.style.borderColor = "#10B981"; e.currentTarget.style.boxShadow = "0 0 0 3px #10B98118"; }}
             disabled={loading}
-            placeholder="Search for Kazakhstan economic data, news, trade stats from the web…"
+            placeholder="Search for US, China, EU, Japan economic data, trade stats, news…"
             style={{ flex: 1, background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: "12px 16px", color: "#e2e8f0", fontSize: 14, outline: "none", transition: "border-color .15s, box-shadow .15s" }}
           />
           <button onClick={() => doSearch(query)} disabled={loading || !query.trim()}

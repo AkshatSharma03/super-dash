@@ -133,7 +133,7 @@ export default function DataMode() {
               Context (optional) — describe what this data represents:
             </label>
             <textarea value={context} onChange={e => setContext(e.target.value)}
-              placeholder="e.g. Monthly Kazakhstan trade data 2020–2024, showing exports and imports by sector in USD millions…"
+              placeholder="e.g. Monthly US trade data 2020–2024, showing exports and imports by sector in USD millions…"
               rows={2}
               style={{ width: "100%", background: "#1e2130", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 14px", color: "#e2e8f0", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "Inter, sans-serif", boxSizing: "border-box", transition: "border-color .15s" }}
               onFocus={e => { e.target.style.borderColor = "#F59E0B"; }}
