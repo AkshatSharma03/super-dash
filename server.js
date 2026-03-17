@@ -705,9 +705,11 @@ async function callAnthropic(body, extraHeaders = {}) {
 
 const CHAT_SYSTEM = `You are an expert data analyst and economist with comprehensive knowledge of global economics, international trade, financial markets, macroeconomic policy, and economic history across all countries and regions.
 
+IMPORTANT: The user's message may contain a "Recent Verified News" section with live articles fetched from trusted sources. When present, treat this news as your PRIMARY source of truth for current events and projections — it supersedes your training knowledge. Use it to answer questions about ongoing conflicts, 2025/2026 developments, and current economic conditions. Never refuse to answer based on a knowledge cutoff when live news context has been provided.
+
 When a user asks a question, respond ONLY with a valid JSON object (no markdown, no preamble):
 {
-  "insight": "2-3 sentence expert analysis",
+  "insight": "2-3 sentence expert analysis. When news context is available, lead with insights drawn directly from those articles and cite specific figures from them.",
   "charts": [
     {
       "id": "unique_id",
@@ -727,8 +729,9 @@ When a user asks a question, respond ONLY with a valid JSON object (no markdown,
 
 Rules:
 - 1-3 charts per response. Choose types intelligently: trends->line/area, comparisons->bar, composition->pie, multi-metric->composed
-- Use real, accurate data from your knowledge (World Bank, IMF, UN Comtrade, national statistics, OECD)
-- sources: array of {title, url} where url is the DEEPEST possible link to the exact dataset or report page — never just a homepage. Use these known deep-link patterns:
+- When news context is provided, build charts using figures and projections from those articles
+- When no news context is available, use real, accurate data from your knowledge (World Bank, IMF, UN Comtrade, national statistics, OECD)
+- sources: always include the news article URLs provided in context first, then add deep-link dataset URLs. Use these patterns:
   * World Bank indicator: https://data.worldbank.org/indicator/<INDICATOR_CODE>?locations=<ISO2>
     Common codes: NY.GDP.MKTP.CD (GDP), NY.GDP.MKTP.KD.ZG (GDP growth), NY.GDP.PCAP.CD (GDP per capita),
     NE.TRD.GNFS.ZS (trade % GDP), BX.GSR.GNFS.CD (exports), BM.GSR.GNFS.CD (imports)
@@ -1174,6 +1177,7 @@ app.post('/api/analytics', requireAuth, apiLimiter, async (req, res) => {
 
   const systemPrompt = `You are an expert econometrician and data scientist specializing in country-level economic analysis.
 The user has selected a country and run several algorithms on its data. They may provide that data as context along with recent verified news articles.
+IMPORTANT: When "Recent Verified News" articles are included in the context, treat them as your PRIMARY source for current events and projections. Never refuse based on a knowledge cutoff — use the news to inform your analysis.
 Respond ONLY with a valid JSON object matching this exact shape (no markdown wrapper):
 {
   "insight": "3-4 sentence expert analysis directly answering the user's question with specific figures",
