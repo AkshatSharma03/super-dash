@@ -73,6 +73,46 @@ export interface ChatSession { id: string; title: string; createdAt: string; upd
 /** Full chat session including all messages (returned by GET /api/sessions/:id). */
 export interface ChatSessionFull extends ChatSession { messages: Message[]; }
 
+// ── Multi-country dataset types ───────────────────────────────────────────────
+
+/** A single series (sector or partner) inside a country's trade charts. */
+export interface TradeSeries { key: string; label: string; color: string; }
+
+/** A generic trade data row — year + total + any number of sector/partner keys. */
+export interface TradeEntry { year: number; total: number; [key: string]: number; }
+
+/** Country-level GDP row (digital_pct is optional — not all countries track it). */
+export interface CountryGDPEntry {
+  year: number;
+  gdp_bn: number;
+  gdp_growth: number;
+  gdp_per_capita: number;
+  digital_pct?: number;
+}
+
+export interface CountryPieEntry { name: string; value: number; }
+export interface CountryKPIEntry { label: string; value: string; sub: string; trend: string | null; color: string; }
+
+/** Full dataset for one country — consumed by DashboardMode. */
+export interface CountryDataset {
+  code: string;
+  name: string;
+  flag: string;
+  region: string;
+  gdpData: CountryGDPEntry[];
+  exportData: TradeEntry[];
+  importData: TradeEntry[];
+  exportSectors: TradeSeries[];
+  importPartners: TradeSeries[];
+  kpis: CountryKPIEntry[];
+  pieExports: CountryPieEntry[];
+  pieImports: CountryPieEntry[];
+  _meta?: { sources: string[]; cachedAt: number; stale?: boolean; };
+}
+
+/** Country search result from /api/country/search. */
+export interface CountrySearchResult { code: string; name: string; flag: string; region: string; }
+
 // ── App types ─────────────────────────────────────────────────────────────────
 
 /** The five top-level navigation modes. */
