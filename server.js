@@ -18,7 +18,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 const PORT              = process.env.PORT || 3000;
-const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
+const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const IS_DEV            = process.env.NODE_ENV !== 'production';

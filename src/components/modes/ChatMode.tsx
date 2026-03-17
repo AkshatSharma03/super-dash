@@ -5,7 +5,7 @@
 // each assistant response.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useRef, useEffect } from "react";
-import { CHAT_SUGGESTIONS } from "../../data/kazakhstan";
+import { CHAT_SUGGESTIONS } from "../../data/suggestions";
 import { useMobile } from "../../utils/useMobile";
 import { askClaude, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
 import type { Message, AIResponse, ChatSession } from "../../types";

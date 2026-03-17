@@ -67,51 +67,48 @@ export class Trie {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CORPUS  — Kazakhstan economic terms, weighted by relevance
+// CORPUS  — Global economic terms, weighted by relevance
 // ─────────────────────────────────────────────────────────────────────────────
 const CORPUS: Array<[string, number]> = [
-  // GDP (weight 10 = highest priority)
+  // GDP
   ["GDP growth", 10], ["GDP per capita", 10], ["nominal GDP", 9], ["real GDP growth", 9],
   ["GDP forecast 2025", 8], ["GDP forecast 2026", 8],
 
   // Oil & energy
   ["oil and gas exports", 10], ["crude oil production", 9], ["petroleum revenues", 8],
-  ["Tengiz oil field", 7], ["Kashagan oil field", 7], ["Karachaganak gas", 7],
-  ["oil price impact Kazakhstan", 9], ["energy sector Kazakhstan", 8],
+  ["energy sector", 8], ["renewable energy", 8], ["solar power", 7], ["wind energy", 7],
 
   // Trade
   ["trade balance", 10], ["trade surplus", 9], ["total exports", 9], ["total imports", 9],
   ["export diversification", 8], ["import partners", 8], ["trade concentration", 7],
-  ["China imports Kazakhstan", 9], ["Russia imports Kazakhstan", 8], ["EU imports Kazakhstan", 7],
   ["metals exports", 7], ["agriculture exports", 7], ["chemicals exports", 6],
 
   // Macroeconomics
   ["inflation rate", 9], ["interest rate", 9], ["monetary policy", 8],
-  ["tenge exchange rate", 9], ["currency depreciation", 8], ["foreign exchange reserves", 7],
+  ["exchange rate", 9], ["currency depreciation", 8], ["foreign exchange reserves", 7],
   ["foreign direct investment", 9], ["FDI inflows", 8], ["capital account", 7],
-  ["sovereign wealth fund", 9], ["National Fund Kazakhstan", 9], ["AIFC", 7],
+  ["sovereign wealth fund", 9], ["central bank policy", 8],
 
   // Digital & tech
-  ["digital economy", 10], ["digital GDP share", 9], ["fintech Kazakhstan", 8],
-  ["digital transformation", 7], ["tech sector growth", 7], ["AI governance Kazakhstan", 8],
-  ["Silicon Steppes", 6], ["startup ecosystem", 6],
+  ["digital economy", 10], ["digital GDP share", 9], ["fintech", 8],
+  ["digital transformation", 7], ["tech sector growth", 7], ["AI governance", 8],
+  ["startup ecosystem", 6], ["e-commerce growth", 7],
 
   // Policy & institutions
-  ["Astana International Financial Centre", 7], ["Belt and Road Initiative", 8],
-  ["BRI investment Kazakhstan", 8], ["EAEU trade", 7], ["Eurasian Economic Union", 7],
-  ["IMF Kazakhstan outlook", 8], ["World Bank Kazakhstan", 8],
+  ["Belt and Road Initiative", 8], ["IMF outlook", 8], ["World Bank report", 8],
+  ["G20 economy", 7], ["OECD growth", 7], ["WTO trade", 7],
 
   // Social
   ["unemployment rate", 7], ["poverty rate", 7], ["population growth", 6],
-  ["labor market Kazakhstan", 6], ["wage growth", 5],
+  ["labor market", 6], ["wage growth", 5], ["income inequality", 6],
 
   // Resources
-  ["uranium production", 7], ["copper exports", 6], ["grain exports", 6],
-  ["wheat production", 5], ["renewable energy", 6], ["solar power Kazakhstan", 5],
+  ["commodity exports", 7], ["copper exports", 6], ["grain exports", 6],
+  ["wheat production", 5], ["natural resources", 7],
 
   // Forecasts
-  ["Kazakhstan 2025 outlook", 9], ["Kazakhstan economic forecast", 9],
-  ["Kazakhstan growth projection", 8], ["Central Asia GDP", 7],
+  ["economic outlook 2025", 9], ["economic forecast 2026", 9],
+  ["growth projection", 8], ["emerging markets GDP", 7], ["global trade growth", 8],
 ];
 
 export function buildSearchTrie(): Trie {
