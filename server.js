@@ -10,7 +10,10 @@ import jwt from 'jsonwebtoken';
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import countries from 'i18n-iso-countries';
+import { createRequire } from 'module'; // <-- Add this
 
+// Create a require function for this ES module
+const require = createRequire(import.meta.url); // <-- Add this
 // Initialize i18n-iso-countries with English
 countries.registerLocale(require('i18n-iso-countries/langs/en.json'));
 
