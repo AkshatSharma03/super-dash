@@ -9,11 +9,14 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
+import countries from 'i18n-iso-countries';
+
+// Initialize i18n-iso-countries with English
+countries.registerLocale(require('i18n-iso-countries/langs/en.json'));
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Configuration ─────────────────────────────────────────────────────────────
-// All tuneable numbers live here — never scattered as inline magic values.
 const PORT              = process.env.PORT || 3000;
 const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514';
 const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
@@ -21,24 +24,24 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const IS_DEV            = process.env.NODE_ENV !== 'production';
 
 // LRU cache
-const CACHE_CAP         = 200;                // max entries before LRU eviction
-const TTL_CHAT_MS       = 60 * 60 * 1000;    // 1 h — chat responses are stable within a session
-const TTL_SEARCH_MS     = 30 * 60 * 1000;    // 30 min — web data changes faster
+const CACHE_CAP         = 200;
+const TTL_CHAT_MS       = 60 * 60 * 1000;
+const TTL_SEARCH_MS     = 30 * 60 * 1000;
 
 // Rate limiting
-const RL_WINDOW_MS      = 15 * 60 * 1000;    // 15-min sliding window
-const RL_MAX            = 20;                 // max API calls per window per IP
+const RL_WINDOW_MS      = 15 * 60 * 1000;
+const RL_MAX            = 20;
 
-// Input sanitization limits (prevent excessively large prompts / DoS)
-const MAX_HISTORY       = 40;                 // conversation turns kept per request
-const MAX_MSG_CHARS     = 12_000;             // per-message content truncation
-const MAX_QUERY_CHARS   = 1_000;             // search query cap
+// Input sanitization limits
+const MAX_HISTORY       = 40;
+const MAX_MSG_CHARS     = 12_000;
+const MAX_QUERY_CHARS   = 1_000;
 const MAX_CSV_COLS      = 50;
 const MAX_CSV_ROWS      = 500;
 const MAX_CONTEXT_CHARS = 2_000;
-const CSV_SAMPLE_ROWS   = 30;                 // rows included in the prompt (keep under ~4k tokens)
-const MAX_SEARCH_TURNS  = 8;                  // tool-use loop guard — prevents infinite Anthropic loops
-const ANTHROPIC_TIMEOUT_MS = 55_000;          // 55 s — Anthropic's own limit is 60 s
+const CSV_SAMPLE_ROWS   = 30;
+const MAX_SEARCH_TURNS  = 8;
+const ANTHROPIC_TIMEOUT_MS = 55_000;
 
 // Auth
 const JWT_SECRET     = process.env.JWT_SECRET || 'dev-secret-change-in-production';
@@ -46,27 +49,22 @@ const BCRYPT_ROUNDS  = 10;
 
 // Database
 const DB_PATH = process.env.DB_PATH || join(__dirname, 'data', 'econChart.db');
+
+// Country cache TTL
+const COUNTRY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 // ─────────────────────────────────────────────────────────────────────────────
 
 if (!ANTHROPIC_API_KEY) {
   console.error('ERROR: ANTHROPIC_API_KEY environment variable is not set.');
-  console.error('Add it to your .env file or set it in your hosting platform.');
   process.exit(1);
 }
 
-if (!process.env.JWT_SECRET) {
-  if (!IS_DEV) {
-    console.error('ERROR: JWT_SECRET environment variable is not set in production.');
-    console.error('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(64).toString(\'hex\'))"');
-    process.exit(1);
-  }
-  console.warn('WARNING: JWT_SECRET not set — using insecure default. Set JWT_SECRET in .env before going to production.');
+if (!process.env.JWT_SECRET && !IS_DEV) {
+  console.error('ERROR: JWT_SECRET environment variable is not set in production.');
+  process.exit(1);
 }
 
 // ── LRU Cache ─────────────────────────────────────────────────────────────────
-// Doubly-linked list + HashMap gives O(1) get and put.
-// Evicts the least-recently-used entry when capacity is reached.
-// Each entry carries a TTL so stale responses are never served.
 class LRUNode {
   constructor(key, value, ttlMs) {
     this.key       = key;
@@ -80,21 +78,18 @@ class LRUNode {
 class LRUCache {
   constructor(capacity) {
     this.capacity = capacity;
-    this.map      = new Map();         // key → LRUNode
-    // Sentinel head/tail — never evicted, simplify boundary pointer updates
+    this.map      = new Map();
     this.head = new LRUNode(null, null, Infinity);
     this.tail = new LRUNode(null, null, Infinity);
     this.head.next = this.tail;
     this.tail.prev = this.head;
   }
 
-  /** Remove a node from its current list position. */
   _detach(node) {
     node.prev.next = node.next;
     node.next.prev = node.prev;
   }
 
-  /** Insert a node immediately after the sentinel head (most-recently-used position). */
   _attachFront(node) {
     node.next           = this.head.next;
     node.prev           = this.head;
@@ -102,11 +97,10 @@ class LRUCache {
     this.head.next      = node;
   }
 
-  /** O(1) — HashMap lookup + move to MRU position. Returns null on miss or TTL expiry. */
   get(key) {
     const node = this.map.get(key);
     if (!node) return null;
-    if (Date.now() > node.expiresAt) {   // expired — evict and return miss
+    if (Date.now() > node.expiresAt) {
       this._detach(node);
       this.map.delete(key);
       return null;
@@ -116,7 +110,6 @@ class LRUCache {
     return node.value;
   }
 
-  /** O(1) — insert or update, then evict LRU tail if over capacity. */
   put(key, value, ttlMs) {
     if (this.map.has(key)) {
       this._detach(this.map.get(key));
@@ -125,7 +118,7 @@ class LRUCache {
     const node = new LRUNode(key, value, ttlMs);
     this._attachFront(node);
     this.map.set(key, node);
-    if (this.map.size > this.capacity) {  // evict least-recently-used (node before tail)
+    if (this.map.size > this.capacity) {
       const lru = this.tail.prev;
       this._detach(lru);
       this.map.delete(lru.key);
@@ -141,9 +134,7 @@ const apiCache = new LRUCache(CACHE_CAP);
 mkdirSync(join(__dirname, 'data'), { recursive: true });
 const db = new Database(DB_PATH);
 
-// WAL mode: faster writes, concurrent reads, safe on crash
 db.pragma('journal_mode = WAL');
-// Enforce foreign-key constraints
 db.pragma('foreign_keys = ON');
 
 db.exec(`
@@ -173,10 +164,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON chat_sessions(user_id);
 `);
 
-// ── Country cache TTL ─────────────────────────────────────────────────────────
-const COUNTRY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-// ── Prepared statements (compiled once, reused on every request) ──────────────
+// ── Prepared statements ──────────────────────────────────────────────────────
 const stmtCountry = {
   get:    db.prepare('SELECT data_json, cached_at FROM country_cache WHERE code = ?'),
   upsert: db.prepare('INSERT OR REPLACE INTO country_cache (code, data_json, cached_at) VALUES (?, ?, ?)'),
@@ -191,16 +179,13 @@ const stmt = {
   insertSession:   db.prepare('INSERT INTO chat_sessions (id, user_id, title, messages, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
   updateSession:   db.prepare('UPDATE chat_sessions SET messages = ?, title = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
   deleteSession:   db.prepare('DELETE FROM chat_sessions WHERE id = ? AND user_id = ?'),
-  // Account management
   userByIdFull:    db.prepare('SELECT * FROM users WHERE id = ?'),
   updatePassword:  db.prepare('UPDATE users SET hashed_password = ? WHERE id = ?'),
   deleteUser:      db.prepare('DELETE FROM users WHERE id = ?'),
   sessionMessages: db.prepare('SELECT messages FROM chat_sessions WHERE user_id = ?'),
 };
 
-/** Validate and normalize a parsed Claude AIResponse object.
- *  Returns a safe object with correct types, or null if input is not an object.
- *  Normalizes sources to [{title, url}] — handles both old string[] and new object[]. */
+// ── Validation and utilities ─────────────────────────────────────────────────
 function validateAIResponse(parsed) {
   if (typeof parsed !== 'object' || parsed === null) return null;
   const rawSources = Array.isArray(parsed.sources) ? parsed.sources : [];
@@ -217,12 +202,10 @@ function validateAIResponse(parsed) {
   };
 }
 
-/** SHA-256 of endpoint + serialized body — deterministic, collision-resistant cache key. */
 function cacheKey(endpoint, body) {
   return createHash('sha256').update(endpoint + JSON.stringify(body)).digest('hex');
 }
 
-/** Verify Bearer JWT and attach req.user. Returns 401 if missing or invalid. */
 function requireAuth(req, res, next) {
   const auth  = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
@@ -231,13 +214,379 @@ function requireAuth(req, res, next) {
   catch { res.status(401).json({ error: 'Invalid or expired token' }); }
 }
 
+function iso2ToFlag(code) {
+  return [...code.toUpperCase()]
+    .map(c => String.fromCodePoint(c.charCodeAt(0) - 65 + 0x1F1E6))
+    .join('');
+}
+
+// ── Multi-source data fetching with fallback ──────────────────────────────────
+
+const DATA_SOURCES = {
+  worldbank: {
+    name: 'World Bank',
+    baseUrl: 'https://api.worldbank.org/v2',
+    indicators: {
+      gdp: 'NY.GDP.MKTP.CD',
+      gdpGrowth: 'NY.GDP.MKTP.KD.ZG',
+      gdpPerCapita: 'NY.GDP.PCAP.CD',
+      exports: 'NE.EXP.GNFS.CD',
+      imports: 'NE.IMP.GNFS.CD',
+    },
+    timeout: 15_000,
+    retries: 2,
+  },
+  imf: {
+    name: 'IMF DataMapper',
+    baseUrl: 'https://www.imf.org/external/datamapper/api/v1',
+    indicators: {
+      gdp: 'NGDPD',
+      gdpGrowth: 'NGDP_RPCH',
+      gdpPerCapita: 'NGDPDPC',
+      // IMF uses growth rates for trade, not absolute values
+      exports: 'TXG_RPCH',
+      imports: 'TMG_RPCH',
+    },
+    timeout: 15_000,
+    retries: 2,
+    note: 'Trade data shows volume growth %, not USD values',
+  },
+  oecd: {
+    name: 'OECD',
+    baseUrl: 'https://stats.oecd.org/SDMX-JSON/data',
+    // OECD has limited country coverage — mainly members + key partners
+    indicators: {
+      gdp: 'QNA/AUT+BEL+CAN+CHL+COL+CRI+CZE+DNK+EST+FIN+FRA+DEU+GRC+HUN+ISL+IRL+ISR+ITA+JPN+KOR+LVA+LTU+LUX+MEX+NLD+NZL+NOR+POL+PRT+SVK+SVN+ESP+SWE+CHE+TUR+GBR+USA.B1_GE.HVPVOBARSA.Q/all?startTime=2010&endTime=2024',
+    },
+    timeout: 20_000,
+    retries: 1,
+    coverage: new Set(['AU', 'AT', 'BE', 'CA', 'CL', 'CO', 'CR', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IS', 'IE', 'IL', 'IT', 'JP', 'KR', 'LV', 'LT', 'LU', 'MX', 'NL', 'NZ', 'NO', 'PL', 'PT', 'SK', 'SI', 'ES', 'SE', 'CH', 'TR', 'GB', 'US']),
+  },
+};
+
+async function fetchWithRetry(url, options, retries = 2, baseDelay = 1000) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) return res;
+      if ((res.status === 503 || res.status === 429) && i < retries) {
+        const delay = baseDelay * Math.pow(2, i);
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      if (i === retries) throw err;
+      await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, i)));
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
+
+async function fetchIndicatorWithFallback(isoCode, indicatorType) {
+  const errors = [];
+  const code = isoCode.toUpperCase();
+
+  // Try World Bank first (most comprehensive)
+  try {
+    const cfg = DATA_SOURCES.worldbank;
+    const indicator = cfg.indicators[indicatorType];
+    const url = `${cfg.baseUrl}/country/${code}/indicator/${indicator}?date=2010:2024&format=json&per_page=30`;
+    
+    const res = await fetchWithRetry(url, { 
+      signal: AbortSignal.timeout(cfg.timeout) 
+    }, cfg.retries);
+    
+    const data = await res.json();
+    if (!Array.isArray(data) || !Array.isArray(data[1])) {
+      throw new Error('Invalid World Bank response structure');
+    }
+    
+    return {
+      source: 'worldbank',
+      data: data[1].filter(e => e.value !== null).sort((a, b) => +a.date - +b.date),
+    };
+  } catch (err) {
+    errors.push(`World Bank: ${err.message}`);
+  }
+
+  // Try IMF second (good coverage, different methodology)
+  try {
+    const cfg = DATA_SOURCES.imf;
+    const indicator = cfg.indicators[indicatorType];
+    const iso3 = countries.alpha2ToAlpha3(code);
+    if (!iso3) throw new Error(`No ISO3 code for ${code}`);
+    
+    const url = `${cfg.baseUrl}/${indicator}/${iso3}?periods=2010:2024`;
+    
+    const res = await fetchWithRetry(url, {
+      signal: AbortSignal.timeout(cfg.timeout),
+      headers: { 'Accept': 'application/json' },
+    }, cfg.retries);
+    
+    const json = await res.json();
+    const values = json.values?.[iso3];
+    if (!values) throw new Error('No data for country');
+    
+    // Normalize to World Bank-like format
+    const normalized = Object.entries(values)
+      .map(([year, value]) => ({
+        date: year,
+        value: value !== 'NA' && value !== '' ? Number(value) : null,
+      }))
+      .filter(e => e.value !== null && !isNaN(e.value))
+      .sort((a, b) => +a.date - +b.date);
+    
+    return {
+      source: 'imf',
+      data: normalized,
+      note: indicatorType === 'exports' || indicatorType === 'imports' 
+        ? 'IMF trade data shows volume growth %, not absolute USD values' 
+        : 'IMF methodology may differ from World Bank',
+    };
+  } catch (err) {
+    errors.push(`IMF: ${err.message}`);
+  }
+
+  // Try OECD third (limited coverage, high quality for members)
+  if (DATA_SOURCES.oecd.coverage.has(code)) {
+    try {
+      const cfg = DATA_SOURCES.oecd;
+      // OECD SDMX-JSON is complex — simplified GDP fetch
+      const url = `${cfg.baseUrl}/QNA/${code}.B1_GE.HVPVOBARSA.Q/all?startTime=2010&endTime=2024&dimensionAtObservation=AllDimensions`;
+      
+      const res = await fetchWithRetry(url, {
+        signal: AbortSignal.timeout(cfg.timeout),
+        headers: { 'Accept': 'application/json' },
+      }, cfg.retries);
+      
+      const json = await res.json();
+      // Parse SDMX-JSON structure (simplified)
+      const observations = json.dataSets?.[0]?.series?.['0:0:0:0']?.observations;
+      if (!observations) throw new Error('No OECD data found');
+      
+      // Convert quarterly to annual (take Q4 values)
+      const annualData = {};
+      Object.entries(observations).forEach(([key, val]) => {
+        const period = json.structure?.dimensions?.observation?.[0]?.values?.[key]?.id;
+        if (period && period.endsWith('-Q4')) {
+          const year = period.slice(0, 4);
+          annualData[year] = val[0]; // value is array
+        }
+      });
+      
+      const normalized = Object.entries(annualData)
+        .map(([year, value]) => ({ date: year, value: Number(value) }))
+        .filter(e => !isNaN(e.value))
+        .sort((a, b) => +a.date - +b.date);
+      
+      return {
+        source: 'oecd',
+        data: normalized,
+        note: 'OECD QNA data — annualized from quarterly',
+      };
+    } catch (err) {
+      errors.push(`OECD: ${err.message}`);
+    }
+  }
+
+  // All sources failed
+  throw new Error(`All data sources failed: ${errors.join('; ')}`);
+}
+
+// ── Updated buildCountryDataset with full fallback chain ──────────────────────
+async function buildCountryDataset(isoCode) {
+  const code = isoCode.toUpperCase().trim();
+
+  // Validate country code using i18n-iso-countries
+  if (!countries.isValid(code)) {
+    throw new Error(`Invalid country code: ${code}`);
+  }
+  const countryName = countries.getName(code, 'en') || code;
+
+  // Fetch all indicators with fallback chain
+  const indicatorTypes = ['gdp', 'gdpGrowth', 'gdpPerCapita', 'exports', 'imports'];
+  const results = await Promise.all(
+    indicatorTypes.map(type => 
+      fetchIndicatorWithFallback(code, type).catch(err => ({
+        error: err.message,
+        source: 'failed',
+        data: [],
+      }))
+    )
+  );
+
+  // Build source tracking
+  const sourcesUsed = new Set();
+  const errors = [];
+  const dataMap = {};
+
+  results.forEach((result, idx) => {
+    const type = indicatorTypes[idx];
+    if (result.error) {
+      errors.push(`${type}: ${result.error}`);
+      dataMap[type] = [];
+    } else {
+      sourcesUsed.add(result.source);
+      dataMap[type] = result.data;
+      if (result.note) console.log(`[${type}] ${result.note}`);
+    }
+  });
+
+  // Transform to common format (same as before)
+  const toMap = arr => Object.fromEntries(arr.map(e => [+e.date, e.value]));
+  const gdpMap = toMap(dataMap.gdp);
+  const growthMap = toMap(dataMap.gdpGrowth);
+  const perCapMap = toMap(dataMap.gdpPerCapita);
+  const expMap = toMap(dataMap.exports);
+  const impMap = toMap(dataMap.imports);
+
+  // Build unified year list
+  const allYears = [...new Set([
+    ...Object.keys(gdpMap), ...Object.keys(growthMap), ...Object.keys(perCapMap),
+  ].map(Number))].filter(y => y >= 2010 && y <= 2024).sort((a, b) => a - b);
+
+  const gdpData = allYears.map(year => ({
+    year,
+    gdp_bn: gdpMap[year] ? +(gdpMap[year] / 1e9).toFixed(1) : null,
+    gdp_growth: growthMap[year] ? +growthMap[year].toFixed(2) : null,
+    gdp_per_capita: perCapMap[year] ? +perCapMap[year].toFixed(0) : null,
+  })).filter(d => d.gdp_bn !== null);
+
+  // Trade data handling (IMF may return growth rates, not absolute values)
+  const tradeYears = [...new Set([...Object.keys(expMap), ...Object.keys(impMap)].map(Number))]
+    .filter(y => y >= 2010 && y <= 2024).sort((a, b) => a - b);
+
+  // Detect if we have absolute values (World Bank) or growth rates (IMF)
+  const isAbsoluteValues = tradeYears.length > 0 && 
+    (Object.values(expMap).some(v => v > 100) || Object.values(impMap).some(v => v > 100));
+
+  const exportTotals = isAbsoluteValues 
+    ? Object.fromEntries(tradeYears.filter(y => expMap[y]).map(y => [y, +(expMap[y] / 1e9).toFixed(1)]))
+    : Object.fromEntries(tradeYears.filter(y => expMap[y]).map(y => [y, `${expMap[y]}%`]));
+
+  const importTotals = isAbsoluteValues
+    ? Object.fromEntries(tradeYears.filter(y => impMap[y]).map(y => [y, +(impMap[y] / 1e9).toFixed(1)]))
+    : Object.fromEntries(tradeYears.filter(y => impMap[y]).map(y => [y, `${impMap[y]}%`]));
+
+  // Claude breakdown prompt (generic, no hardcoded country)
+  const breakdownPrompt = `Generate trade composition breakdown for ${countryName} (ISO-2: ${code}).
+
+${isAbsoluteValues ? `Real World Bank total exports (USD billions):
+${JSON.stringify(exportTotals)}
+
+Real World Bank total imports (USD billions):
+${JSON.stringify(importTotals)}` : `IMF trade volume growth rates (%):
+Exports: ${JSON.stringify(exportTotals)}
+Imports: ${JSON.stringify(importTotals)}
+
+Note: IMF provides growth rates, not absolute values. Estimate relative proportions based on typical trade patterns for ${countryName}.`}
+
+Return ONLY this JSON (no markdown, no explanation):
+{
+  "exportSectors": [{"key":"snake_key","label":"Label","color":"#hex"}, ...],
+  "importPartners": [{"key":"snake_key","label":"Label","color":"#hex"}, ...],
+  "exportData": [{"year":2010,"total":X,"<sector_key>":X,...}, ...],
+  "importData": [{"year":2010,"total":X,"<partner_key>":X,...}, ...],
+  "pieExports": [{"name":"Label","value":X}, ...],
+  "pieImports": [{"name":"Label","value":X}, ...],
+  "digitalPctByYear": {"2010":1.2,"2011":1.4,...}
+}
+
+Rules:
+1. 5–6 export sectors; last key must be "other".
+2. 5–6 import partners/regions; last key must be "other".
+3. Values must SUM to match totals for each year (±0.2 rounding OK).
+4. "total" field = exactly the provided value.
+5. Include ONLY years present in the provided totals.
+6. Export sector colors: #F59E0B #94a3b8 #10B981 #8B5CF6 #06B6D4 #64748b
+7. Import partner colors: #EF4444 #F59E0B #10B981 #F97316 #8B5CF6 #64748b
+8. pieExports/pieImports use the most recent year available.
+9. digitalPctByYear: estimate for ALL years 2010–2024 (annual).`;
+
+  const bdRes = await callAnthropic({
+    model: MODEL, max_tokens: 4000,
+    system: 'Return only valid JSON matching the schema given. No markdown, no explanation.',
+    messages: [{ role: 'user', content: breakdownPrompt }],
+  });
+  const bdText = bdRes.content?.map(b => b.text || '').join('') || '{}';
+  let bd;
+  try { bd = JSON.parse(bdText.replace(/```json|```/g, '').trim()); }
+  catch { throw new Error(`Claude breakdown parse failed for ${code}: ${bdText.slice(0, 200)}`); }
+
+  // Merge digital_pct into gdpData
+  const digMap = bd.digitalPctByYear ?? {};
+  const gdpDataFinal = gdpData.map(d => ({
+    ...d,
+    digital_pct: digMap[String(d.year)] != null ? +Number(digMap[String(d.year)]).toFixed(1) : undefined,
+  }));
+
+  // Build KPIs
+  const lastGDP  = gdpDataFinal[gdpDataFinal.length - 1];
+  const prevGDP  = gdpDataFinal[gdpDataFinal.length - 2];
+  const sortedExpYears = Object.entries(exportTotals).sort((a, b) => +b[0] - +a[0]);
+  const sortedImpYears = Object.entries(importTotals).sort((a, b) => +b[0] - +a[0]);
+  const expTotal = sortedExpYears[0] ? +sortedExpYears[0][1] : 0;
+  const impTotal = sortedImpYears[0] ? +sortedImpYears[0][1] : 0;
+  const expYear  = sortedExpYears[0]?.[0] ?? '';
+  const balance  = isAbsoluteValues ? +(expTotal - impTotal).toFixed(1) : null;
+  const gdpDelta = lastGDP && prevGDP ? +(lastGDP.gdp_bn - prevGDP.gdp_bn).toFixed(1) : null;
+  const topPartner = (bd.importPartners ?? []).find(p => p.key !== 'other');
+  const topPie     = (bd.pieImports   ?? []).find(p => p.name !== 'Other' && p.name !== 'other');
+  const topPct     = topPie && isAbsoluteValues && impTotal > 0 ? Math.round((topPie.value / impTotal) * 100) : null;
+  const lastDigPct = digMap[String(lastGDP?.year)];
+
+  const kpis = [
+    { label: `GDP ${lastGDP?.year ?? ''}`, value: `$${lastGDP?.gdp_bn}B`,
+      sub: 'Nominal USD', trend: gdpDelta != null ? `${gdpDelta >= 0 ? '+' : ''}$${gdpDelta}B YoY` : null, color: '#00AAFF' },
+    { label: 'GDP Growth', value: `${lastGDP?.gdp_growth ?? 'N/A'}%`,
+      sub: `Real ${lastGDP?.year ?? ''}`, trend: null, color: '#10B981' },
+    { label: 'GDP/Capita', value: lastGDP?.gdp_per_capita ? `$${Number(lastGDP.gdp_per_capita).toLocaleString()}` : 'N/A',
+      sub: `${lastGDP?.year ?? ''} estimate`, trend: null, color: '#8B5CF6' },
+    { label: 'Total Exports', value: isAbsoluteValues ? `$${expTotal}B` : `${expTotal}`,
+      sub: isAbsoluteValues ? expYear : 'volume growth %', trend: null, color: '#F59E0B' },
+    { label: 'Total Imports', value: isAbsoluteValues ? `$${impTotal}B` : `${impTotal}`,
+      sub: isAbsoluteValues ? expYear : 'volume growth %', trend: null, color: '#EF4444' },
+    ...(isAbsoluteValues ? [{
+      label: 'Trade Balance', value: `${balance >= 0 ? '+' : ''}$${balance}B`, sub: expYear,
+      trend: balance >= 0 ? '↑ Surplus' : '↓ Deficit', color: '#06B6D4'
+    }] : []),
+    { label: 'Digital GDP%', value: lastDigPct != null ? `${lastDigPct}%` : 'N/A',
+      sub: 'of total GDP', trend: null, color: '#F97316' },
+    { label: '#1 Importer', value: topPartner?.label ?? 'N/A',
+      sub: topPie && topPct != null ? `$${topPie.value}B · ${topPct}% share` : '',
+      trend: null, color: '#EF4444' },
+  ];
+
+  return {
+    code,
+    name: countryName,
+    flag: iso2ToFlag(code),
+    region: info.region?.value ?? 'Unknown',
+    gdpData: gdpDataFinal,
+    exportData:    bd.exportData    ?? [],
+    importData:    bd.importData    ?? [],
+    exportSectors: bd.exportSectors ?? [],
+    importPartners:bd.importPartners?? [],
+    kpis,
+    pieExports: bd.pieExports ?? [],
+    pieImports: bd.pieImports ?? [],
+    _meta: {
+      sources: Array.from(sourcesUsed).map(s => {
+        const src = Object.values(DATA_SOURCES).find(ds => ds.name.toLowerCase().replace(/\s/g, '') === s);
+        return src ? src.name : s;
+      }),
+      fallbackUsed: sourcesUsed.has('imf') || sourcesUsed.has('oecd'),
+      dataQuality: sourcesUsed.has('worldbank') ? 'high' : sourcesUsed.has('imf') ? 'good' : 'limited',
+      cachedAt: Date.now(),
+    },
+  };
+}
+
 // ── Express setup ─────────────────────────────────────────────────────────────
 
 const app = express();
 
-// CORS: allowlisted origins — exact-match only (no regex). Covers Vite dev (5173) and
-// alternate HMR port (5174). Production serves same-origin so this block is a no-op.
-// Override with CORS_ORIGINS env var for non-standard ports (comma-separated).
 const DEV_ORIGINS = new Set(
   (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174')
     .split(',').map(o => o.trim()).filter(Boolean)
@@ -248,8 +597,8 @@ app.use((req, res, next) => {
   if (DEV_ORIGINS.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    res.setHeader('Access-Control-Max-Age', '600');  // 10 min
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Max-Age', '600');
   }
   if (req.method === 'OPTIONS') return res.status(204).end();
   next();
@@ -274,7 +623,6 @@ app.use(
 
 app.use(express.json({ limit: '2mb' }));
 
-// Rate limiter: RL_MAX requests per RL_WINDOW_MS per IP.
 const apiLimiter = rateLimit({
   windowMs: RL_WINDOW_MS,
   max:      RL_MAX,
@@ -283,7 +631,6 @@ const apiLimiter = rateLimit({
   message: { error: 'Too many requests. Please wait a few minutes and try again.' },
 });
 
-// Auth endpoints are brute-force targets — stricter limit: 10 attempts per 15 min per IP.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max:      10,
@@ -292,11 +639,9 @@ const authLimiter = rateLimit({
   message: { error: 'Too many authentication attempts. Please wait 15 minutes and try again.' },
 });
 
-// Static files can be fetched more frequently than API calls (browsers fan out
-// requests for JS/CSS/images), but still need a ceiling against abusive hammering.
 const staticLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,  // 1-min window
-  max:      200,             // generous for legitimate browser fan-out
+  windowMs: 1 * 60 * 1000,
+  max:      200,
   standardHeaders: true,
   legacyHeaders:   false,
   message: { error: 'Too many requests.' },
@@ -304,13 +649,6 @@ const staticLimiter = rateLimit({
 
 // ── Anthropic helper ──────────────────────────────────────────────────────────
 
-/**
- * POST to the Anthropic Messages API with shared auth headers.
- * Throws on non-2xx so callers can use a single try/catch.
- * @param {object} body         - Request body per Anthropic Messages API spec
- * @param {object} extraHeaders - Additional headers (e.g. beta feature flags)
- * @returns {Promise<object>}   - Parsed JSON response from Anthropic
- */
 async function callAnthropic(body, extraHeaders = {}) {
   const res = await fetch(ANTHROPIC_BASE, {
     method: 'POST',
@@ -327,11 +665,8 @@ async function callAnthropic(body, extraHeaders = {}) {
   return res.json();
 }
 
-// ── System prompts ────────────────────────────────────────────────────────────
-// Kept as named constants so they can be versioned separately from routing logic.
+// ── Generic system prompts (no hardcoded country) ──────────────────────────────
 
-// Instructs Claude to return ONLY a JSON AIResponse — no markdown wrapper.
-// Client-side DynChart depends on the exact shape: { insight, charts[], sources[], followUps[] }.
 const CHAT_SYSTEM = `You are an expert data analyst and economist with comprehensive knowledge of global economics, international trade, financial markets, macroeconomic policy, and economic history across all countries and regions.
 
 When a user asks a question, respond ONLY with a valid JSON object (no markdown, no preamble):
@@ -349,32 +684,27 @@ When a user asks a question, respond ONLY with a valid JSON object (no markdown,
     }
   ],
   "sources": [
-    {"title":"World Bank – Kazakhstan GDP","url":"https://data.worldbank.org/indicator/NY.GDP.MKTP.CD?locations=KZ"},
-    {"title":"IMF – Kazakhstan Article IV","url":"https://www.imf.org/en/Publications/CR?country=KAZ"}
+    {"title":"Source name","url":"https://..."}
   ],
   "followUps": ["Follow-up question 1","Follow-up question 2","Follow-up question 3"]
 }
 
 Rules:
 - 1-3 charts per response. Choose types intelligently: trends->line/area, comparisons->bar, composition->pie, multi-metric->composed
-- Use real, accurate data from your knowledge (World Bank, IMF, UN Comtrade, stat.gov.kz, OECD)
+- Use real, accurate data from your knowledge (World Bank, IMF, UN Comtrade, national statistics, OECD)
 - sources: array of {title, url} where url is the DEEPEST possible link to the exact dataset or report page — never just a homepage. Use these known deep-link patterns:
-  * World Bank indicator: https://data.worldbank.org/indicator/<INDICATOR_CODE>?locations=KZ
+  * World Bank indicator: https://data.worldbank.org/indicator/<INDICATOR_CODE>?locations=<ISO2>
     Common codes: NY.GDP.MKTP.CD (GDP), NY.GDP.MKTP.KD.ZG (GDP growth), NY.GDP.PCAP.CD (GDP per capita),
     NE.TRD.GNFS.ZS (trade % GDP), BX.GSR.GNFS.CD (exports), BM.GSR.GNFS.CD (imports)
-  * IMF country reports: https://www.imf.org/en/Publications/CR?country=KAZ
-  * IMF World Economic Outlook data: https://www.imf.org/en/Publications/WEO
+  * IMF country reports: https://www.imf.org/en/Publications/CR?country=<ISO3>
+  * IMF World Economic Outlook: https://www.imf.org/en/Publications/WEO
   * IMF Direction of Trade Statistics: https://data.imf.org/?sk=9d6028d4-f14a-464c-a2f2-59b2cd424b85
-  * UN Comtrade: https://comtradeplus.un.org/TradeFlow?Frequency=A&Flows=X&CommodityCodes=TOTAL&Partners=0&Reporters=398&period=2023&AggregateBy=none&BreakdownMode=plus
-  * Kazakhstan Bureau of Statistics: https://stat.gov.kz/en/industries/economy/national-accounts/
-  * Kazakhstan National Bank: https://www.nationalbank.kz/en/page/statistics
-  * OECD Kazakhstan: https://data.oecd.org/kazakhstan.htm
+  * UN Comtrade: https://comtradeplus.un.org/TradeFlow?Frequency=A&Flows=X&CommodityCodes=TOTAL&Partners=0&Reporters=<ISO3_NUMERIC>&period=<YEAR>&AggregateBy=none&BreakdownMode=plus
+  * OECD country data: https://data.oecd.org/<ISO3>.htm
 - For pie charts: each data item needs 'name' and 'value'
 - Dense data: 8-15 points per chart when possible
 - Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4`;
 
-// Instructs Claude to return structured markdown with section headers.
-// SearchMode renders this via MarkdownText which handles ##, bullets, bold.
 const SEARCH_SYSTEM = `You are an expert research analyst and economist with comprehensive knowledge of global economics and financial markets.
 When searching, prioritize authoritative sources: World Bank (worldbank.org), IMF (imf.org), OECD (oecd.org), national statistics offices, central banks, Reuters, Bloomberg, Financial Times, and regional economic organizations.
 
@@ -392,25 +722,19 @@ Brief executive overview (2-3 sentences with key headline numbers).
 Important news, policy changes, or events from the most recent period available.
 
 **Economic Implications**
-What the data means for Kazakhstan's economic trajectory and outlook.
+What the data means for the country's economic trajectory and outlook.
 
 Be specific — include exact figures, percentages, dates, and growth rates wherever possible.`;
 
-// CSV analysis prompt — Claude must use exact column names from the uploaded data.
 const CSV_SYSTEM = `You are an expert data analyst and visualization specialist. Analyze CSV datasets and generate Recharts-compatible chart configurations using real values from the data. Never use placeholder values. Return only valid JSON without any markdown wrapper.`;
 
-// ── API Routes ────────────────────────────────────────────────────────────────
+// ── API Routes (same as before, using updated CHAT_SYSTEM) ─────────────────────
 
-// POST /api/chat
-// Accepts: { messages: Array<{role: string, content: string}> }
-// Returns: AIResponse — { insight?, charts?, sources?, followUps?, error? }
-// Caches single-turn queries for TTL_CHAT_MS (multi-turn skipped — context changes each call).
 app.post('/api/chat', apiLimiter, async (req, res) => {
   let { messages } = req.body;
   if (!Array.isArray(messages) || messages.length === 0)
     return res.status(400).json({ error: 'messages array is required' });
 
-  // Sanitize: cap history depth and per-message content size
   messages = messages.slice(-MAX_HISTORY).map(m => ({
     role:    m.role === 'assistant' ? 'assistant' : 'user',
     content: String(m.content || '').slice(0, MAX_MSG_CHARS),
@@ -441,10 +765,6 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
   }
 });
 
-// POST /api/search
-// Accepts: { query: string }
-// Returns: SearchResult — { text, sources[], webSearchUsed }
-// Strategy: attempt Anthropic web_search beta tool first; fall back to model knowledge on failure.
 app.post('/api/search', apiLimiter, async (req, res) => {
   const query = String(req.body.query || '').trim().slice(0, MAX_QUERY_CHARS);
   if (!query) return res.status(400).json({ error: 'query is required' });
@@ -456,9 +776,6 @@ app.post('/api/search', apiLimiter, async (req, res) => {
   let text = '', sources = [], webSearchUsed = false;
 
   try {
-    // Anthropic tool-use follows a multi-turn loop: the model requests web_search,
-    // we return a dummy tool_result, and it continues until stop_reason === 'end_turn'.
-    // MAX_SEARCH_TURNS guards against runaway loops if the model repeatedly calls the tool.
     const msgs = [{ role: 'user', content: query }];
     for (let turn = 0; turn < MAX_SEARCH_TURNS; turn++) {
       const data = await callAnthropic(
@@ -484,7 +801,6 @@ app.post('/api/search', apiLimiter, async (req, res) => {
       } else break;
     }
   } catch (_) {
-    // Fallback: answer from Claude's training knowledge when the beta tool is unavailable
     try {
       const data = await callAnthropic({
         model: MODEL, max_tokens: 4000,
@@ -504,20 +820,15 @@ app.post('/api/search', apiLimiter, async (req, res) => {
   res.json(result);
 });
 
-// POST /api/analyze-csv
-// Accepts: { headers: string[], rows: object[], context?: string }
-// Returns: AIResponse with charts derived from actual CSV column values (not placeholder data).
 app.post('/api/analyze-csv', apiLimiter, async (req, res) => {
   let { headers, rows, context } = req.body;
   if (!Array.isArray(headers) || !Array.isArray(rows))
     return res.status(400).json({ error: 'headers and rows arrays are required' });
 
-  // Sanitize to prevent oversized prompts
   headers = headers.slice(0, MAX_CSV_COLS).map(h => String(h).slice(0, 100));
   rows    = rows.slice(0, MAX_CSV_ROWS);
   context = String(context || '').slice(0, MAX_CONTEXT_CHARS);
 
-  // Build a compact CSV text sample — Claude only needs enough rows to understand the data shape
   const sample  = rows.slice(0, CSV_SAMPLE_ROWS);
   const csvText = [headers.join(','), ...sample.map(r => headers.map(h => String(r[h] ?? '')).join(','))].join('\n');
 
@@ -537,36 +848,41 @@ Respond ONLY with valid JSON (no markdown code block wrapper):
   "insight": "2-3 sentence expert analysis of what this data reveals",
   "charts": [
     {
-      "id": "c1",
-      "title": "Descriptive chart title",
-      "type": "line|bar|area|pie|composed|radar",
-      "description": "One sentence describing what this chart shows",
-      "data": [ ...array of objects with real values from the CSV... ],
-      "xKey": "exact_column_name_for_x_axis",
-      "series": [{"key": "exact_col_name", "name": "Display Name", "color": "#hex", "stacked": false, "rightAxis": false}]
+      "id": "unique_id",
+      "title": "Chart title",
+      "type": "line|bar|area|pie|composed",
+      "description": "One sentence",
+      "data": [...],
+      "xKey": "year",
+      "series": [{"key":"fieldname","name":"Display Name","color":"#hex","chartType":"bar|line","stacked":false}]
     }
   ],
   "sources": ["Uploaded CSV — ${rows.length} rows"],
-  "followUps": ["Follow-up question 1", "Follow-up question 2", "Follow-up question 3"]
+  "followUps": ["Follow-up 1","Follow-up 2","Follow-up 3"]
 }
 
 Rules:
-- Use EXACT column names from the CSV as object keys (not placeholders)
+- Use EXACT column names from the CSV as object keys
 - Include REAL data values from the CSV, not invented numbers
-- For pie charts: data items must have 'name' and 'value' keys; aggregate/sum if needed
+- For pie charts: data items must have 'name' and 'value' keys
 - For time-series: sort data by the time/date column ascending
-- Choose chart types that best reveal patterns: trends→line/area, comparisons→bar, distribution→pie
-- Colors to use: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4`;
+- Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4`;
 
   try {
-    const data = await callAnthropic({ model: MODEL, max_tokens: 4000, system: CSV_SYSTEM, messages: [{ role: 'user', content: prompt }] });
+    const data = await callAnthropic({
+      model: MODEL, max_tokens: 4000,
+      system: CSV_SYSTEM,
+      messages: [{ role: 'user', content: prompt }],
+    });
     const txt  = data.content?.map(b => b.text || '').join('') || '{}';
+    let parsed;
     try {
       const raw = JSON.parse(txt.replace(/```json|```/g, '').trim());
-      res.json(validateAIResponse(raw) ?? { insight: txt, charts: [], sources: [{ title: 'Uploaded CSV', url: null }], followUps: [] });
+      parsed = validateAIResponse(raw) ?? { insight: txt, charts: [], sources: [{ title: 'Uploaded CSV', url: null }], followUps: [] };
     } catch {
-      res.json({ insight: txt, charts: [], sources: [{ title: 'Uploaded CSV', url: null }], followUps: [] });
+      parsed = { insight: txt, charts: [], sources: [{ title: 'Uploaded CSV', url: null }], followUps: [] };
     }
+    res.json(parsed);
   } catch (e) {
     console.error('/api/analyze-csv error:', e.message);
     res.status(502).json({ error: e.message });
@@ -575,7 +891,6 @@ Rules:
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 
-// POST /api/auth/register
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password || !name)
@@ -594,7 +909,6 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   res.json({ token, user: { id, email: em, name: uname } });
 });
 
-// POST /api/auth/login
 app.post('/api/auth/login', authLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
@@ -607,14 +921,12 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
 });
 
-// GET /api/auth/me — validate token and return user
 app.get('/api/auth/me', requireAuth, (req, res) => {
   const user = stmt.userById.get(req.user.id);
   if (!user) return res.status(401).json({ error: 'User not found' });
   res.json(user);
 });
 
-// GET /api/auth/usage — usage stats for the logged-in user
 app.get('/api/auth/usage', requireAuth, (req, res) => {
   const user     = stmt.userById.get(req.user.id);
   if (!user) return res.status(401).json({ error: 'User not found' });
@@ -627,7 +939,6 @@ app.get('/api/auth/usage', requireAuth, (req, res) => {
   res.json({ sessionCount, messageCount, memberSince: user.created_at });
 });
 
-// PATCH /api/auth/password — change password (requires current password)
 app.patch('/api/auth/password', requireAuth, authLimiter, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
   if (!currentPassword || !newPassword)
@@ -643,7 +954,6 @@ app.patch('/api/auth/password', requireAuth, authLimiter, async (req, res) => {
   res.json({ ok: true });
 });
 
-// DELETE /api/auth/account — permanently delete account + all sessions
 app.delete('/api/auth/account', requireAuth, authLimiter, async (req, res) => {
   const { password } = req.body;
   if (!password) return res.status(400).json({ error: 'Password confirmation is required' });
@@ -651,18 +961,16 @@ app.delete('/api/auth/account', requireAuth, authLimiter, async (req, res) => {
   if (!user) return res.status(401).json({ error: 'User not found' });
   const match = await bcrypt.compare(String(password), user.hashed_password);
   if (!match) return res.status(401).json({ error: 'Password is incorrect' });
-  stmt.deleteUser.run(req.user.id);  // CASCADE deletes all their sessions too
+  stmt.deleteUser.run(req.user.id);
   res.json({ ok: true });
 });
 
-// ── Chat session routes ────────────────────────────────────────────────────────
+// ── Chat session routes ───────────────────────────────────────────────────────
 
-// GET /api/sessions — list sessions for logged-in user (summaries only, no messages)
 app.get('/api/sessions', requireAuth, (req, res) => {
   res.json(stmt.sessionsByUser.all(req.user.id));
 });
 
-// POST /api/sessions — create a new session
 app.post('/api/sessions', requireAuth, (req, res) => {
   const title = String(req.body.title || 'New Chat').slice(0, 100);
   const id    = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -671,14 +979,12 @@ app.post('/api/sessions', requireAuth, (req, res) => {
   res.json({ id, userId: req.user.id, title, messages: [], createdAt: now, updatedAt: now });
 });
 
-// GET /api/sessions/:id — load full session with messages
 app.get('/api/sessions/:id', requireAuth, (req, res) => {
   const row = stmt.sessionById.get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Session not found' });
   res.json({ ...row, messages: JSON.parse(row.messages) });
 });
 
-// PATCH /api/sessions/:id — update messages and/or title
 app.patch('/api/sessions/:id', requireAuth, (req, res) => {
   const row = stmt.sessionById.get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Session not found' });
@@ -689,7 +995,6 @@ app.patch('/api/sessions/:id', requireAuth, (req, res) => {
   res.json({ id: row.id, title: newTitle, updatedAt: now });
 });
 
-// DELETE /api/sessions/:id
 app.delete('/api/sessions/:id', requireAuth, (req, res) => {
   const row = stmt.sessionById.get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Session not found' });
@@ -697,184 +1002,8 @@ app.delete('/api/sessions/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Country data helpers ──────────────────────────────────────────────────────
+// ── Country data routes ───────────────────────────────────────────────────────
 
-/** Convert ISO-2 code to a flag emoji (regional indicator symbols). */
-function iso2ToFlag(code) {
-  return [...code.toUpperCase()]
-    .map(c => String.fromCodePoint(c.charCodeAt(0) - 65 + 0x1F1E6))
-    .join('');
-}
-
-/** Fetch a single World Bank indicator time series for one country. */
-async function fetchWBIndicator(isoCode, indicator) {
-  const url = `https://api.worldbank.org/v2/country/${isoCode}/indicator/${indicator}?date=2010:2024&format=json&per_page=30`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
-  if (!res.ok) throw new Error(`World Bank API ${res.status} for ${indicator}`);
-  const data = await res.json();
-  if (!Array.isArray(data) || !Array.isArray(data[1]))
-    throw new Error(`Unexpected World Bank response for ${indicator}`);
-  return data[1].filter(e => e.value !== null).sort((a, b) => +a.date - +b.date);
-}
-
-/** Fetch country metadata (name, region) from World Bank. */
-async function fetchWBCountryInfo(isoCode) {
-  const url = `https://api.worldbank.org/v2/country/${isoCode}?format=json`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`World Bank country info ${res.status}`);
-  const data = await res.json();
-  const info = data?.[1]?.[0];
-  if (!info || !info.name) throw new Error(`Country not found: ${isoCode}`);
-  return info;
-}
-
-/**
- * Build a CountryDataset by:
- *   1. Fetching real GDP + trade totals from World Bank
- *   2. Asking Claude to generate sector/partner breakdown anchored to those totals
- */
-async function buildCountryDataset(isoCode) {
-  const code = isoCode.toUpperCase().trim();
-
-  // 1. Country metadata
-  const info        = await fetchWBCountryInfo(code);
-  const countryName = info.name;
-  const region      = info.region?.value ?? 'Unknown';
-
-  // 2. WB indicators (parallel)
-  const [gdpRaw, growthRaw, perCapRaw, exportRaw, importRaw] = await Promise.all([
-    fetchWBIndicator(code, 'NY.GDP.MKTP.CD'),
-    fetchWBIndicator(code, 'NY.GDP.MKTP.KD.ZG'),
-    fetchWBIndicator(code, 'NY.GDP.PCAP.CD'),
-    fetchWBIndicator(code, 'NE.EXP.GNFS.CD'),
-    fetchWBIndicator(code, 'NE.IMP.GNFS.CD'),
-  ]);
-
-  const toMap = arr => Object.fromEntries(arr.map(e => [+e.date, e.value]));
-  const gdpMap    = toMap(gdpRaw);
-  const growthMap = toMap(growthRaw);
-  const perCapMap = toMap(perCapRaw);
-  const expMap    = toMap(exportRaw);
-  const impMap    = toMap(importRaw);
-
-  // Years with at least GDP data
-  const years = [...new Set([
-    ...Object.keys(gdpMap), ...Object.keys(growthMap), ...Object.keys(perCapMap),
-  ].map(Number))].filter(y => y >= 2010 && y <= 2024).sort((a, b) => a - b);
-
-  const gdpData = years.map(year => ({
-    year,
-    gdp_bn:         gdpMap[year]    ? +(gdpMap[year]    / 1e9).toFixed(1) : null,
-    gdp_growth:     growthMap[year] ? +growthMap[year].toFixed(2)         : null,
-    gdp_per_capita: perCapMap[year] ? +perCapMap[year].toFixed(0)         : null,
-  })).filter(d => d.gdp_bn !== null);
-
-  // Trade year totals (USD billions, 1 dp)
-  const tradeYears = [...new Set([...Object.keys(expMap), ...Object.keys(impMap)].map(Number))]
-    .filter(y => y >= 2010 && y <= 2024).sort((a, b) => a - b);
-  const exportTotals = Object.fromEntries(tradeYears.filter(y => expMap[y]).map(y => [y, +(expMap[y] / 1e9).toFixed(1)]));
-  const importTotals = Object.fromEntries(tradeYears.filter(y => impMap[y]).map(y => [y, +(impMap[y] / 1e9).toFixed(1)]));
-
-  // 3. Claude: sector / partner breakdown + digital_pct estimates
-  const breakdownPrompt = `Generate trade composition breakdown for ${countryName} (ISO-2: ${code}).
-
-Real World Bank total exports (USD billions):
-${JSON.stringify(exportTotals)}
-
-Real World Bank total imports (USD billions):
-${JSON.stringify(importTotals)}
-
-Return ONLY this JSON (no markdown, no explanation):
-{
-  "exportSectors":  [{"key":"snake_key","label":"Label","color":"#hex"}, ...],
-  "importPartners": [{"key":"snake_key","label":"Label","color":"#hex"}, ...],
-  "exportData": [{"year":2010,"total":X,"<sector_key>":X,...}, ...],
-  "importData": [{"year":2010,"total":X,"<partner_key>":X,...}, ...],
-  "pieExports": [{"name":"Label","value":X}, ...],
-  "pieImports": [{"name":"Label","value":X}, ...],
-  "digitalPctByYear": {"2010":1.2,"2011":1.4,...}
-}
-
-Rules:
-1. 5–6 export sectors; last key must be "other".
-2. 5–6 import partners/regions; last key must be "other".
-3. Sector/partner values must SUM to match the provided total for each year (±0.2 rounding OK).
-4. "total" field in each row = exactly the World Bank value given.
-5. Include ONLY years present in the provided export/import totals.
-6. Export sector colors (in order): #F59E0B #94a3b8 #10B981 #8B5CF6 #06B6D4 #64748b
-7. Import partner colors (in order): #EF4444 #F59E0B #10B981 #F97316 #8B5CF6 #64748b
-8. pieExports/pieImports use the most recent year available.
-9. digitalPctByYear: estimate for ALL years 2010–2024 (annual).`;
-
-  const bdRes = await callAnthropic({
-    model: MODEL, max_tokens: 4000,
-    system: 'Return only valid JSON matching the schema given. No markdown, no explanation.',
-    messages: [{ role: 'user', content: breakdownPrompt }],
-  });
-  const bdText = bdRes.content?.map(b => b.text || '').join('') || '{}';
-  let bd;
-  try { bd = JSON.parse(bdText.replace(/```json|```/g, '').trim()); }
-  catch { throw new Error(`Claude breakdown parse failed for ${code}: ${bdText.slice(0, 200)}`); }
-
-  // 4. Merge digital_pct into gdpData
-  const digMap = bd.digitalPctByYear ?? {};
-  const gdpDataFinal = gdpData.map(d => ({
-    ...d,
-    digital_pct: digMap[String(d.year)] != null ? +Number(digMap[String(d.year)]).toFixed(1) : undefined,
-  }));
-
-  // 5. Build KPIs from real data
-  const lastGDP  = gdpDataFinal[gdpDataFinal.length - 1];
-  const prevGDP  = gdpDataFinal[gdpDataFinal.length - 2];
-  const sortedExpYears = Object.entries(exportTotals).sort((a, b) => +b[0] - +a[0]);
-  const sortedImpYears = Object.entries(importTotals).sort((a, b) => +b[0] - +a[0]);
-  const expTotal = sortedExpYears[0] ? +sortedExpYears[0][1] : 0;
-  const impTotal = sortedImpYears[0] ? +sortedImpYears[0][1] : 0;
-  const expYear  = sortedExpYears[0]?.[0] ?? '';
-  const balance  = +(expTotal - impTotal).toFixed(1);
-  const gdpDelta = lastGDP && prevGDP ? +(lastGDP.gdp_bn - prevGDP.gdp_bn).toFixed(1) : null;
-  const topPartner = (bd.importPartners ?? []).find(p => p.key !== 'other');
-  const topPie     = (bd.pieImports   ?? []).find(p => p.name !== 'Other' && p.name !== 'other');
-  const topPct     = topPie && impTotal > 0 ? Math.round((topPie.value / impTotal) * 100) : null;
-  const lastDigPct = digMap[String(lastGDP?.year)];
-
-  const kpis = [
-    { label: `GDP ${lastGDP?.year ?? ''}`, value: `$${lastGDP?.gdp_bn}B`,
-      sub: 'Nominal USD', trend: gdpDelta != null ? `${gdpDelta >= 0 ? '+' : ''}$${gdpDelta}B YoY` : null, color: '#00AAFF' },
-    { label: 'GDP Growth', value: `${lastGDP?.gdp_growth ?? 'N/A'}%`,
-      sub: `Real ${lastGDP?.year ?? ''}`, trend: null, color: '#10B981' },
-    { label: 'GDP/Capita', value: lastGDP?.gdp_per_capita ? `$${Number(lastGDP.gdp_per_capita).toLocaleString()}` : 'N/A',
-      sub: `${lastGDP?.year ?? ''} estimate`, trend: null, color: '#8B5CF6' },
-    { label: 'Total Exports', value: `$${expTotal}B`, sub: expYear, trend: null, color: '#F59E0B' },
-    { label: 'Total Imports', value: `$${impTotal}B`, sub: expYear, trend: null, color: '#EF4444' },
-    { label: 'Trade Balance', value: `${balance >= 0 ? '+' : ''}$${balance}B`, sub: expYear,
-      trend: balance >= 0 ? '↑ Surplus' : '↓ Deficit', color: '#06B6D4' },
-    { label: 'Digital GDP%', value: lastDigPct != null ? `${lastDigPct}%` : 'N/A',
-      sub: 'of total GDP', trend: null, color: '#F97316' },
-    { label: '#1 Importer', value: topPartner?.label ?? 'N/A',
-      sub: topPie && topPct != null ? `$${topPie.value}B · ${topPct}% share` : '',
-      trend: null, color: '#EF4444' },
-  ];
-
-  return {
-    code, name: countryName, flag: iso2ToFlag(code), region,
-    gdpData: gdpDataFinal,
-    exportData:    bd.exportData    ?? [],
-    importData:    bd.importData    ?? [],
-    exportSectors: bd.exportSectors ?? [],
-    importPartners:bd.importPartners?? [],
-    kpis,
-    pieExports: bd.pieExports ?? [],
-    pieImports: bd.pieImports ?? [],
-    _meta: {
-      sources: ['World Bank Open Data (GDP & trade totals)', 'AI-estimated sector / partner breakdown'],
-      cachedAt: Date.now(),
-    },
-  };
-}
-
-// GET /api/country/history
-// Returns metadata for every country already in the local cache, newest first.
 app.get('/api/country/history', requireAuth, (req, res) => {
   const rows = db.prepare('SELECT code, data_json, cached_at FROM country_cache ORDER BY cached_at DESC').all();
   const history = rows.map(r => {
@@ -886,8 +1015,6 @@ app.get('/api/country/history', requireAuth, (req, res) => {
   res.json(history);
 });
 
-// GET /api/country/search?q=name
-// Returns up to 15 matching countries from World Bank country list.
 app.get('/api/country/search', requireAuth, apiLimiter, async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 100);
   if (q.length < 2) return res.json([]);
@@ -905,14 +1032,19 @@ app.get('/api/country/search', requireAuth, apiLimiter, async (req, res) => {
   }
 });
 
-// GET /api/country/:code
-// Returns cached CountryDataset; fetches fresh if cache is missing or expired.
 app.get('/api/country/:code', requireAuth, apiLimiter, async (req, res) => {
   const code = req.params.code.toUpperCase().replace(/[^A-Z]/g, '');
   if (code.length !== 2) return res.status(400).json({ error: 'Expected ISO 2-letter country code' });
+  
+  // Validate with i18n-iso-countries
+  if (!countries.isValid(code)) {
+    return res.status(400).json({ error: `Unknown country code: ${code}` });
+  }
+  
   const row = stmtCountry.get.get(code);
   if (row && (Date.now() - row.cached_at) < COUNTRY_CACHE_TTL_MS)
     return res.json(JSON.parse(row.data_json));
+  
   try {
     const dataset = await buildCountryDataset(code);
     stmtCountry.upsert.run(code, JSON.stringify(dataset), Date.now());
@@ -924,11 +1056,13 @@ app.get('/api/country/:code', requireAuth, apiLimiter, async (req, res) => {
   }
 });
 
-// POST /api/country/:code/refresh
-// Force re-fetch, bypassing cache.
 app.post('/api/country/:code/refresh', requireAuth, apiLimiter, async (req, res) => {
   const code = req.params.code.toUpperCase().replace(/[^A-Z]/g, '');
   if (code.length !== 2) return res.status(400).json({ error: 'Expected ISO 2-letter country code' });
+  if (!countries.isValid(code)) {
+    return res.status(400).json({ error: `Unknown country code: ${code}` });
+  }
+  
   try {
     const dataset = await buildCountryDataset(code);
     stmtCountry.upsert.run(code, JSON.stringify(dataset), Date.now());
@@ -939,10 +1073,6 @@ app.post('/api/country/:code/refresh', requireAuth, apiLimiter, async (req, res)
   }
 });
 
-// POST /api/analytics
-// Accepts: { query: string, context: string }
-// context is a pre-formatted text summary of the selected country's data.
-// Returns: AIResponse — same shape as /api/chat so the client can reuse DynChart.
 app.post('/api/analytics', requireAuth, apiLimiter, async (req, res) => {
   const query   = String(req.body.query   || '').trim().slice(0, MAX_MSG_CHARS);
   const context = String(req.body.context || '').trim().slice(0, 8_000);
@@ -1003,13 +1133,12 @@ Rules:
 });
 
 // ── Static file serving ───────────────────────────────────────────────────────
-// In production, Express serves the Vite-built dist/ folder.
-// SPA fallback: all non-API routes return index.html so React Router works.
 const DIST = join(__dirname, 'dist');
 app.use(staticLimiter);
 app.use(express.static(DIST));
 app.use((_req, res) => res.sendFile(join(DIST, 'index.html')));
 
 app.listen(PORT, () => {
-  console.log(`Kazakhstan Dashboard server running on http://localhost:${PORT}`);
+  console.log(`Economic Dashboard server running on http://localhost:${PORT}`);
+  console.log(`Supported countries: ${countries.getNames('en').length} via i18n-iso-countries`);
 });
