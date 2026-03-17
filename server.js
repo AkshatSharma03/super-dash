@@ -783,6 +783,20 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
     if (cached) { if (IS_DEV) console.log('[cache hit] /api/chat'); return res.json(cached); }
   }
 
+  // Inject recent news into the last user message
+  const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+  if (lastUserMsg) {
+    try {
+      const recentNews = await fetchVerifiedNews(lastUserMsg.content.slice(0, 200));
+      if (recentNews.length > 0) {
+        const newsContext = `\n\nRecent Verified News:\n${JSON.stringify(recentNews)}`;
+        lastUserMsg.content = lastUserMsg.content + newsContext;
+      }
+    } catch (e) {
+      console.error('News fetch error in /api/chat:', e.message);
+    }
+  }
+
   try {
     const data = await callAnthropic({ model: MODEL, max_tokens: 4000, system: CHAT_SYSTEM, messages });
     const text = data.content?.map(b => b.text || '').join('') || '{}';
