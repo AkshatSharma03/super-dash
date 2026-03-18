@@ -440,6 +440,17 @@ async function buildCountryDataset(isoCode) {
   }
   const countryName = countries.getName(code, 'en') || code;
 
+  // Fetch country region from World Bank (non-fatal)
+  let region = 'Unknown';
+  try {
+    const infoRes = await fetch(
+      `https://api.worldbank.org/v2/country/${code}?format=json`,
+      { signal: AbortSignal.timeout(5000) }
+    );
+    const infoData = await infoRes.json();
+    region = infoData[1]?.[0]?.region?.value ?? 'Unknown';
+  } catch { /* region stays 'Unknown' */ }
+
   // Fetch all indicators with fallback chain
   const indicatorTypes = ['gdp', 'gdpGrowth', 'gdpPerCapita', 'exports', 'imports'];
   const results = await Promise.all(
@@ -598,7 +609,7 @@ Rules:
     code,
     name: countryName,
     flag: iso2ToFlag(code),
-    region: info.region?.value ?? 'Unknown',
+    region,
     gdpData: gdpDataFinal,
     exportData:    bd.exportData    ?? [],
     importData:    bd.importData    ?? [],
