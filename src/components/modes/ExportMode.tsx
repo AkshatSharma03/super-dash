@@ -9,7 +9,9 @@
 //                         correlation, HHI, anomaly, k-means, openness).
 //                         Algorithms are re-run fresh from the loaded dataset.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { useMobile } from "../../utils/useMobile";
 import {
   LineChart, BarChart, ComposedChart,
@@ -42,33 +44,16 @@ interface ExportBtnProps {
   label: string;
   icon: string;
   onClick: () => void;
-  color?: string;
+  color?: string; // kept for call-site compatibility; not used visually
   disabled?: boolean;
   full?: boolean;
 }
-function ExportBtn({ label, icon, onClick, color = "#2d3348", disabled, full }: ExportBtnProps) {
-  const [hover, setHover] = useState(false);
+function ExportBtn({ label, icon, onClick, disabled, full }: ExportBtnProps) {
   return (
-    <button
-      disabled={disabled}
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "flex", alignItems: "center", gap: 7,
-        background: hover && !disabled ? "#1e2130" : "#161929",
-        border: `1px solid ${hover && !disabled ? color : "#2d3348"}`,
-        borderRadius: 7, padding: "7px 12px",
-        fontSize: 12, color: disabled ? "#374151" : hover ? "#e2e8f0" : "#94a3b8",
-        cursor: disabled ? "not-allowed" : "pointer",
-        transition: "all .15s", fontWeight: 500,
-        width: full ? "100%" : undefined,
-        opacity: disabled ? 0.5 : 1,
-      }}
-    >
-      <span style={{ fontSize: 14 }}>{icon}</span>
-      {label}
-    </button>
+    <Button variant="outline" size="sm" onClick={onClick} disabled={disabled}
+      className={`gap-1.5 text-xs font-medium ${full ? "w-full justify-start" : ""}`}>
+      <span>{icon}</span>{label}
+    </Button>
   );
 }
 
@@ -77,20 +62,6 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     <p style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.8px", margin: "20px 0 8px" }}>
       {children}
     </p>
-  );
-}
-
-function Toast({ msg, onDone }: { msg: string; onDone: () => void }) {
-  useEffect(() => { const t = setTimeout(onDone, 2200); return () => clearTimeout(t); }, [onDone]);
-  return (
-    <div style={{
-      position: "fixed", bottom: 28, left: "50%", transform: "translateX(-50%)",
-      background: "#10b981", color: "#fff", borderRadius: 8,
-      padding: "9px 18px", fontSize: 13, fontWeight: 600,
-      boxShadow: "0 4px 20px #10b98155", zIndex: 9999,
-    }}>
-      {msg}
-    </div>
   );
 }
 
@@ -307,7 +278,6 @@ interface ExportModeProps {
 }
 
 export default function ExportMode({ dashDataset, analyticsDataset }: ExportModeProps) {
-  const [toast, setToast]         = useState<string | null>(null);
   const [generating, setGenerating] = useState<"dash" | "analytics" | null>(null);
   const isMobile = useMobile();
 
@@ -327,7 +297,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
     else setAlgoCsvs({});
   }, [analyticsDataset]);
 
-  const showToast = useCallback((msg: string) => setToast(msg), []);
+  const showToast = useCallback((msg: string) => toast.success(msg), []);
 
   // Extract one SVG from a chart container ref
   function extractSVG(ref: React.RefObject<HTMLDivElement | null>): string {
@@ -634,7 +604,6 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
         </div>
       </div>
 
-      {toast && <Toast msg={toast} onDone={() => setToast(null)} />}
     </div>
   );
 }

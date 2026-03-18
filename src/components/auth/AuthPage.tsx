@@ -5,6 +5,11 @@
 import { useState } from "react";
 import { login, register, guestLogin } from "../../utils/api";
 import type { User } from "../../types";
+import { Button }  from "@/components/ui/button";
+import { Input }   from "@/components/ui/input";
+import { Label }   from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 
 interface AuthPageProps {
   onAuth: (token: string, user: User) => void;
@@ -19,13 +24,13 @@ const FEATURES = [
 ];
 
 export default function AuthPage({ onAuth }: AuthPageProps) {
-  const [tab,      setTab]      = useState<"login" | "register">("login");
-  const [name,     setName]     = useState("");
-  const [email,    setEmail]    = useState("");
-  const [password, setPassword] = useState("");
-  const [loading,       setLoading]       = useState(false);
-  const [guestLoading,  setGuestLoading]  = useState(false);
-  const [error,         setError]         = useState<string | null>(null);
+  const [tab,          setTab]         = useState<"login" | "register">("login");
+  const [name,         setName]        = useState("");
+  const [email,        setEmail]       = useState("");
+  const [password,     setPassword]    = useState("");
+  const [loading,      setLoading]     = useState(false);
+  const [guestLoading, setGuestLoading] = useState(false);
+  const [error,        setError]       = useState<string | null>(null);
 
   const switchTab = (t: "login" | "register") => { setTab(t); setError(null); };
 
@@ -53,20 +58,9 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
       onAuth(result.token, result.user);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong";
-      // Strip JSON wrapping if the server sent a plain error object
       try { setError(JSON.parse(msg).error ?? msg); } catch { setError(msg); }
     }
     setLoading(false);
-  };
-
-  const inp: React.CSSProperties = {
-    background: "#161929", border: "1px solid #2d3348", borderRadius: 8,
-    padding: "10px 14px", color: "#e2e8f0", fontSize: 13, outline: "none",
-    transition: "border-color .15s, box-shadow .15s", width: "100%", boxSizing: "border-box",
-  };
-  const lbl: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600, color: "#64748b", display: "block",
-    marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.6px",
   };
 
   return (
@@ -77,16 +71,11 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
         <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: "0 0 12px #00AAFF44" }}>📊</div>
         <span style={{ fontSize: 15, fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>EconChart</span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
-          <button onClick={() => switchTab("login")}
-            style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 7, padding: "7px 18px", fontSize: 12, color: "#94a3b8", cursor: "pointer", transition: "all .15s" }}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#64748b"; (e.currentTarget as HTMLButtonElement).style.color = "#e2e8f0"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}>
-            Sign in
-          </button>
-          <button onClick={continueAsGuest} disabled={guestLoading}
-            style={{ background: "linear-gradient(135deg,#00AAFF,#0088DD)", border: "none", borderRadius: 7, padding: "7px 18px", fontSize: 12, fontWeight: 700, color: "#fff", cursor: guestLoading ? "wait" : "pointer", boxShadow: "0 2px 10px #00AAFF44", opacity: guestLoading ? 0.7 : 1 }}>
+          <Button variant="outline" size="sm" onClick={() => switchTab("login")}>Sign in</Button>
+          <Button size="sm" onClick={continueAsGuest} disabled={guestLoading}
+            className="bg-gradient-to-r from-[#00AAFF] to-[#0088DD] shadow-[0_2px_10px_#00AAFF44]">
             {guestLoading ? "Starting…" : "Get started free"}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -145,50 +134,41 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
             ))}
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="flex flex-col gap-3.5">
             {tab === "register" && (
               <div>
-                <label style={lbl}>Full Name</label>
-                <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name"
-                  style={inp}
-                  onFocus={e => { (e.target as HTMLInputElement).style.borderColor = "#00AAFF"; (e.target as HTMLInputElement).style.boxShadow = "0 0 0 3px #00AAFF18"; }}
-                  onBlur={e  => { (e.target as HTMLInputElement).style.borderColor = "#2d3348"; (e.target as HTMLInputElement).style.boxShadow = "none"; }} />
+                <Label htmlFor="name">Full Name</Label>
+                <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" />
               </div>
             )}
             <div>
-              <label style={lbl}>Email Address</label>
-              <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com"
-                style={inp}
-                onFocus={e => { (e.target as HTMLInputElement).style.borderColor = "#00AAFF"; (e.target as HTMLInputElement).style.boxShadow = "0 0 0 3px #00AAFF18"; }}
-                onBlur={e  => { (e.target as HTMLInputElement).style.borderColor = "#2d3348"; (e.target as HTMLInputElement).style.boxShadow = "none"; }} />
+              <Label htmlFor="email">Email Address</Label>
+              <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
             </div>
             <div>
-              <label style={lbl}>Password</label>
-              <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min. 8 characters"
-                onKeyDown={e => e.key === "Enter" && submit()}
-                style={inp}
-                onFocus={e => { (e.target as HTMLInputElement).style.borderColor = "#00AAFF"; (e.target as HTMLInputElement).style.boxShadow = "0 0 0 3px #00AAFF18"; }}
-                onBlur={e  => { (e.target as HTMLInputElement).style.borderColor = "#2d3348"; (e.target as HTMLInputElement).style.boxShadow = "none"; }} />
+              <Label htmlFor="password">Password</Label>
+              <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)}
+                placeholder="Min. 8 characters" onKeyDown={e => e.key === "Enter" && submit()} />
             </div>
           </div>
 
           {error && (
-            <div style={{ background: "#EF444418", border: "1px solid #EF444455", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#EF4444", marginTop: 14, display: "flex", gap: 8, alignItems: "flex-start" }}>
-              <span style={{ flexShrink: 0 }}>⚠</span> {error}
-            </div>
+            <Alert variant="destructive" className="mt-3.5">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
-          <button onClick={submit} disabled={loading}
-            style={{ marginTop: 16, background: loading ? "#1e2130" : "linear-gradient(135deg, #00AAFF, #0088DD)", border: "none", borderRadius: 9, padding: "12px", fontSize: 13, fontWeight: 700, color: loading ? "#334155" : "#fff", cursor: loading ? "not-allowed" : "pointer", transition: "all .15s", width: "100%", boxShadow: loading ? "none" : "0 4px 14px #00AAFF44" }}>
+          <Button onClick={submit} disabled={loading} className="mt-4 w-full bg-gradient-to-r from-[#00AAFF] to-[#0088DD] shadow-[0_4px_14px_#00AAFF44] font-bold">
             {loading ? "Please wait…" : tab === "login" ? "Sign in →" : "Create account →"}
-          </button>
+          </Button>
 
           <p style={{ textAlign: "center", fontSize: 11, color: "#334155", marginTop: 18 }}>
             {tab === "login" ? "Don't have an account? " : "Already have an account? "}
-            <button onClick={() => switchTab(tab === "login" ? "register" : "login")}
-              style={{ background: "transparent", border: "none", color: "#00AAFF", fontSize: 11, cursor: "pointer", padding: 0, fontWeight: 600 }}>
+            <Button variant="link" size="sm" onClick={() => switchTab(tab === "login" ? "register" : "login")}
+              className="h-auto p-0 text-xs text-primary">
               {tab === "login" ? "Register free" : "Sign in"}
-            </button>
+            </Button>
           </p>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 0" }}>
@@ -196,12 +176,9 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
             <span style={{ fontSize: 11, color: "#334155" }}>or</span>
             <div style={{ flex: 1, height: 1, background: "#1e2130" }} />
           </div>
-          <button onClick={continueAsGuest} disabled={guestLoading}
-            style={{ marginTop: 12, background: "transparent", border: "1px solid #2d3348", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 600, color: guestLoading ? "#334155" : "#94a3b8", cursor: guestLoading ? "wait" : "pointer", transition: "all .15s", width: "100%" }}
-            onMouseEnter={e => { if (!guestLoading) { (e.currentTarget as HTMLButtonElement).style.borderColor = "#64748b"; (e.currentTarget as HTMLButtonElement).style.color = "#e2e8f0"; } }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}>
+          <Button variant="outline" onClick={continueAsGuest} disabled={guestLoading} className="mt-3 w-full">
             {guestLoading ? "Starting…" : "Continue without account →"}
-          </button>
+          </Button>
           <p style={{ textAlign: "center", fontSize: 10, color: "#334155", marginTop: 8 }}>No email required · Chat history not saved</p>
         </div>
       </div>

@@ -1,6 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// SEARCH MODE  —  live web search backed by /api/search (Anthropic web_search
-// beta tool). Falls back to model knowledge when live search is unavailable.
+// SEARCH MODE  —  live web search backed by /api/search.
 // Includes Trie-powered O(m) autocomplete from a weighted economic term corpus.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from "react";
@@ -10,28 +9,29 @@ import { performWebSearch } from "../../utils/api";
 import { getSearchTrie } from "../../algorithms/trie";
 import type { SearchResult } from "../../types";
 import { MarkdownText } from "../ui";
+import { Button }  from "@/components/ui/button";
+import { Input }   from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge }   from "@/components/ui/badge";
+import { AlertTriangle } from "lucide-react";
 
 export default function SearchMode() {
   const isMobile = useMobile();
-  // ── State
   const [query,           setQuery]           = useState("");
   const [loading,         setLoading]         = useState(false);
   const [result,          setResult]          = useState<SearchResult | null>(null);
   const [error,           setError]           = useState<string | null>(null);
-  const [searched,        setSearched]        = useState("");   // display label for the current result
+  const [searched,        setSearched]        = useState("");
   const [followQuery,     setFollowQuery]     = useState("");
   const [suggestions,     setSuggestions]     = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
 
-  // Singleton Trie — built once from the weighted corpus in algorithms/trie.ts.
   const trie = getSearchTrie();
 
-  // ── Handlers
   const handleQueryChange = (val: string) => {
     setQuery(val);
-    // Show Trie suggestions for queries ≥2 chars (avoids spammy single-char matches).
     if (val.trim().length >= 2) {
-      const hits = trie.search(val.trim()); // O(m) where m = query length
+      const hits = trie.search(val.trim());
       setSuggestions(hits);
       setShowSuggestions(hits.length > 0);
     } else {
@@ -60,34 +60,32 @@ export default function SearchMode() {
     setLoading(false);
   };
 
-  // ── Render
   return (
     <div style={{ maxWidth: 860, margin: "0 auto" }}>
 
-      {/* ── Search bar with Trie autocomplete dropdown ── */}
+      {/* ── Search bar with Trie autocomplete ── */}
       <div style={{ position: "relative", marginBottom: 18 }}>
-        <div style={{ display: "flex", gap: 8, flexDirection: isMobile ? "column" : "row" }}>
-          <input
+        <div className={`flex gap-2 ${isMobile ? "flex-col" : ""}`}>
+          <Input
             value={query}
             onChange={e => handleQueryChange(e.target.value)}
             onKeyDown={e => {
               if (e.key === "Enter")  doSearch(query);
               if (e.key === "Escape") setShowSuggestions(false);
             }}
-            // onBlur: restore border AND hide suggestions (setTimeout lets onMouseDown fire first)
-            onBlur={e => { e.currentTarget.style.borderColor = "#2d3348"; e.currentTarget.style.boxShadow = "none"; setTimeout(() => setShowSuggestions(false), 150); }}
-            onFocus={e => { e.currentTarget.style.borderColor = "#10B981"; e.currentTarget.style.boxShadow = "0 0 0 3px #10B98118"; }}
+            onBlur={e => { e.currentTarget.blur(); setTimeout(() => setShowSuggestions(false), 150); }}
+            onFocus={() => query.trim().length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
             disabled={loading}
             placeholder="Search for US, China, EU, Japan economic data, trade stats, news…"
-            style={{ flex: 1, background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: "12px 16px", color: "#e2e8f0", fontSize: 14, outline: "none", transition: "border-color .15s, box-shadow .15s" }}
+            className="flex-1 h-11 text-sm focus-visible:ring-green-500 focus-visible:border-green-500"
           />
-          <button onClick={() => doSearch(query)} disabled={loading || !query.trim()}
-            style={{ background: loading || !query.trim() ? "#161929" : "linear-gradient(135deg,#10B981,#059669)", border: "none", borderRadius: 10, padding: "12px 22px", color: loading || !query.trim() ? "#334155" : "#fff", fontSize: 13, fontWeight: 700, cursor: loading || !query.trim() ? "not-allowed" : "pointer", transition: "all .15s", whiteSpace: "nowrap", boxShadow: !loading && query.trim() ? "0 2px 10px #10B98144" : "none" }}>
+          <Button onClick={() => doSearch(query)} disabled={loading || !query.trim()}
+            className="h-11 px-6 whitespace-nowrap bg-gradient-to-br from-[#10B981] to-[#059669] shadow-[0_2px_10px_#10B98144] font-bold">
             {loading ? "…" : "Search →"}
-          </button>
+          </Button>
         </div>
 
-        {/* Trie autocomplete dropdown — uses onMouseDown (not onClick) so it fires before the input's onBlur */}
+        {/* Trie autocomplete dropdown */}
         {showSuggestions && suggestions.length > 0 && (
           <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 54, background: "#1e2130", border: "1px solid #10B98155", borderRadius: 10, zIndex: 100, overflow: "hidden" }}>
             <div style={{ padding: "6px 12px", fontSize: 10, color: "#10B981", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, borderBottom: "1px solid #2d3348" }}>
@@ -105,11 +103,11 @@ export default function SearchMode() {
         )}
       </div>
 
-      {/* ── Suggested searches (shown before first search) ── */}
+      {/* ── Suggested searches ── */}
       {!result && !loading && !error && (
         <>
           <p style={{ fontSize: 10, color: "#475569", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px" }}>Suggested searches</p>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 7, marginBottom: 24 }}>
+          <div className={`grid gap-1.5 mb-6 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}>
             {SEARCH_SUGGESTIONS.map((s, i) => (
               <button key={i} onClick={() => doSearch(s)}
                 style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#64748b", cursor: "pointer", textAlign: "left", lineHeight: 1.45, transition: "all .15s" }}
@@ -122,7 +120,7 @@ export default function SearchMode() {
         </>
       )}
 
-      {/* ── Loading state ── */}
+      {/* ── Loading ── */}
       {loading && (
         <div style={{ background: "#161929", border: "1px solid #10B98133", borderLeft: "3px solid #10B981", borderRadius: "0 12px 12px 0", padding: "18px 20px", display: "flex", alignItems: "center", gap: 14, animation: "fadeInUp .2s ease-out" }}>
           <div style={{ width: 32, height: 32, borderRadius: "50%", border: "2.5px solid #1e2130", borderTop: "2.5px solid #10B981", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
@@ -133,25 +131,26 @@ export default function SearchMode() {
         </div>
       )}
 
-      {/* ── Error state ── */}
+      {/* ── Error ── */}
       {error && (
-        <div style={{ background: "#EF444422", border: "1px solid #EF4444", borderRadius: 10, padding: 16, fontSize: 13, color: "#EF4444" }}>
-          <strong>Search error:</strong> {error}
-        </div>
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription><strong>Search error:</strong> {error}</AlertDescription>
+        </Alert>
       )}
 
       {/* ── Results ── */}
       {result && (
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, background: result.webSearchUsed ? "#10B98122" : "#F59E0B22", color: result.webSearchUsed ? "#10B981" : "#F59E0B", border: `1px solid ${result.webSearchUsed ? "#10B98144" : "#F59E0B44"}`, borderRadius: 5, padding: "2px 10px", fontWeight: 600 }}>
+          <div className="flex items-center gap-2.5 mb-3.5 flex-wrap">
+            <Badge variant={result.webSearchUsed ? "success" : "warning"}>
               {result.webSearchUsed ? "🌐 Live Web Search" : "📚 Model Knowledge"}
-            </span>
+            </Badge>
             <span style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>"{searched}"</span>
-            <button onClick={() => { setResult(null); setError(null); setSearched(""); }}
-              style={{ marginLeft: "auto", background: "transparent", border: "1px solid #2d3348", borderRadius: 6, padding: "4px 12px", fontSize: 11, color: "#64748b", cursor: "pointer" }}>
+            <Button variant="outline" size="sm" className="ml-auto text-xs"
+              onClick={() => { setResult(null); setError(null); setSearched(""); }}>
               Clear
-            </button>
+            </Button>
           </div>
 
           <div style={{ background: "#161929", border: `1px solid ${result.webSearchUsed ? "#10B98133" : "#F59E0B33"}`, borderLeft: `3px solid ${result.webSearchUsed ? "#10B981" : "#F59E0B"}`, borderRadius: "0 12px 12px 0", padding: 22, marginBottom: 14, animation: "fadeInUp .25s ease-out" }}>
@@ -159,9 +158,7 @@ export default function SearchMode() {
               <span style={{ fontSize: 14 }}>{result.webSearchUsed ? "🌐" : "📚"}</span>
               <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.7px", color: result.webSearchUsed ? "#10B981" : "#F59E0B" }}>Research Summary</span>
               {!result.webSearchUsed && (
-                <span style={{ fontSize: 9, color: "#F59E0B", background: "#F59E0B11", border: "1px solid #F59E0B33", borderRadius: 4, padding: "1px 7px", fontWeight: 600 }}>
-                  Training data — may be outdated
-                </span>
+                <Badge variant="warning" className="text-[9px]">Training data — may be outdated</Badge>
               )}
             </div>
             <MarkdownText text={result.text} />
@@ -173,7 +170,7 @@ export default function SearchMode() {
               <p style={{ margin: "0 0 10px", fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
                 Sources ({result.sources.length})
               </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              <div className="flex flex-col gap-1.5">
                 {result.sources.slice(0, 8).map((s, i) =>
                   s.url
                     ? <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
@@ -190,21 +187,19 @@ export default function SearchMode() {
             </div>
           )}
 
-          {/* Follow-up search bar */}
+          {/* Follow-up search */}
           <div style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: 14 }}>
             <p style={{ margin: "0 0 8px", fontSize: 10, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px" }}>Refine or follow up</p>
-            <div style={{ display: "flex", gap: 8, flexDirection: isMobile ? "column" : "row" }}>
-              <input value={followQuery} onChange={e => setFollowQuery(e.target.value)}
+            <div className={`flex gap-2 ${isMobile ? "flex-col" : ""}`}>
+              <Input value={followQuery} onChange={e => setFollowQuery(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && doSearch(followQuery)}
                 disabled={loading}
                 placeholder="Enter a follow-up or related search…"
-                style={{ flex: 1, background: "#0f1117", border: "1px solid #2d3348", borderRadius: 8, padding: "9px 14px", color: "#e2e8f0", fontSize: 13, outline: "none", transition: "border-color .15s" }}
-                onFocus={e => { e.target.style.borderColor = "#10B981"; }}
-                onBlur={e => { e.target.style.borderColor = "#2d3348"; }} />
-              <button onClick={() => doSearch(followQuery)} disabled={loading || !followQuery.trim()}
-                style={{ background: loading || !followQuery.trim() ? "#0f1117" : "#10B981", border: "none", borderRadius: 8, padding: "9px 18px", color: loading || !followQuery.trim() ? "#334155" : "#fff", fontSize: 13, fontWeight: 700, cursor: loading || !followQuery.trim() ? "not-allowed" : "pointer" }}>
+                className="flex-1 focus-visible:ring-green-500 focus-visible:border-green-500" />
+              <Button onClick={() => doSearch(followQuery)} disabled={loading || !followQuery.trim()}
+                className="bg-[#10B981] hover:bg-[#059669] font-bold">
                 Search
-              </button>
+              </Button>
             </div>
           </div>
         </div>
