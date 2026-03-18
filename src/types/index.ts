@@ -65,7 +65,7 @@ export interface ParsedCSV {
 // ── Auth + session types ───────────────────────────────────────────────────────
 
 /** Authenticated user returned from /api/auth/login and /api/auth/register. */
-export interface User { id: string; email: string; name: string; }
+export interface User { id: string; email: string; name: string; isGuest?: boolean; }
 
 /** Summary of a saved chat session (no messages — for sidebar list). */
 export interface ChatSession { id: string; title: string; createdAt: string; updatedAt: string; }

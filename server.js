@@ -988,6 +988,17 @@ Rules:
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 
+// Guest access — issues a short-lived JWT without creating a DB record.
+// Grants full read access to all AI/country endpoints; sessions are in-memory only.
+app.post('/api/auth/guest', authLimiter, (req, res) => {
+  const token = jwt.sign(
+    { id: 'guest', name: 'Guest', email: '', isGuest: true },
+    JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+  res.json({ token, user: { id: 'guest', name: 'Guest', email: '', isGuest: true } });
+});
+
 app.post('/api/auth/register', authLimiter, async (req, res) => {
   const { email, password, name } = req.body;
   if (!email || !password || !name)
@@ -1065,6 +1076,7 @@ app.delete('/api/auth/account', requireAuth, authLimiter, async (req, res) => {
 // ── Chat session routes ───────────────────────────────────────────────────────
 
 app.get('/api/sessions', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.json([]);
   res.json(stmt.sessionsByUser.all(req.user.id));
 });
 
@@ -1072,7 +1084,8 @@ app.post('/api/sessions', requireAuth, (req, res) => {
   const title = String(req.body.title || 'New Chat').slice(0, 100);
   const id    = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const now   = new Date().toISOString();
-  stmt.insertSession.run(id, req.user.id, title, '[]', now, now);
+  // Guests have no DB record — return a fake session without inserting
+  if (!req.user.isGuest) stmt.insertSession.run(id, req.user.id, title, '[]', now, now);
   res.json({ id, userId: req.user.id, title, messages: [], createdAt: now, updatedAt: now });
 });
 
@@ -1083,6 +1096,8 @@ app.get('/api/sessions/:id', requireAuth, (req, res) => {
 });
 
 app.patch('/api/sessions/:id', requireAuth, (req, res) => {
+  // Guest sessions are in-memory only — silently acknowledge the update
+  if (req.user.isGuest) return res.json({ id: req.params.id, title: '', updatedAt: new Date().toISOString() });
   const row = stmt.sessionById.get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Session not found' });
   const newMessages = Array.isArray(req.body.messages) ? JSON.stringify(req.body.messages) : row.messages;

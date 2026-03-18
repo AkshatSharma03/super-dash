@@ -81,9 +81,9 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
 
 // ── ChatMode root ─────────────────────────────────────────────────────────────
 
-interface ChatModeProps { token: string; }
+interface ChatModeProps { token: string; isGuest?: boolean; }
 
-export default function ChatMode({ token }: ChatModeProps) {
+export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
   const [messages,         setMessages]         = useState<Message[]>([]);
   const [input,            setInput]            = useState("");
   const [loading,          setLoading]          = useState(false);
@@ -152,16 +152,18 @@ export default function ChatMode({ token }: ChatModeProps) {
       const finalMessages: Message[] = [...nextMessages, { role: "assistant", content: result }];
       setMessages(finalMessages);
 
-      // Persist: create session on first message, then patch on subsequent ones
-      const sessionTitle = q.slice(0, 60) + (q.length > 60 ? "…" : "");
-      if (!activeSessionId) {
-        const session = await createSession(token, sessionTitle);
-        setActiveSessionId(session.id);
-        await updateSession(token, session.id, { messages: finalMessages as unknown[] });
-        setSessions(prev => [{ id: session.id, title: session.title, createdAt: session.createdAt, updatedAt: session.updatedAt }, ...prev]);
-      } else {
-        await updateSession(token, activeSessionId, { messages: finalMessages as unknown[] });
-        setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, updatedAt: new Date().toISOString() } : s));
+      // Guests: chat works fully but history is not persisted to the server
+      if (!isGuest) {
+        const sessionTitle = q.slice(0, 60) + (q.length > 60 ? "…" : "");
+        if (!activeSessionId) {
+          const session = await createSession(token, sessionTitle);
+          setActiveSessionId(session.id);
+          await updateSession(token, session.id, { messages: finalMessages as unknown[] });
+          setSessions(prev => [{ id: session.id, title: session.title, createdAt: session.createdAt, updatedAt: session.updatedAt }, ...prev]);
+        } else {
+          await updateSession(token, activeSessionId, { messages: finalMessages as unknown[] });
+          setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, updatedAt: new Date().toISOString() } : s));
+        }
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -209,7 +211,17 @@ export default function ChatMode({ token }: ChatModeProps) {
         </div>
 
         <div style={{ flex: 1, overflowY: "auto" }}>
-          {sessionsLoading ? (
+          {isGuest ? (
+            <div style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "12px 12px", marginBottom: 8 }}>
+              <p style={{ margin: "0 0 8px", fontSize: 12, color: "#94a3b8", lineHeight: 1.55 }}>
+                You're in guest mode. Chats are not saved between sessions.
+              </p>
+              <a href="#" onClick={e => { e.preventDefault(); window.location.reload(); }}
+                style={{ fontSize: 11, fontWeight: 700, color: "#00AAFF", textDecoration: "none" }}>
+                Sign up free to save history →
+              </a>
+            </div>
+          ) : sessionsLoading ? (
             <p style={{ fontSize: 11, color: "#334155", padding: "4px 2px" }}>Loading…</p>
           ) : sessions.length === 0 ? (
             <p style={{ fontSize: 11, color: "#334155", padding: "4px 2px", lineHeight: 1.5 }}>No saved chats yet.<br />Your conversations will appear here.</p>
