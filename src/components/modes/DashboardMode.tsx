@@ -4,7 +4,7 @@
 // Country fetch state lives in App.tsx so fetches survive tab switches.
 // This component owns only UI-local state: year range, search, tab, history.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   ComposedChart, Bar, Line, BarChart, AreaChart, Area,
   PieChart, Pie, Cell, LineChart, XAxis, YAxis,
@@ -14,6 +14,7 @@ import type { CountryDataset, CountrySearchResult, CountryHistoryEntry } from ".
 import { searchCountries, getCountryHistory } from "../../utils/api";
 import { TT, GRID, AX, LEG, P } from "../../config/styles";
 import { Btn, KPI, Card } from "../ui";
+import { POPULAR_COUNTRIES } from "../../data/suggestions";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -21,21 +22,6 @@ import { Badge }  from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { AlertTriangle } from "lucide-react";
 
-// ── Popular quick-select countries ────────────────────────────────────────────
-const POPULAR: CountrySearchResult[] = [
-  { code: "US", name: "United States", flag: "🇺🇸", region: "North America" },
-  { code: "CN", name: "China",         flag: "🇨🇳", region: "East Asia" },
-  { code: "DE", name: "Germany",       flag: "🇩🇪", region: "Europe" },
-  { code: "JP", name: "Japan",         flag: "🇯🇵", region: "East Asia" },
-  { code: "GB", name: "United Kingdom",flag: "🇬🇧", region: "Europe" },
-  { code: "FR", name: "France",        flag: "🇫🇷", region: "Europe" },
-  { code: "IN", name: "India",         flag: "🇮🇳", region: "South Asia" },
-  { code: "BR", name: "Brazil",        flag: "🇧🇷", region: "Latin America" },
-  { code: "CA", name: "Canada",        flag: "🇨🇦", region: "North America" },
-  { code: "KR", name: "South Korea",   flag: "🇰🇷", region: "East Asia" },
-  { code: "AU", name: "Australia",     flag: "🇦🇺", region: "Oceania" },
-  { code: "SG", name: "Singapore",     flag: "🇸🇬", region: "Southeast Asia" },
-];
 
 const DASH_TABS = ["GDP", "Exports", "Imports", "Trade Balance"] as const;
 type DashTab = typeof DASH_TABS[number];
@@ -60,20 +46,10 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
   const [history,      setHistory]      = useState<CountryHistoryEntry[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Load fetch history on mount ─────────────────────────────────────────────
+  // ── Load fetch history on mount and whenever the loaded country changes ──────
   useEffect(() => {
-    getCountryHistory(token)
-      .then(setHistory)
-      .catch(() => { /* silently skip if unavailable */ });
-  }, [token]);
-
-  // Refresh history list whenever a new dataset arrives
-  useEffect(() => {
-    if (!dataset) return;
-    getCountryHistory(token)
-      .then(setHistory)
-      .catch(() => {});
-  }, [dataset, token]);
+    getCountryHistory(token).then(setHistory).catch(() => {});
+  }, [token, dataset?.code]);
 
   // ── Adapt year range when a new dataset loads ───────────────────────────────
   useEffect(() => {
@@ -106,19 +82,24 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
     onSelectCountry(code);
   }
 
-  // ── Filtered data slices ────────────────────────────────────────────────────
-  const yr = <T extends { year: number }>(d: T[]) =>
-    d.filter(r => r.year >= yearRange[0] && r.year <= yearRange[1]);
-
-  const gdp = dataset ? yr(dataset.gdpData)   : [];
-  const exp = dataset ? yr(dataset.exportData) : [];
-  const imp = dataset ? yr(dataset.importData) : [];
-  const bal = dataset
-    ? yr(dataset.exportData).map(e => {
-        const im = dataset.importData.find(x => x.year === e.year);
-        return { year: e.year, exports: e.total, imports: im?.total ?? 0, balance: +(e.total - (im?.total ?? 0)).toFixed(1) };
-      })
-    : [];
+  // ── Filtered data slices (memoized — only recalculate when dataset/range changes) ──
+  const { gdp, exp, imp, bal } = useMemo(() => {
+    if (!dataset) return { gdp: [], exp: [], imp: [], bal: [] };
+    const inRange = <T extends { year: number }>(d: T[]) =>
+      d.filter(r => r.year >= yearRange[0] && r.year <= yearRange[1]);
+    const filteredExp = inRange(dataset.exportData);
+    const impMap = new Map(dataset.importData.map(d => [d.year, d.total]));
+    return {
+      gdp: inRange(dataset.gdpData),
+      exp: filteredExp,
+      imp: inRange(dataset.importData),
+      bal: filteredExp.map(e => ({
+        year: e.year, exports: e.total,
+        imports: impMap.get(e.year) ?? 0,
+        balance: +(e.total - (impMap.get(e.year) ?? 0)).toFixed(1),
+      })),
+    };
+  }, [dataset, yearRange]);
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
   const yearMin = dataset?.gdpData[0]?.year ?? 2010;
@@ -194,7 +175,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
 
         {/* Popular quick-select */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-          {POPULAR.map(c => (
+          {POPULAR_COUNTRIES.map(c => (
             <button key={c.code} onClick={() => selectCountry(c.code)} disabled={loading} style={{
               display: "flex", alignItems: "center", gap: 6,
               background: dataset?.code === c.code ? "#00AAFF18" : "#161929",
@@ -244,10 +225,9 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
       {/* ── Loading ───────────────────────────────────────────────────────── */}
       {loading && (
         <div style={{ textAlign: "center", padding: "60px 0", color: "#475569" }}>
-          <div style={{ fontSize: 28, marginBottom: 12, display: "inline-block", animation: "ecSpin 1.2s linear infinite" }}>⟳</div>
+          <div style={{ fontSize: 28, marginBottom: 12, display: "inline-block", animation: "spin 1.2s linear infinite" }}>⟳</div>
           <div style={{ fontSize: 14 }}>Fetching data from World Bank…</div>
           <div style={{ fontSize: 12, marginTop: 6, color: "#334155" }}>GDP, trade totals + AI-estimated sector breakdown</div>
-          <style>{`@keyframes ecSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
         </div>
       )}
 

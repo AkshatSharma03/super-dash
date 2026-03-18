@@ -192,9 +192,6 @@ export default function App() {
         </div>
       </div>
 
-      {/* Keyframe for pulsing background-fetch indicator */}
-      <style>{`@keyframes ecPulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }`}</style>
-
       {/* ── Mode badge + description ── */}
       <div style={{ padding: "5px 20px", borderBottom: "1px solid #1e2130", flexShrink: 0, display: "flex", alignItems: "center", gap: 10, background: "#0d1018" }}>
         <div style={{ width: 3, height: 18, borderRadius: 2, background: color, flexShrink: 0 }} />

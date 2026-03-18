@@ -9,13 +9,13 @@
 //                         correlation, HHI, anomaly, k-means, openness).
 //                         Algorithms are re-run fresh from the loaded dataset.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useMobile } from "../../utils/useMobile";
 import {
   LineChart, BarChart, ComposedChart,
-  Bar, Line, Area, AreaChart,
+  Bar, Line, Area, AreaChart, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
 } from "recharts";
 import type { CountryDataset } from "../../types";
@@ -38,13 +38,23 @@ import { buildCorrelationMatrix }    from "../../algorithms/correlation";
 const LG  = { strokeDasharray: "3 3", stroke: "#e2e8f0" } as const;
 const LP  = ["#3b82f6","#f59e0b","#10b981","#ef4444","#8b5cf6","#f97316","#06b6d4"] as const;
 
+const ALGO_DEFS: { key: string; name: string; icon: string }[] = [
+  { key: "regression",  name: "OLS Regression",     icon: "📈" },
+  { key: "cagr",        name: "CAGR Analysis",       icon: "📊" },
+  { key: "hp_filter",   name: "HP Filter",           icon: "〰️" },
+  { key: "correlation", name: "Correlation Matrix",  icon: "🔗" },
+  { key: "hhi",         name: "HHI Concentration",   icon: "⚖️" },
+  { key: "anomaly",     name: "Anomaly Detection",   icon: "🚨" },
+  { key: "kmeans",      name: "K-Means Clustering",  icon: "🔵" },
+  { key: "openness",    name: "Trade Openness",       icon: "🌐" },
+];
+
 // ── Tiny UI helpers ───────────────────────────────────────────────────────────
 
 interface ExportBtnProps {
   label: string;
   icon: string;
   onClick: () => void;
-  color?: string; // kept for call-site compatibility; not used visually
   disabled?: boolean;
   full?: boolean;
 }
@@ -65,34 +75,56 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
   );
 }
 
+function Panel({
+  title, icon, color, dataset, empty, children,
+}: {
+  title: string; icon: string; color: string;
+  dataset: CountryDataset | null; empty: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ background: "#0d1018", border: "1px solid #1e2130", borderRadius: 12, padding: "20px 22px", flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 16 }}>
+        <div style={{ width: 32, height: 32, borderRadius: 8, background: color + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{icon}</div>
+        <div>
+          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#e2e8f0" }}>{title}</p>
+          {dataset
+            ? <p style={{ margin: 0, fontSize: 11, color: "#475569" }}>{dataset.flag} {dataset.name} · {dataset.gdpData.length} years of data</p>
+            : <p style={{ margin: 0, fontSize: 11, color: "#374151" }}>{empty}</p>
+          }
+        </div>
+        {dataset && (
+          <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: 4, background: color + "22", border: `1px solid ${color}44`, fontSize: 10, fontWeight: 700, color, letterSpacing: "0.4px" }}>
+            LOADED
+          </div>
+        )}
+      </div>
+      {children}
+    </div>
+  );
+}
+
 // ── Algorithm CSV builders ────────────────────────────────────────────────────
 
 function buildAlgoCSVs(ds: CountryDataset): Record<string, string> {
   const out: Record<string, string> = {};
 
-  // Regression — buildForecast({year,value}[], futureYears[])
   try {
-    const { points } = buildForecast(
-      ds.gdpData.map(d => ({ year: d.year, value: d.gdp_bn })),
-      [],
-    );
+    const { points } = buildForecast(ds.gdpData.map(d => ({ year: d.year, value: d.gdp_bn })), []);
     out.regression = toCSVString(
       ["year", "actual_gdp_bn", "trend_gdp_bn", "ci_low", "ci_high", "is_forecast"],
       points.map(p => [p.year, p.actual ?? "", p.trend ?? "", p.ciLow ?? "", p.ciHigh ?? "", p.isForecast ? 1 : 0]),
     );
   } catch { /* skip */ }
 
-  // CAGR — returns { periods: CAGREntry[], fullPeriod, ... }
   try {
     const { periods, fullPeriod } = buildCAGRSeries(ds.gdpData, ds.exportData, ds.importData);
-    const rows = [...periods, fullPeriod];
     out.cagr = toCSVString(
       ["period", "start_year", "end_year", "gdp_cagr_pct", "exports_cagr_pct", "imports_cagr_pct", "per_capita_cagr_pct"],
-      rows.map(s => [s.label, s.startYear, s.endYear, s.gdp ?? "", s.exports ?? "", s.imports ?? "", s.perCapita ?? ""]),
+      [...periods, fullPeriod].map(s => [s.label, s.startYear, s.endYear, s.gdp ?? "", s.exports ?? "", s.imports ?? "", s.perCapita ?? ""]),
     );
   } catch { /* skip */ }
 
-  // HP Filter — takes {year,value}[], returns { points: [{year,actual,trend,cycle}] }
   try {
     const { points } = hpFilter(ds.gdpData.map(d => ({ year: d.year, value: d.gdp_bn })));
     out.hp_filter = toCSVString(
@@ -101,18 +133,14 @@ function buildAlgoCSVs(ds: CountryDataset): Record<string, string> {
     );
   } catch { /* skip */ }
 
-  // Correlation — returns { variables, cells: CorrelationCell[], strongestPair }
   try {
     const { cells } = buildCorrelationMatrix(ds.gdpData, ds.exportData, ds.importData);
-    // exclude diagonal (r === 1, rowLabel === colLabel)
-    const offDiag = cells.filter(c => c.rowLabel !== c.colLabel);
     out.correlation = toCSVString(
       ["variable_1", "variable_2", "pearson_r", "strength", "direction"],
-      offDiag.map(c => [c.rowLabel, c.colLabel, +c.r.toFixed(4), c.strength, c.direction]),
+      cells.filter(c => c.rowLabel !== c.colLabel).map(c => [c.rowLabel, c.colLabel, +c.r.toFixed(4), c.strength, c.direction]),
     );
   } catch { /* skip */ }
 
-  // HHI — buildGenericHHITimeSeries(exportData, importData, exportSectors, importPartners)
   try {
     const hhi = buildGenericHHITimeSeries(ds.exportData, ds.importData, ds.exportSectors, ds.importPartners);
     out.hhi = toCSVString(
@@ -121,7 +149,6 @@ function buildAlgoCSVs(ds: CountryDataset): Record<string, string> {
     );
   } catch { /* skip */ }
 
-  // Anomaly
   try {
     const anomalies = detectAllAnomaliesGeneric(ds.gdpData, ds.exportData, ds.importData);
     out.anomaly = toCSVString(
@@ -130,14 +157,12 @@ function buildAlgoCSVs(ds: CountryDataset): Record<string, string> {
     );
   } catch { /* skip */ }
 
-  // K-Means — kmeans returns { assignments }, labelClusters(years[], gdpGrowths[], assignments[], k)
   try {
     const valid = ds.gdpData.filter(d => d.gdp_growth != null);
     const years = valid.map(d => d.year);
     const growths = valid.map(d => d.gdp_growth!);
     const { assignments } = kmeans(valid.map(d => [d.gdp_growth!, d.gdp_bn]), 3);
     const clusters = labelClusters(years, growths, assignments, 3);
-    // Build year→cluster map
     const yearCluster = new Map<number, string>();
     clusters.forEach(cl => cl.years.forEach(y => yearCluster.set(y, cl.label)));
     out.kmeans = toCSVString(
@@ -146,7 +171,6 @@ function buildAlgoCSVs(ds: CountryDataset): Record<string, string> {
     );
   } catch { /* skip */ }
 
-  // Trade Openness
   try {
     const expMap = new Map(ds.exportData.map(d => [d.year, d.total]));
     const impMap = new Map(ds.importData.map(d => [d.year, d.total]));
@@ -155,8 +179,7 @@ function buildAlgoCSVs(ds: CountryDataset): Record<string, string> {
       ds.gdpData.map(d => {
         const exp = expMap.get(d.year) ?? 0;
         const imp = impMap.get(d.year) ?? 0;
-        const open = d.gdp_bn > 0 ? +(((exp + imp) / d.gdp_bn) * 100).toFixed(1) : "";
-        return [d.year, exp || "", imp || "", d.gdp_bn, open];
+        return [d.year, exp || "", imp || "", d.gdp_bn, d.gdp_bn > 0 ? +(((exp + imp) / d.gdp_bn) * 100).toFixed(1) : ""];
       }),
     );
   } catch { /* skip */ }
@@ -189,13 +212,10 @@ function HiddenCharts({ dataset, refs }: HiddenChartsProps) {
 
   const sKeys = dataset.exportSectors.map(s => s.key);
   const pKeys = dataset.importPartners.map(s => s.key);
-
   const W = 680, tickStyle = { fill: "#6b7280", fontSize: 11 };
 
   return (
     <div style={{ position: "fixed", left: -9999, top: 0, width: W, pointerEvents: "none", visibility: "hidden" }}>
-
-      {/* GDP trend */}
       <div ref={refs.gdp}>
         <LineChart width={W} height={240} data={dataset.gdpData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid {...LG} />
@@ -206,25 +226,20 @@ function HiddenCharts({ dataset, refs }: HiddenChartsProps) {
         </LineChart>
       </div>
 
-      {/* Growth rate */}
       <div ref={refs.growth}>
         <BarChart width={W} height={200} data={dataset.gdpData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid {...LG} />
           <XAxis dataKey="year" tick={tickStyle} />
           <YAxis tick={tickStyle} />
           <Tooltip />
-          <Bar dataKey="gdp_growth" name="GDP Growth (%)" fill={LP[0]}
-            label={false}
-            // colour bars individually: green positive, red negative
-          >
+          <Bar dataKey="gdp_growth" name="GDP Growth (%)">
             {dataset.gdpData.map((entry, idx) => (
-              <rect key={idx} fill={(entry.gdp_growth ?? 0) >= 0 ? "#10b981" : "#ef4444"} />
+              <Cell key={idx} fill={(entry.gdp_growth ?? 0) >= 0 ? "#10b981" : "#ef4444"} />
             ))}
           </Bar>
         </BarChart>
       </div>
 
-      {/* Trade balance */}
       <div ref={refs.trade}>
         <ComposedChart width={W} height={240} data={tradeData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid {...LG} />
@@ -237,7 +252,6 @@ function HiddenCharts({ dataset, refs }: HiddenChartsProps) {
         </ComposedChart>
       </div>
 
-      {/* Export composition (stacked bars) */}
       <div ref={refs.exports}>
         <BarChart width={W} height={220} data={dataset.exportData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid {...LG} />
@@ -251,7 +265,6 @@ function HiddenCharts({ dataset, refs }: HiddenChartsProps) {
         </BarChart>
       </div>
 
-      {/* Import breakdown (stacked area) */}
       <div ref={refs.imports}>
         <AreaChart width={W} height={220} data={dataset.importData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid {...LG} />
@@ -265,7 +278,6 @@ function HiddenCharts({ dataset, refs }: HiddenChartsProps) {
           ))}
         </AreaChart>
       </div>
-
     </div>
   );
 }
@@ -278,26 +290,25 @@ interface ExportModeProps {
 }
 
 export default function ExportMode({ dashDataset, analyticsDataset }: ExportModeProps) {
-  const [generating, setGenerating] = useState<"dash" | "analytics" | null>(null);
+  const [generating, setGenerating] = useState<"dash" | null>(null);
   const isMobile = useMobile();
 
-  // Refs for off-screen chart SVG extraction
-  const chartRefs = {
-    gdp:     useRef<HTMLDivElement>(null),
-    growth:  useRef<HTMLDivElement>(null),
-    trade:   useRef<HTMLDivElement>(null),
-    exports: useRef<HTMLDivElement>(null),
-    imports: useRef<HTMLDivElement>(null),
-  };
+  // Stable individual refs for off-screen chart SVG extraction
+  const gdpRef     = useRef<HTMLDivElement>(null);
+  const growthRef  = useRef<HTMLDivElement>(null);
+  const tradeRef   = useRef<HTMLDivElement>(null);
+  const exportsRef = useRef<HTMLDivElement>(null);
+  const importsRef = useRef<HTMLDivElement>(null);
+  const chartRefs  = useMemo(
+    () => ({ gdp: gdpRef, growth: growthRef, trade: tradeRef, exports: exportsRef, imports: importsRef }),
+    [],
+  );
 
-  // Lazy-compute algorithm CSVs whenever analyticsDataset changes
-  const [algoCsvs, setAlgoCsvs] = useState<Record<string, string>>({});
-  useEffect(() => {
-    if (analyticsDataset) setAlgoCsvs(buildAlgoCSVs(analyticsDataset));
-    else setAlgoCsvs({});
-  }, [analyticsDataset]);
-
-  const showToast = useCallback((msg: string) => toast.success(msg), []);
+  // Compute algorithm CSVs — memoized, avoids double-render vs useEffect+setState
+  const algoCsvs = useMemo(
+    () => analyticsDataset ? buildAlgoCSVs(analyticsDataset) : {} as Record<string, string>,
+    [analyticsDataset],
+  );
 
   // Extract one SVG from a chart container ref
   function extractSVG(ref: React.RefObject<HTMLDivElement | null>): string {
@@ -305,7 +316,6 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
     if (!svg) return "";
     const clone = svg.cloneNode(true) as SVGElement;
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-    // Ensure background is white in report
     clone.style.background = "#fff";
     return new XMLSerializer().serializeToString(clone);
   }
@@ -320,19 +330,18 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
     } as const;
     const [csv, name] = map[which]() as [string, string];
     downloadCSV(name, csv);
-    showToast(`Downloaded ${name}`);
+    toast.success(`Downloaded ${name}`);
   }
 
   function handleDashJSON() {
     if (!dashDataset) return;
     downloadJSON(`${dashDataset.code}_dataset.json`, dashDataset);
-    showToast(`Downloaded ${dashDataset.code}_dataset.json`);
+    toast.success(`Downloaded ${dashDataset.code}_dataset.json`);
   }
 
   function handleDashReport(print = false) {
     if (!dashDataset) return;
     setGenerating("dash");
-    // Allow HiddenCharts one extra tick to finish rendering
     setTimeout(() => {
       const svgs = {
         gdp:     extractSVG(chartRefs.gdp),
@@ -345,9 +354,6 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
       if (print) {
         printHTML(html);
       } else {
-        const name = `${dashDataset.code}_economic_report.html`;
-        downloadCSV(name.replace(".csv", ""), html);   // reuse downloadBlob via alias
-        // use dedicated download
         const blob = new Blob([html], { type: "text/html;charset=utf-8" });
         const url  = URL.createObjectURL(blob);
         const a    = Object.assign(document.createElement("a"), { href: url, download: `${dashDataset.code}_economic_report.html` });
@@ -355,7 +361,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        showToast("Report downloaded");
+        toast.success("Report downloaded");
       }
       setGenerating(null);
     }, 120);
@@ -366,13 +372,13 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
     if (!csv || !analyticsDataset) return;
     const name = `${analyticsDataset.code}_${key}.csv`;
     downloadCSV(name, csv);
-    showToast(`Downloaded ${name}`);
+    toast.success(`Downloaded ${name}`);
   }
 
   function handleAlgoJSON() {
     if (!analyticsDataset) return;
     downloadJSON(`${analyticsDataset.code}_all_algorithms.json`, algoCsvs);
-    showToast("Downloaded all algorithm results as JSON");
+    toast.success("Downloaded all algorithm results as JSON");
   }
 
   async function handleCopySummary(ds: CountryDataset) {
@@ -386,58 +392,14 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
       ...ds.kpis.map(k => `${k.label}: ${k.value} (${k.sub})`),
     ].join("\n");
     await copyToClipboard(text);
-    showToast("Summary copied to clipboard");
+    toast.success("Summary copied to clipboard");
   }
-
-  // ── Panel card ──────────────────────────────────────────────────────────────
-  function Panel({
-    title, icon, color, dataset, empty,
-    children,
-  }: {
-    title: string; icon: string; color: string;
-    dataset: CountryDataset | null; empty: string;
-    children: React.ReactNode;
-  }) {
-    return (
-      <div style={{ background: "#0d1018", border: "1px solid #1e2130", borderRadius: 12, padding: "20px 22px", flex: 1, minWidth: 0 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 16 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: color + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{icon}</div>
-          <div>
-            <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#e2e8f0" }}>{title}</p>
-            {dataset
-              ? <p style={{ margin: 0, fontSize: 11, color: "#475569" }}>{dataset.flag} {dataset.name} · {dataset.gdpData.length} years of data</p>
-              : <p style={{ margin: 0, fontSize: 11, color: "#374151" }}>{empty}</p>
-            }
-          </div>
-          {dataset && (
-            <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: 4, background: color + "22", border: `1px solid ${color}44`, fontSize: 10, fontWeight: 700, color, letterSpacing: "0.4px" }}>
-              LOADED
-            </div>
-          )}
-        </div>
-        {children}
-      </div>
-    );
-  }
-
-  const ALGO_DEFS: { key: string; name: string; icon: string }[] = [
-    { key: "regression",  name: "OLS Regression",     icon: "📈" },
-    { key: "cagr",        name: "CAGR Analysis",       icon: "📊" },
-    { key: "hp_filter",   name: "HP Filter",           icon: "〰️" },
-    { key: "correlation", name: "Correlation Matrix",  icon: "🔗" },
-    { key: "hhi",         name: "HHI Concentration",   icon: "⚖️" },
-    { key: "anomaly",     name: "Anomaly Detection",   icon: "🚨" },
-    { key: "kmeans",      name: "K-Means Clustering",  icon: "🔵" },
-    { key: "openness",    name: "Trade Openness",       icon: "🌐" },
-  ];
 
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto" }}>
 
-      {/* Hidden off-screen charts for SVG extraction */}
       {dashDataset && <HiddenCharts dataset={dashDataset} refs={chartRefs} />}
 
-      {/* ── Page header ── */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: "#e2e8f0", letterSpacing: "-0.3px" }}>
           📤 Export &amp; Reports
@@ -447,10 +409,8 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
         </p>
       </div>
 
-      {/* ── Two-panel layout ── */}
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexDirection: isMobile ? "column" : "row" }}>
 
-        {/* ── Panel 1: Country Data ── */}
         <Panel title="Country Data" icon="🌍" color="#00AAFF"
           dataset={dashDataset}
           empty="No country loaded — open the Country Data tab and select a country first">
@@ -459,17 +419,17 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
             <>
               <SectionTitle>Raw Data Downloads</SectionTitle>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
-                <ExportBtn icon="📉" label="GDP CSV"           onClick={() => handleDashCSV("gdp")}     color="#00AAFF" />
-                <ExportBtn icon="📦" label="Exports CSV"       onClick={() => handleDashCSV("exports")} color="#10b981" />
-                <ExportBtn icon="📥" label="Imports CSV"       onClick={() => handleDashCSV("imports")} color="#ef4444" />
-                <ExportBtn icon="⚖️" label="Trade Balance CSV" onClick={() => handleDashCSV("balance")} color="#f59e0b" />
+                <ExportBtn icon="📉" label="GDP CSV"           onClick={() => handleDashCSV("gdp")} />
+                <ExportBtn icon="📦" label="Exports CSV"       onClick={() => handleDashCSV("exports")} />
+                <ExportBtn icon="📥" label="Imports CSV"       onClick={() => handleDashCSV("imports")} />
+                <ExportBtn icon="⚖️" label="Trade Balance CSV" onClick={() => handleDashCSV("balance")} />
               </div>
               <div style={{ marginTop: 6 }}>
-                <ExportBtn icon="🗂" label="Full Dataset JSON" onClick={handleDashJSON} color="#8b5cf6" full />
+                <ExportBtn icon="🗂" label="Full Dataset JSON" onClick={handleDashJSON} full />
               </div>
 
               <SectionTitle>Clipboard</SectionTitle>
-              <ExportBtn icon="📋" label="Copy summary to clipboard" onClick={() => handleCopySummary(dashDataset)} color="#06b6d4" full />
+              <ExportBtn icon="📋" label="Copy summary to clipboard" onClick={() => handleCopySummary(dashDataset)} full />
 
               <SectionTitle>Full Report</SectionTitle>
               <p style={{ fontSize: 11, color: "#374151", margin: "0 0 8px" }}>
@@ -481,7 +441,6 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
                     icon={generating === "dash" ? "⏳" : "⬇"}
                     label={generating === "dash" ? "Generating…" : "Download HTML"}
                     onClick={() => handleDashReport(false)}
-                    color="#00AAFF"
                     disabled={generating === "dash"}
                     full
                   />
@@ -491,14 +450,12 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
                     icon="🖨"
                     label="Print / Save PDF"
                     onClick={() => handleDashReport(true)}
-                    color="#8b5cf6"
                     disabled={generating === "dash"}
                     full
                   />
                 </div>
               </div>
 
-              {/* Data preview table */}
               <SectionTitle>Preview — GDP Data ({dashDataset.gdpData.length} rows)</SectionTitle>
               <div style={{ overflowX: "auto", borderRadius: 6, border: "1px solid #1e2130" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
@@ -536,7 +493,6 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
           )}
         </Panel>
 
-        {/* ── Panel 2: Algorithm Results ── */}
         <Panel title="Algorithm Results" icon="🧮" color="#EF4444"
           dataset={analyticsDataset}
           empty="No analytics country loaded — open the Analytics tab and select a country first">
@@ -551,7 +507,6 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
                     icon={icon}
                     label={`${name} CSV`}
                     onClick={() => handleAlgoCSV(key)}
-                    color="#EF4444"
                     disabled={!algoCsvs[key]}
                     full
                   />
@@ -559,9 +514,8 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               </div>
 
               <SectionTitle>Bulk Export</SectionTitle>
-              <ExportBtn icon="🗂" label="All Algorithm Results → JSON" onClick={handleAlgoJSON} color="#8b5cf6" full />
+              <ExportBtn icon="🗂" label="All Algorithm Results → JSON" onClick={handleAlgoJSON} full />
 
-              {/* Row-count summary */}
               <SectionTitle>Result Summary</SectionTitle>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
                 {ALGO_DEFS.map(({ key, name }) => {
@@ -587,7 +541,6 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
         </Panel>
       </div>
 
-      {/* ── Format reference ── */}
       <div style={{ marginTop: 20, background: "#0d1018", border: "1px solid #1e2130", borderRadius: 10, padding: "16px 20px" }}>
         <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.6px" }}>File Formats</p>
         <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 10 }}>

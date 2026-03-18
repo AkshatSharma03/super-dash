@@ -1,3 +1,21 @@
+import type { CountrySearchResult } from "../types";
+
+// Countries shown as quick-select buttons in DashboardMode and AnalyticsMode
+export const POPULAR_COUNTRIES: CountrySearchResult[] = [
+  { code: "US", name: "United States",  flag: "🇺🇸", region: "North America" },
+  { code: "CN", name: "China",          flag: "🇨🇳", region: "East Asia" },
+  { code: "DE", name: "Germany",        flag: "🇩🇪", region: "Europe" },
+  { code: "JP", name: "Japan",          flag: "🇯🇵", region: "East Asia" },
+  { code: "GB", name: "United Kingdom", flag: "🇬🇧", region: "Europe" },
+  { code: "FR", name: "France",         flag: "🇫🇷", region: "Europe" },
+  { code: "IN", name: "India",          flag: "🇮🇳", region: "South Asia" },
+  { code: "BR", name: "Brazil",         flag: "🇧🇷", region: "Latin America" },
+  { code: "CA", name: "Canada",         flag: "🇨🇦", region: "North America" },
+  { code: "KR", name: "South Korea",    flag: "🇰🇷", region: "East Asia" },
+  { code: "AU", name: "Australia",      flag: "🇦🇺", region: "Oceania" },
+  { code: "SG", name: "Singapore",      flag: "🇸🇬", region: "Southeast Asia" },
+];
+
 export const CHAT_SUGGESTIONS: string[] = [
   "Compare US, China and EU GDP growth over the last decade",
   "Show China's trade balance with the US 2010–2024",
