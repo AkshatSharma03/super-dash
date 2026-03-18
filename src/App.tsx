@@ -164,22 +164,34 @@ export default function App() {
 
         {/* User chip */}
         <div className="ec-user-chip" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-          <button onClick={() => setSettingsOpen(true)}
-            style={{ display: "flex", alignItems: "center", gap: 8, background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "5px 10px 5px 6px", cursor: "pointer", transition: "all .15s" }}
-            onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF6"; el.style.background = "#1e2130"; }}
-            onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.background = "#161929"; }}>
-            <div style={{ width: 24, height: 24, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-              {user.name.charAt(0).toUpperCase()}
-            </div>
-            <span className="ec-user-name" style={{ fontSize: 12, color: "#cbd5e1", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{user.name}</span>
-            <span style={{ fontSize: 9, color: "#475569" }}>▼</span>
-          </button>
-          <button onClick={logout}
-            style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 7, padding: "5px 12px", fontSize: 11, color: "#64748b", cursor: "pointer", transition: "all .15s", fontWeight: 500 }}
-            onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = "#EF4444"; el.style.borderColor = "#EF444466"; }}
-            onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = "#64748b"; el.style.borderColor = "#2d3348"; }}>
-            Sign out
-          </button>
+          {user.isGuest ? (
+            <>
+              <span style={{ fontSize: 11, color: "#475569" }}>Guest mode</span>
+              <button onClick={logout}
+                style={{ background: "linear-gradient(135deg,#00AAFF,#0088DD)", border: "none", borderRadius: 7, padding: "6px 14px", fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer", boxShadow: "0 2px 8px #00AAFF44" }}>
+                Sign up free
+              </button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setSettingsOpen(true)}
+                style={{ display: "flex", alignItems: "center", gap: 8, background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "5px 10px 5px 6px", cursor: "pointer", transition: "all .15s" }}
+                onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF6"; el.style.background = "#1e2130"; }}
+                onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.background = "#161929"; }}>
+                <div style={{ width: 24, height: 24, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                  {user.name.charAt(0).toUpperCase()}
+                </div>
+                <span className="ec-user-name" style={{ fontSize: 12, color: "#cbd5e1", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontWeight: 500 }}>{user.name}</span>
+                <span style={{ fontSize: 9, color: "#475569" }}>▼</span>
+              </button>
+              <button onClick={logout}
+                style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 7, padding: "5px 12px", fontSize: 11, color: "#64748b", cursor: "pointer", transition: "all .15s", fontWeight: 500 }}
+                onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = "#EF4444"; el.style.borderColor = "#EF444466"; }}
+                onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = "#64748b"; el.style.borderColor = "#2d3348"; }}>
+                Sign out
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -204,7 +216,7 @@ export default function App() {
 
       {/* ── Main content ── */}
       <div style={{ flex: 1, overflowY: mode === "chat" ? "hidden" : "auto", padding: mode === "chat" ? "16px 20px 0" : "20px 20px" }}>
-        {mode === "chat"      && <div style={{ maxWidth: 1060, margin: "0 auto", height: "100%", display: "flex", flexDirection: "column" }}><ChatMode token={token} /></div>}
+        {mode === "chat"      && <div style={{ maxWidth: 1060, margin: "0 auto", height: "100%", display: "flex", flexDirection: "column" }}><ChatMode token={token} isGuest={user.isGuest ?? false} /></div>}
         {mode === "search"    && <SearchMode />}
         {mode === "data"      && <DataMode />}
         {mode === "analytics" && (
@@ -235,7 +247,7 @@ export default function App() {
         )}
       </div>
 
-      {settingsOpen && (
+      {settingsOpen && !user.isGuest && (
         <SettingsPanel
           user={user}
           token={token}

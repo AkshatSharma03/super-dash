@@ -51,6 +51,10 @@ export function register(email: string, password: string, name: string) {
   return post<{ token: string; user: User }>("/api/auth/register", { email, password, name });
 }
 
+export function guestLogin() {
+  return post<{ token: string; user: User }>("/api/auth/guest", {});
+}
+
 export function login(email: string, password: string) {
   return post<{ token: string; user: User }>("/api/auth/login", { email, password });
 }

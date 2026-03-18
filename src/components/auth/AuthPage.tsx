@@ -3,7 +3,7 @@
 // Left: hero explaining the product. Right: login / register form.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from "react";
-import { login, register } from "../../utils/api";
+import { login, register, guestLogin } from "../../utils/api";
 import type { User } from "../../types";
 
 interface AuthPageProps {
@@ -23,10 +23,24 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
   const [name,     setName]     = useState("");
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState<string | null>(null);
+  const [loading,       setLoading]       = useState(false);
+  const [guestLoading,  setGuestLoading]  = useState(false);
+  const [error,         setError]         = useState<string | null>(null);
 
   const switchTab = (t: "login" | "register") => { setTab(t); setError(null); };
+
+  const continueAsGuest = async () => {
+    if (guestLoading) return;
+    setGuestLoading(true);
+    setError(null);
+    try {
+      const result = await guestLogin();
+      onAuth(result.token, result.user);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not start guest session");
+    }
+    setGuestLoading(false);
+  };
 
   const submit = async () => {
     if (loading) return;
@@ -69,9 +83,9 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
             onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}>
             Sign in
           </button>
-          <button onClick={() => switchTab("register")}
-            style={{ background: "linear-gradient(135deg,#00AAFF,#0088DD)", border: "none", borderRadius: 7, padding: "7px 18px", fontSize: 12, fontWeight: 700, color: "#fff", cursor: "pointer", boxShadow: "0 2px 10px #00AAFF44" }}>
-            Get started free
+          <button onClick={continueAsGuest} disabled={guestLoading}
+            style={{ background: "linear-gradient(135deg,#00AAFF,#0088DD)", border: "none", borderRadius: 7, padding: "7px 18px", fontSize: 12, fontWeight: 700, color: "#fff", cursor: guestLoading ? "wait" : "pointer", boxShadow: "0 2px 10px #00AAFF44", opacity: guestLoading ? 0.7 : 1 }}>
+            {guestLoading ? "Starting…" : "Get started free"}
           </button>
         </div>
       </div>
@@ -176,6 +190,19 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
               {tab === "login" ? "Register free" : "Sign in"}
             </button>
           </p>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 0" }}>
+            <div style={{ flex: 1, height: 1, background: "#1e2130" }} />
+            <span style={{ fontSize: 11, color: "#334155" }}>or</span>
+            <div style={{ flex: 1, height: 1, background: "#1e2130" }} />
+          </div>
+          <button onClick={continueAsGuest} disabled={guestLoading}
+            style={{ marginTop: 12, background: "transparent", border: "1px solid #2d3348", borderRadius: 9, padding: "11px", fontSize: 13, fontWeight: 600, color: guestLoading ? "#334155" : "#94a3b8", cursor: guestLoading ? "wait" : "pointer", transition: "all .15s", width: "100%" }}
+            onMouseEnter={e => { if (!guestLoading) { (e.currentTarget as HTMLButtonElement).style.borderColor = "#64748b"; (e.currentTarget as HTMLButtonElement).style.color = "#e2e8f0"; } }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; }}>
+            {guestLoading ? "Starting…" : "Continue without account →"}
+          </button>
+          <p style={{ textAlign: "center", fontSize: 10, color: "#334155", marginTop: 8 }}>No email required · Chat history not saved</p>
         </div>
       </div>
     </div>
