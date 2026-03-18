@@ -43,8 +43,9 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
       onAuth(result.token, result.user);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start guest session");
+    } finally {
+      setGuestLoading(false);
     }
-    setGuestLoading(false);
   };
 
   const submit = async () => {
@@ -59,8 +60,9 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong";
       try { setError(JSON.parse(msg).error ?? msg); } catch { setError(msg); }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

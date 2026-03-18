@@ -10,7 +10,7 @@
 //   Z-Score Anomaly Detection · Hodrick-Prescott Filter · CAGR Analysis
 //   Pearson Correlation Matrix · Trade Openness Index
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useMobile } from "../../utils/useMobile";
 import {
   ComposedChart, Bar, Line, Area, BarChart,
@@ -21,6 +21,7 @@ import type { CountryDataset, CountrySearchResult, AIResponse } from "../../type
 import { searchCountries, getCountryHistory, queryAnalytics } from "../../utils/api";
 import { TT, GRID, AX, LEG } from "../../config/styles";
 import { AnalyticsCard, Stat, DynChart } from "../ui";
+import { POPULAR_COUNTRIES } from "../../data/suggestions";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -36,17 +37,6 @@ import { buildCAGRSeries }             from "../../algorithms/cagr";
 import { buildCorrelationMatrix }      from "../../algorithms/correlation";
 import type { AnomalyPoint }           from "../../algorithms/anomaly";
 
-// ── Popular quick-picks ───────────────────────────────────────────────────────
-const POPULAR: CountrySearchResult[] = [
-  { code: "US", name: "United States", flag: "🇺🇸", region: "North America" },
-  { code: "CN", name: "China",         flag: "🇨🇳", region: "East Asia" },
-  { code: "DE", name: "Germany",       flag: "🇩🇪", region: "Europe" },
-  { code: "JP", name: "Japan",         flag: "🇯🇵", region: "East Asia" },
-  { code: "GB", name: "United Kingdom",flag: "🇬🇧", region: "Europe" },
-  { code: "IN", name: "India",         flag: "🇮🇳", region: "South Asia" },
-  { code: "BR", name: "Brazil",        flag: "🇧🇷", region: "Latin America" },
-  { code: "FR", name: "France",        flag: "🇫🇷", region: "Europe" },
-];
 
 // ── Algorithm catalogue ───────────────────────────────────────────────────────
 interface AlgoDef { id: string; name: string; desc: string; color: string; }
@@ -534,7 +524,7 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
     onSelect(code);
   }
 
-  const extraHistory = history.filter(h => !POPULAR.some(p => p.code === h.code));
+  const extraHistory = history.filter(h => !POPULAR_COUNTRIES.some(p => p.code === h.code));
 
   return (
     <div style={{ background: "#161929", borderRadius: 12, padding: 16, border: "1px solid #2d3348", marginBottom: 18 }}>
@@ -582,7 +572,7 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
 
       {/* Quick picks */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-        {POPULAR.map(c => (
+        {POPULAR_COUNTRIES.map(c => (
           <button key={c.code} onClick={() => pick(c.code)} style={{
             background: dataset?.code === c.code ? "#00AAFF18" : "#1e2130",
             border: `1px solid ${dataset?.code === c.code ? "#00AAFF66" : "#2d3348"}`,
@@ -634,7 +624,8 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
     });
   }
 
-  function buildContext(): string {
+  // Pre-build context string when dataset changes — avoids rebuilding on every render
+  const context = useMemo(() => {
     if (!dataset) return "";
     return [
       `Country: ${dataset.name} (${dataset.code}), ${dataset.region}`,
@@ -651,22 +642,22 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       `Export sectors: ${dataset.exportSectors.map(s => s.label).join(", ")}`,
       `Import partners: ${dataset.importPartners.map(s => s.label).join(", ")}`,
     ].join("\n");
-  }
+  }, [dataset]);
 
-  async function runQuery() {
+  const runQuery = useCallback(async () => {
     if (!query.trim()) return;
     setAILoading(true);
     setAIError(null);
     setAIResult(null);
     try {
-      const result = await queryAnalytics(query.trim(), buildContext(), token);
+      const result = await queryAnalytics(query.trim(), context, token);
       setAIResult(result);
     } catch (e) {
       setAIError(e instanceof Error ? e.message : "Query failed");
     } finally {
       setAILoading(false);
     }
-  }
+  }, [query, context, token]);
 
   const enabledAlgos = ALGOS.filter(a => activeAlgos.has(a.id));
 

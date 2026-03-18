@@ -71,6 +71,11 @@ input[type="range"] { cursor: pointer; }
   50%      { opacity: 0.4; }
 }
 
+@keyframes ecPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
+
 @keyframes searchSpin {
   0%   { transform: rotate(0deg);   border-top-color: #10B981; }
   50%  { border-top-color: #00AAFF; }

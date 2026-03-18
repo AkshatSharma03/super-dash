@@ -109,8 +109,8 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
       .finally(() => setSessionsLoading(false));
   }, [token]);
 
-  // Auto-scroll on new messages
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+  // Auto-scroll when messages change (not on every loading toggle to avoid stutter)
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
   // ── Start a brand-new chat ──────────────────────────────────────────────────
   const newChat = () => {
