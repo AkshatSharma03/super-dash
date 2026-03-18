@@ -1130,11 +1130,41 @@ app.get('/api/country/history', requireAuth, (req, res) => {
 app.get('/api/country/search', requireAuth, apiLimiter, async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 100);
   if (q.length < 2) return res.json([]);
+
+  // Common alternative names → World Bank canonical names
+  const ALIASES = {
+    'palestine':       'west bank',
+    'taiwan':          'taiwan, china',
+    'south korea':     'korea, rep',
+    'north korea':     'korea, dem',
+    'russia':          'russian federation',
+    'iran':            'iran, islamic rep',
+    'syria':           'syrian arab republic',
+    'laos':            'lao pdr',
+    'vietnam':         'viet nam',
+    'ivory coast':     'côte d\'ivoire',
+    'congo':           'congo, dem',
+    'czech':           'czechia',
+    'slovakia':        'slovak republic',
+    'venezuela':       'venezuela, rb',
+    'bolivia':         'bolivia',
+    'egypt':           'egypt, arab rep',
+    'yemen':           'yemen, rep',
+    'gambia':          'gambia, the',
+    'bahamas':         'bahamas, the',
+    'micronesia':      'micronesia, fed',
+    'kyrgyzstan':      'kyrgyz republic',
+  };
+  const qLower = q.toLowerCase();
+  const canonicalQ = ALIASES[qLower] ?? qLower;
+
   try {
-    const r    = await fetch('https://api.worldbank.org/v2/country?format=json&per_page=300', { signal: AbortSignal.timeout(10_000) });
+    const r    = await fetch('https://api.worldbank.org/v2/country?format=json&per_page=500', { signal: AbortSignal.timeout(10_000) });
     const data = await r.json();
     const hits = (data[1] ?? [])
-      .filter(c => c.capitalCity && c.name.toLowerCase().includes(q.toLowerCase()))
+      // region.id === 'NA' marks World Bank aggregates (not sovereign countries)
+      .filter(c => c.region?.id !== 'NA' &&
+        (c.name.toLowerCase().includes(qLower) || c.name.toLowerCase().includes(canonicalQ)))
       .slice(0, 15)
       .map(c => ({ code: c.iso2Code, name: c.name, flag: iso2ToFlag(c.iso2Code), region: c.region?.value ?? '' }));
     res.json(hits);

@@ -1,3 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── shadcn CSS variables — mapped to the app's dark palette ── */
+@layer base {
+  :root {
+    --background:  222 25% 7%;       /* #0f1117 */
+    --foreground:  214 32% 91%;      /* #e2e8f0 */
+    --card:        224 27% 12%;      /* #161929 */
+    --card-foreground: 214 32% 91%;
+    --popover:     222 27% 9%;       /* #0a0d14 */
+    --popover-foreground: 214 32% 91%;
+    --primary:     199 100% 50%;     /* #00AAFF */
+    --primary-foreground: 0 0% 100%;
+    --secondary:   225 28% 18%;      /* #2d3348 */
+    --secondary-foreground: 215 20% 65%;
+    --muted:       225 25% 15%;      /* #1e2130 */
+    --muted-foreground: 215 16% 47%; /* #64748b */
+    --accent:      258 89% 66%;      /* #8B5CF6 */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;        /* #EF4444 */
+    --destructive-foreground: 0 0% 100%;
+    --border:      225 28% 18%;      /* #2d3348 */
+    --input:       224 27% 12%;      /* #161929 */
+    --ring:        199 100% 50%;     /* #00AAFF */
+    --radius:      0.5rem;
+  }
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
 body { font-family: 'Inter', sans-serif; background: #0f1117; color: #e2e8f0; -webkit-font-smoothing: antialiased; }

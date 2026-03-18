@@ -14,6 +14,12 @@ import type { CountryDataset, CountrySearchResult, CountryHistoryEntry } from ".
 import { searchCountries, getCountryHistory } from "../../utils/api";
 import { TT, GRID, AX, LEG, P } from "../../config/styles";
 import { Btn, KPI, Card } from "../ui";
+import { Button } from "@/components/ui/button";
+import { Input }  from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge }  from "@/components/ui/badge";
+import { Slider } from "@/components/ui/slider";
+import { AlertTriangle } from "lucide-react";
 
 // ── Popular quick-select countries ────────────────────────────────────────────
 const POPULAR: CountrySearchResult[] = [
@@ -136,17 +142,13 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         {/* Search bar row */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 360 }}>
-            <input
+            <Input
               value={query}
               onChange={e => setQuery(e.target.value)}
-              onFocus={e => { e.currentTarget.style.borderColor = "#00AAFF"; if (query.length >= 2 && results.length) setShowDropdown(true); }}
-              onBlur={e => { e.currentTarget.style.borderColor = "#2d3348"; setTimeout(() => setShowDropdown(false), 150); }}
+              onFocus={() => { if (query.length >= 2 && results.length) setShowDropdown(true); }}
+              onBlur={() => { setTimeout(() => setShowDropdown(false), 150); }}
               placeholder="Search any country by name…"
-              style={{
-                width: "100%", boxSizing: "border-box", background: "#161929",
-                border: "1px solid #2d3348", borderRadius: 8, padding: "7px 14px 7px 36px",
-                fontSize: 13, color: "#e2e8f0", outline: "none",
-              }}
+              className="pl-9"
             />
             <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 14, pointerEvents: "none" }}>
               {searching ? "…" : "🔍"}
@@ -176,17 +178,16 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
 
           {/* Year range slider — only shown after data loads */}
           {dataset && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "5px 14px", flexShrink: 0 }}>
-              <span style={{ fontSize: 10, color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>Years</span>
-              <input type="range" min={yearMin} max={yearMax} value={yearRange[0]}
-                onChange={e => setYearRange([Math.min(+e.target.value, yearRange[1]), yearRange[1]])}
-                style={{ width: 65, accentColor: "#00AAFF", cursor: "pointer" }} />
-              <span style={{ fontSize: 11, color: "#00AAFF", minWidth: 30, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{yearRange[0]}</span>
-              <span style={{ fontSize: 11, color: "#2d3348" }}>—</span>
-              <input type="range" min={yearMin} max={yearMax} value={yearRange[1]}
-                onChange={e => setYearRange([yearRange[0], Math.max(+e.target.value, yearRange[0])])}
-                style={{ width: 65, accentColor: "#00AAFF", cursor: "pointer" }} />
-              <span style={{ fontSize: 11, color: "#00AAFF", minWidth: 30, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{yearRange[1]}</span>
+            <div className="flex items-center gap-3 bg-card border border-border rounded-lg px-3.5 py-2 shrink-0">
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Years</span>
+              <span className="text-xs font-bold text-primary tabular-nums">{yearRange[0]}</span>
+              <Slider
+                min={yearMin} max={yearMax}
+                value={yearRange}
+                onValueChange={([a, b]) => setYearRange([a, b])}
+                className="w-28"
+              />
+              <span className="text-xs font-bold text-primary tabular-nums">{yearRange[1]}</span>
             </div>
           )}
         </div>
@@ -252,9 +253,10 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
 
       {/* ── Error ─────────────────────────────────────────────────────────── */}
       {!loading && error && (
-        <div style={{ background: "#EF444415", border: "1px solid #EF444444", borderRadius: 10, padding: "16px 20px", color: "#EF4444", fontSize: 13 }}>
-          <strong>Failed to load:</strong> {error}
-        </div>
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription><strong>Failed to load:</strong> {error}</AlertDescription>
+        </Alert>
       )}
 
       {/* ── Empty state ───────────────────────────────────────────────────── */}
@@ -271,24 +273,13 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
 
         {/* Provenance + refresh bar */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-          <span style={{ fontSize: 11, background: "#00AAFF18", color: "#00AAFF", borderRadius: 4, padding: "2px 8px", fontWeight: 700 }}>
-            {dataset.flag} {dataset.name} · {dataset.region}
-          </span>
-          {dataset._meta?.stale && (
-            <span style={{ fontSize: 11, background: "#F59E0B18", color: "#F59E0B", borderRadius: 4, padding: "2px 8px", fontWeight: 600 }}>⚠ Stale cache</span>
-          )}
-          <span style={{ fontSize: 11, color: "#475569" }}>
-            {dataset._meta?.sources.join(" · ")}
-          </span>
+          <Badge variant="default">{dataset.flag} {dataset.name} · {dataset.region}</Badge>
+          {dataset._meta?.stale && <Badge variant="warning">⚠ Stale cache</Badge>}
+          <span style={{ fontSize: 11, color: "#475569" }}>{dataset._meta?.sources.join(" · ")}</span>
           <span style={{ marginLeft: "auto", fontSize: 11, color: "#334155" }}>Cached {cachedAgo}</span>
-          <button onClick={onRefresh} style={{
-            background: "transparent", border: "1px solid #2d3348", borderRadius: 6,
-            padding: "3px 10px", fontSize: 11, color: "#64748b", cursor: "pointer",
-          }}
-          onMouseEnter={e => { e.currentTarget.style.color = "#00AAFF"; e.currentTarget.style.borderColor = "#00AAFF55"; }}
-          onMouseLeave={e => { e.currentTarget.style.color = "#64748b"; e.currentTarget.style.borderColor = "#2d3348"; }}>
+          <Button variant="outline" size="sm" onClick={onRefresh} className="text-xs hover:text-primary hover:border-primary/50">
             ↻ Refresh
-          </button>
+          </Button>
         </div>
 
         {/* KPI row */}

@@ -21,6 +21,10 @@ import type { CountryDataset, CountrySearchResult, AIResponse } from "../../type
 import { searchCountries, getCountryHistory, queryAnalytics } from "../../utils/api";
 import { TT, GRID, AX, LEG } from "../../config/styles";
 import { AnalyticsCard, Stat, DynChart } from "../ui";
+import { Button } from "@/components/ui/button";
+import { Input }  from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 
 // ── Algorithms ────────────────────────────────────────────────────────────────
 import { buildForecast }               from "../../algorithms/regression";
@@ -702,25 +706,24 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       {/* ── AI query ── */}
       <div style={{ background: "#161929", borderRadius: 12, padding: 16, border: "1px solid #2d3348", marginBottom: 18 }}>
         <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>AI Economic Query</p>
-        <div style={{ display: "flex", gap: 8, flexDirection: isMobile ? "column" : "row" }}>
-          <input value={query} onChange={e => setQuery(e.target.value)}
+        <div className={`flex gap-2 ${isMobile ? "flex-col" : ""}`}>
+          <Input value={query} onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runQuery(); } }}
             placeholder={dataset ? `Ask about ${dataset.name}'s economy…` : "Select a country above, then ask a question…"}
             disabled={aiLoading}
-            style={{ flex: 1, background: "#0f1117", border: "1px solid #2d3348", borderRadius: 8, padding: "9px 14px", fontSize: 13, color: "#e2e8f0", outline: "none", opacity: aiLoading ? 0.6 : 1 }}
+            className="flex-1 focus-visible:ring-[#8B5CF6] focus-visible:border-[#8B5CF6]"
           />
-          <button onClick={runQuery} disabled={aiLoading || !query.trim()} style={{
-            background: aiLoading ? "#1e2130" : "#8B5CF6",
-            border: "none", borderRadius: 8, padding: "9px 20px",
-            fontSize: 13, fontWeight: 700, color: "#fff",
-            cursor: aiLoading || !query.trim() ? "not-allowed" : "pointer",
-            opacity: !query.trim() ? 0.5 : 1, transition: "all .15s",
-            boxShadow: aiLoading || !query.trim() ? "none" : "0 2px 12px #8B5CF655",
-          }}>
+          <Button onClick={runQuery} disabled={aiLoading || !query.trim()}
+            className="bg-[#8B5CF6] hover:bg-[#7C3AED] font-bold shadow-[0_2px_12px_#8B5CF655]">
             {aiLoading ? "Analyzing…" : "Analyze"}
-          </button>
+          </Button>
         </div>
-        {aiError && <p style={{ margin: "8px 0 0", fontSize: 12, color: "#EF4444" }}>{aiError}</p>}
+        {aiError && (
+          <Alert variant="destructive" className="mt-2">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{aiError}</AlertDescription>
+          </Alert>
+        )}
       </div>
 
       {/* ── AI result ── */}

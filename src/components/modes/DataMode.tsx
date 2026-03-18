@@ -8,6 +8,11 @@ import { analyzeCSVData } from "../../utils/api";
 import { parseCSV } from "../../utils/csv";
 import type { ParsedCSV, AIResponse } from "../../types";
 import { DynChart } from "../ui";
+import { Button }   from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge }    from "@/components/ui/badge";
+import { AlertTriangle } from "lucide-react";
 
 export default function DataMode() {
   // ── State
@@ -87,14 +92,10 @@ export default function DataMode() {
       {/* ── File loaded: header + preview table + context input + generate button ── */}
       {csv && (
         <>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11, background: "#F59E0B22", color: "#F59E0B", border: "1px solid #F59E0B44", borderRadius: 5, padding: "2px 10px", fontWeight: 600 }}>
-              📁 {file?.name}
-            </span>
+          <div className="flex items-center gap-2.5 mb-3 flex-wrap">
+            <Badge variant="warning">📁 {file?.name}</Badge>
             <span style={{ fontSize: 11, color: "#64748b" }}>{csv.rows.length} rows · {csv.headers.length} columns</span>
-            <button onClick={reset} style={{ marginLeft: "auto", background: "transparent", border: "1px solid #2d3348", borderRadius: 6, padding: "4px 12px", fontSize: 11, color: "#64748b", cursor: "pointer" }}>
-              Remove file
-            </button>
+            <Button variant="outline" size="sm" onClick={reset} className="ml-auto text-xs">Remove file</Button>
           </div>
 
           {/* Scrollable preview table — shows first 6 rows */}
@@ -132,44 +133,37 @@ export default function DataMode() {
             <label style={{ fontSize: 12, color: "#64748b", display: "block", marginBottom: 6 }}>
               Context (optional) — describe what this data represents:
             </label>
-            <textarea value={context} onChange={e => setContext(e.target.value)}
+            <Textarea value={context} onChange={e => setContext(e.target.value)}
               placeholder="e.g. Monthly US trade data 2020–2024, showing exports and imports by sector in USD millions…"
-              rows={2}
-              style={{ width: "100%", background: "#1e2130", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 14px", color: "#e2e8f0", fontSize: 13, outline: "none", resize: "vertical", fontFamily: "Inter, sans-serif", boxSizing: "border-box", transition: "border-color .15s" }}
-              onFocus={e => { e.target.style.borderColor = "#F59E0B"; }}
-              onBlur={e => { e.target.style.borderColor = "#2d3348"; }} />
+              rows={2} className="focus-visible:ring-amber-500 focus-visible:border-amber-500" />
           </div>
 
-          <button onClick={generate} disabled={loading}
-            style={{ background: loading ? "#1e2130" : "#F59E0B", border: "none", borderRadius: 10, padding: "12px 28px", color: loading ? "#334155" : "#0f1117", fontSize: 14, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", transition: "all .15s", display: "inline-flex", alignItems: "center", gap: 8, boxShadow: !loading ? "0 2px 12px #F59E0B44" : "none" }}>
+          <Button onClick={generate} disabled={loading}
+            className="bg-[#F59E0B] hover:bg-[#D97706] text-[#0f1117] font-bold shadow-[0_2px_12px_#F59E0B44] gap-2">
             {loading ? (
               <>
                 <span style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid #334155", borderTop: "2px solid #64748b", display: "inline-block", animation: "spin 0.7s linear infinite" }} />
                 Analyzing data…
               </>
             ) : "✨ Generate Charts"}
-          </button>
+          </Button>
         </>
       )}
 
       {/* ── Error state ── */}
       {error && (
-        <div style={{ background: "#EF444422", border: "1px solid #EF4444", borderRadius: 10, padding: 14, fontSize: 13, color: "#EF4444", marginTop: 14 }}>
-          {error}
-        </div>
+        <Alert variant="destructive" className="mt-3.5">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {/* ── Analysis results: insight + chart cards + follow-up suggestions ── */}
       {result && (
         <div style={{ marginTop: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-            <span style={{ fontSize: 11, background: "#F59E0B22", color: "#F59E0B", border: "1px solid #F59E0B44", borderRadius: 5, padding: "2px 10px", fontWeight: 600 }}>
-              ✨ Generated Analysis
-            </span>
-            <button onClick={() => setResult(null)}
-              style={{ marginLeft: "auto", background: "transparent", border: "1px solid #2d3348", borderRadius: 6, padding: "4px 12px", fontSize: 11, color: "#64748b", cursor: "pointer" }}>
-              Regenerate
-            </button>
+          <div className="flex items-center gap-2.5 mb-3.5">
+            <Badge variant="warning">✨ Generated Analysis</Badge>
+            <Button variant="outline" size="sm" onClick={() => setResult(null)} className="ml-auto text-xs">Regenerate</Button>
           </div>
 
           {result.insight && (

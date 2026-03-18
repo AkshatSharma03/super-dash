@@ -10,6 +10,10 @@ import { useMobile } from "../../utils/useMobile";
 import { askClaude, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
 import type { Message, AIResponse, ChatSession } from "../../types";
 import { DynChart } from "../ui";
+import { Button } from "@/components/ui/button";
+import { Input }  from "@/components/ui/input";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { AlertTriangle } from "lucide-react";
 
 // ── ChatMessage sub-component ─────────────────────────────────────────────────
 
@@ -35,9 +39,10 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
         </div>
       )}
       {error && (
-        <div style={{ background: "#EF444418", border: "1px solid #EF444455", borderRadius: 10, padding: 14, marginBottom: 14, fontSize: 13, color: "#EF4444", display: "flex", gap: 8, alignItems: "flex-start" }}>
-          <span style={{ flexShrink: 0 }}>⚠</span> {error}
-        </div>
+        <Alert variant="destructive" className="mb-3.5">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
       {charts.map(chart => (
         <div key={chart.id} style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 12, padding: 18, marginBottom: 12 }}>
@@ -195,18 +200,12 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
         borderRight: "1px solid #1e2130", paddingRight: 0, marginRight: 16,
       }}>
 
-        <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-          <button onClick={newChat}
-            style={{ flex: 1, background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "9px 14px", fontSize: 12, fontWeight: 600, color: "#cbd5e1", cursor: "pointer", textAlign: "left", transition: "all .15s", display: "flex", alignItems: "center", gap: 7 }}
-            onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF666"; el.style.background = "#1a1d2e"; }}
-            onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.background = "#161929"; }}>
-            <span style={{ fontSize: 13 }}>✦</span> New chat
-          </button>
+        <div className="flex gap-1.5 mb-2.5">
+          <Button variant="outline" size="sm" onClick={newChat} className="flex-1 justify-start gap-1.5 text-xs">
+            <span>✦</span> New chat
+          </Button>
           {isMobile && (
-            <button onClick={() => setSidebarOpen(false)}
-              style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 8, padding: "9px 12px", fontSize: 16, color: "#475569", cursor: "pointer" }}>
-              ✕
-            </button>
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="text-muted-foreground text-base">✕</Button>
           )}
         </div>
 
@@ -302,31 +301,19 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
         <div style={{ borderTop: "1px solid #1e2130", paddingTop: 12, flexShrink: 0 }}>
           <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", gap: 8 }}>
             {isMobile && (
-              <button onClick={() => setSidebarOpen(true)}
-                style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 12px", fontSize: 15, color: "#475569", cursor: "pointer", flexShrink: 0 }}
-                title="Chat history">
-                ☰
-              </button>
+              <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} title="Chat history">☰</Button>
             )}
             {messages.length > 0 && (
-              <button onClick={newChat}
-                style={{ background: "transparent", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#475569", cursor: "pointer", whiteSpace: "nowrap", transition: "all .15s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#94a3b8"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#3d4460"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#475569"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
-                Clear
-              </button>
+              <Button variant="outline" size="sm" onClick={newChat} className="whitespace-nowrap">Clear</Button>
             )}
-            <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+            <Input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && send(input)}
               placeholder="Ask about GDP, trade flows, inflation, interest rates, any country…"
-              disabled={loading}
-              style={{ flex: 1, background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: "11px 16px", color: "#e2e8f0", fontSize: 13, outline: "none", transition: "border-color .15s, box-shadow .15s" }}
-              onFocus={e => { (e.target as HTMLInputElement).style.borderColor = "#8B5CF6"; (e.target as HTMLInputElement).style.boxShadow = "0 0 0 3px #8B5CF618"; }}
-              onBlur={e  => { (e.target as HTMLInputElement).style.borderColor = "#2d3348"; (e.target as HTMLInputElement).style.boxShadow = "none"; }} />
-            <button onClick={() => send(input)} disabled={loading || !input.trim()}
-              style={{ background: loading || !input.trim() ? "#161929" : "linear-gradient(135deg,#8B5CF6,#6D28D9)", border: "none", borderRadius: 10, padding: "11px 20px", color: loading || !input.trim() ? "#334155" : "#fff", fontSize: 13, fontWeight: 700, cursor: loading || !input.trim() ? "not-allowed" : "pointer", transition: "all .15s", whiteSpace: "nowrap", boxShadow: !loading && input.trim() ? "0 2px 10px #8B5CF644" : "none" }}>
+              disabled={loading} className="flex-1 h-10 focus-visible:ring-accent" />
+            <Button onClick={() => send(input)} disabled={loading || !input.trim()}
+              className="whitespace-nowrap bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] shadow-[0_2px_10px_#8B5CF644] font-bold">
               {loading ? "…" : "Send →"}
-            </button>
+            </Button>
           </div>
           <p style={{ textAlign: "center", fontSize: 10, color: "#2d3348", marginTop: 8 }}>
             Powered by Claude · World Bank · IMF · UN Comtrade · OECD · Enter to send
