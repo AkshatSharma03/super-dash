@@ -64,15 +64,16 @@ export default function SettingsPanel({ user, token, onClose, onLogout }: Props)
       await changePassword(token, curPwd, newPwd);
       setPwdSuccess(true);
       setCurPwd(""); setNewPwd(""); setConfirmPwd("");
-    } catch (e) { setPwdError(parseError(e)); }
-    setPwdLoading(false);
+    } catch (e) {
+      setPwdError(parseError(e));
+    } finally { setPwdLoading(false); }
   };
 
   const handleDeleteAccount = async () => {
     setDeleteError(null); setDeleteLoading(true);
     try { await deleteAccount(token, deletePwd); onLogout(); }
     catch (e) { setDeleteError(parseError(e)); }
-    setDeleteLoading(false);
+    finally { setDeleteLoading(false); }
   };
 
   const memberSince = usage

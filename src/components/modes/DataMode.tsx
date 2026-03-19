@@ -58,8 +58,7 @@ export default function DataMode() {
       setResult(res);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-    }
-    setLoading(false);
+    } finally { setLoading(false); }
   };
 
   const reset = () => {
