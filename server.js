@@ -633,7 +633,7 @@ Rules:
 // ── Express setup ─────────────────────────────────────────────────────────────
 
 const app = express();
-
+app.set('trust proxy', 1); // Railway / other reverse proxies set X-Forwarded-For
 const DEV_ORIGINS = new Set(
   (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174')
     .split(',').map(o => o.trim()).filter(Boolean)
