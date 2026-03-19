@@ -3,6 +3,9 @@ import ReactDOM from 'react-dom/client'
 import { Toaster } from 'sonner'
 import App from './App'
 import './index.css'
+import { initAnalytics } from './analytics'
+
+initAnalytics();
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>

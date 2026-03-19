@@ -10,6 +10,7 @@ import jwt from 'jsonwebtoken';
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import countries from 'i18n-iso-countries';
+import { PostHog } from 'posthog-node';
 
 import enLocale from 'i18n-iso-countries/langs/en.json' with { type: 'json' };
 
@@ -60,6 +61,23 @@ if (!ANTHROPIC_API_KEY) {
   console.error('ERROR: ANTHROPIC_API_KEY environment variable is not set.');
   process.exit(1);
 }
+
+// ── PostHog telemetry ─────────────────────────────────────────────────────────
+const ph = process.env.POSTHOG_API_KEY
+  ? new PostHog(process.env.POSTHOG_API_KEY, { host: 'https://us.i.posthog.com', flushAt: 20, flushInterval: 10_000 })
+  : null;
+
+/** Fire-and-forget event. distinctId is the user's DB id or 'guest'. */
+function track(distinctId, event, properties = {}) {
+  if (!ph) return;
+  ph.capture({ distinctId: String(distinctId), event, properties });
+}
+
+if (ph) {
+  process.on('SIGTERM', async () => { await ph.shutdown(); process.exit(0); });
+  process.on('SIGINT',  async () => { await ph.shutdown(); process.exit(0); });
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 if (!process.env.JWT_SECRET && !IS_DEV) {
   console.error('ERROR: JWT_SECRET environment variable is not set in production.');
@@ -633,7 +651,7 @@ Rules:
 // ── Express setup ─────────────────────────────────────────────────────────────
 
 const app = express();
-
+app.set('trust proxy', 1); // Railway / other reverse proxies set X-Forwarded-For
 const DEV_ORIGINS = new Set(
   (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174')
     .split(',').map(o => o.trim()).filter(Boolean)
@@ -659,7 +677,7 @@ app.use(
         scriptSrc:      ["'self'"],
         styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc:        ["'self'", 'https://fonts.gstatic.com'],
-        connectSrc:     ["'self'"],
+        connectSrc:     ["'self'", 'https://*.i.posthog.com', 'https://*.posthog.com'],
         imgSrc:         ["'self'", 'data:'],
         frameAncestors: ["'none'"],
       },
@@ -832,6 +850,11 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       }
     }
     if (ck) apiCache.put(ck, parsed, TTL_CHAT_MS);
+    track(req.user?.id || 'guest', 'chat_sent', {
+      message_count: messages.length,
+      charts_returned: parsed.charts?.length ?? 0,
+      has_news_context: fetchedNewsSources.length > 0,
+    });
     res.json(parsed);
   } catch (e) {
     console.error('/api/chat error:', e.message);
@@ -914,6 +937,11 @@ app.post('/api/search', apiLimiter, async (req, res) => {
 
   const result = { text, sources, webSearchUsed };
   apiCache.put(ck, result, TTL_SEARCH_MS);
+  track(req.user?.id || 'guest', 'search_queried', {
+    query_length: query.length,
+    web_search_used: webSearchUsed,
+    source_count: sources.length,
+  });
   res.json(result);
 });
 
@@ -979,6 +1007,11 @@ Rules:
     } catch {
       parsed = { insight: txt, charts: [], sources: [{ title: 'Uploaded CSV', url: null }], followUps: [] };
     }
+    track(req.user?.id || 'guest', 'csv_analyzed', {
+      row_count: rows.length,
+      col_count: headers.length,
+      charts_returned: parsed.charts?.length ?? 0,
+    });
     res.json(parsed);
   } catch (e) {
     console.error('/api/analyze-csv error:', e.message);
@@ -996,6 +1029,7 @@ app.post('/api/auth/guest', authLimiter, (req, res) => {
     JWT_SECRET,
     { expiresIn: '24h' }
   );
+  track('guest', 'guest_session_started');
   res.json({ token, user: { id: 'guest', name: 'Guest', email: '', isGuest: true } });
 });
 
@@ -1014,6 +1048,8 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   const uname = String(name).slice(0, 80).trim();
   stmt.insertUser.run(id, em, uname, hashedPassword, new Date().toISOString());
   const token = jwt.sign({ id, email: em, name: uname }, JWT_SECRET, { expiresIn: '7d' });
+  if (ph) ph.identify({ distinctId: id, properties: { email: em, name: uname } });
+  track(id, 'user_registered', { email: em, name: uname });
   res.json({ token, user: { id, email: em, name: uname } });
 });
 
@@ -1026,6 +1062,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   const match = await bcrypt.compare(String(password), user.hashed_password);
   if (!match) return res.status(401).json({ error: 'Invalid email or password' });
   const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+  track(user.id, 'user_logged_in', { email: user.email });
   res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
 });
 
@@ -1184,12 +1221,20 @@ app.get('/api/country/:code', requireAuth, apiLimiter, async (req, res) => {
   }
   
   const row = stmtCountry.get.get(code);
-  if (row && (Date.now() - row.cached_at) < COUNTRY_CACHE_TTL_MS)
+  if (row && (Date.now() - row.cached_at) < COUNTRY_CACHE_TTL_MS) {
+    track(req.user?.id || 'guest', 'country_viewed', { country_code: code, cache_hit: true });
     return res.json(JSON.parse(row.data_json));
-  
+  }
+
   try {
     const dataset = await buildCountryDataset(code);
     stmtCountry.upsert.run(code, JSON.stringify(dataset), Date.now());
+    track(req.user?.id || 'guest', 'country_viewed', {
+      country_code: code,
+      country_name: dataset.name,
+      cache_hit: false,
+      sources: dataset._meta?.sources ?? [],
+    });
     res.json(dataset);
   } catch (e) {
     console.error(`/api/country/${code}:`, e.message);
@@ -1331,6 +1376,11 @@ Rules:
       parsed = { insight: text, charts: [], sources: [], followUps: [] };
     }
     apiCache.put(ck, parsed, TTL_CHAT_MS);
+    track(req.user?.id || 'guest', 'analytics_queried', {
+      query_length: query.length,
+      has_context: context.length > 0,
+      charts_returned: parsed.charts?.length ?? 0,
+    });
     res.json(parsed);
   } catch (e) {
     console.error('/api/analytics error:', e.message);
