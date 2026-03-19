@@ -10,6 +10,7 @@ import type { Mode, User, CountryDataset } from "./types";
 import { useMobile } from "./utils/useMobile";
 import { Button } from "@/components/ui/button";
 import { fetchMe, getCountryData, refreshCountryData } from "./utils/api";
+import { identifyUser, resetUser, track } from "./analytics";
 import AuthPage      from "./components/auth/AuthPage";
 import SettingsPanel from "./components/auth/SettingsPanel";
 import DashboardMode from "./components/modes/DashboardMode";
@@ -99,7 +100,7 @@ export default function App() {
     const stored = localStorage.getItem("ec_token");
     if (!stored) { setAuthReady(true); return; }
     fetchMe(stored)
-      .then(u => { setToken(stored); setUser(u); })
+      .then(u => { setToken(stored); setUser(u); if (!u.isGuest) identifyUser(u.id, u.email, u.name); })
       .catch(() => { localStorage.removeItem("ec_token"); })
       .finally(() => setAuthReady(true));
   }, []);
@@ -108,10 +109,12 @@ export default function App() {
     localStorage.setItem("ec_token", t);
     setToken(t);
     setUser(u);
+    if (!u.isGuest) identifyUser(u.id, u.email, u.name);
   };
 
   const logout = () => {
     localStorage.removeItem("ec_token");
+    resetUser();
     setToken(null);
     setUser(null);
     setCountryData(null);
@@ -144,7 +147,7 @@ export default function App() {
             const isBgFetch = m === "dashboard" && fetchingInBg;
             const [emoji, ...words] = lbl.split(" ");
             return (
-              <button key={m} onClick={() => setMode(m)} style={{
+              <button key={m} onClick={() => { setMode(m); track("mode_viewed", { mode: m }); }} style={{
                 background: mode === m ? MODE_META[m].color : "transparent",
                 color: mode === m ? "#fff" : "#64748b",
                 border: "none", borderRadius: 7, padding: "5px 12px",
