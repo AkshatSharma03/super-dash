@@ -9,7 +9,7 @@ import { CHAT_SUGGESTIONS } from "../../data/suggestions";
 import { useMobile } from "../../utils/useMobile";
 import { askClaude, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
 import type { Message, AIResponse, ChatSession } from "../../types";
-import { DynChart } from "../ui";
+import { ChartCard, SourceList } from "../ui";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -44,30 +44,8 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      {charts.map(chart => (
-        <div key={chart.id} style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 12, padding: 18, marginBottom: 12 }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 13, color: "#e2e8f0", fontWeight: 700, letterSpacing: "-0.2px" }}>{chart.title}</h3>
-          {chart.description && <p style={{ margin: "0 0 12px", fontSize: 12, color: "#475569" }}>{chart.description}</p>}
-          <DynChart chart={chart} />
-        </div>
-      ))}
-      {sources.length > 0 && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10, alignItems: "center" }}>
-          <span style={{ fontSize: 10, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Sources:</span>
-          {sources.map((s, i) =>
-            s.url ? (
-              <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: 11, color: "#00AAFF", background: "#161929", border: "1px solid #2d334870", borderRadius: 5, padding: "2px 8px", textDecoration: "none", transition: "border-color .15s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#00AAFF66"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#2d334870"; }}>
-                {s.title} ↗
-              </a>
-            ) : (
-              <span key={i} style={{ fontSize: 11, color: "#475569", background: "#161929", border: "1px solid #2d3348", borderRadius: 5, padding: "2px 8px" }}>{s.title}</span>
-            )
-          )}
-        </div>
-      )}
+      {charts.map(chart => <ChartCard key={chart.id} chart={chart} />)}
+      <SourceList sources={sources} style={{ marginBottom: 10 }} />
       {followUps.length > 0 && (
         <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
           {followUps.map((q, i) => (
