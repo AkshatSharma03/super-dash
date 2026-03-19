@@ -10,7 +10,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
 } from "recharts";
 import { P, TT, GRID, AX, LEG } from "../../config/styles";
-import type { BtnProps, KPIProps, CardProps, AnalyticsCardProps, ChartConfig } from "../../types";
+import type { BtnProps, KPIProps, CardProps, AnalyticsCardProps, ChartConfig, AISource } from "../../types";
 
 // ── Navigation / action button ────────────────────────────────────────────────
 
@@ -171,6 +171,43 @@ export function MarkdownText({ text }: { text?: string }) {
     i++;
   }
   return <div>{out}</div>;
+}
+
+// ── Chart card wrapper ────────────────────────────────────────────────────────
+
+/** Chart title + optional description + DynChart, inside a dark card. */
+export function ChartCard({ chart }: { chart: ChartConfig }) {
+  return (
+    <div style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 12, padding: 18, marginBottom: 12 }}>
+      <h3 style={{ margin: "0 0 4px", fontSize: 13, color: "#e2e8f0", fontWeight: 700 }}>{chart.title}</h3>
+      {chart.description && <p style={{ margin: "0 0 12px", fontSize: 12, color: "#475569" }}>{chart.description}</p>}
+      <DynChart chart={chart} />
+    </div>
+  );
+}
+
+// ── Source list ───────────────────────────────────────────────────────────────
+
+/** Inline source badge links — used by ChatMode and AnalyticsMode. */
+export function SourceList({ sources, style }: { sources: AISource[]; style?: React.CSSProperties }) {
+  if (!sources.length) return null;
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", ...style }}>
+      <span style={{ fontSize: 10, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Sources:</span>
+      {sources.map((s, i) =>
+        s.url ? (
+          <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 11, color: "#00AAFF", background: "#161929", border: "1px solid #2d334870", borderRadius: 5, padding: "2px 8px", textDecoration: "none", transition: "border-color .15s" }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#00AAFF66"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#2d334870"; }}>
+            {s.title} ↗
+          </a>
+        ) : (
+          <span key={i} style={{ fontSize: 11, color: "#475569", background: "#161929", border: "1px solid #2d3348", borderRadius: 5, padding: "2px 8px" }}>{s.title}</span>
+        )
+      )}
+    </div>
+  );
 }
 
 // ── Dynamic chart renderer ────────────────────────────────────────────────────

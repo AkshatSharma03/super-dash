@@ -4,19 +4,19 @@
 // Country fetch state lives in App.tsx so fetches survive tab switches.
 // This component owns only UI-local state: year range, search, tab, history.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   ComposedChart, Bar, Line, BarChart, AreaChart, Area,
   PieChart, Pie, Cell, LineChart, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import type { CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../../types";
-import { searchCountries, getCountryHistory } from "../../utils/api";
+import type { CountryDataset, CountryHistoryEntry } from "../../types";
+import { getCountryHistory } from "../../utils/api";
 import { TT, GRID, AX, LEG, P } from "../../config/styles";
 import { Btn, KPI, Card } from "../ui";
 import { POPULAR_COUNTRIES } from "../../data/suggestions";
+import CountrySearchInput from "../shared/CountrySearchInput";
 import { Button } from "@/components/ui/button";
-import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge }  from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
@@ -37,14 +37,9 @@ interface Props {
 
 export default function DashboardMode({ token, dataset, loading, error, onSelectCountry, onRefresh }: Props) {
   // ── UI-local state ──────────────────────────────────────────────────────────
-  const [tab,          setTab]          = useState<DashTab>("GDP");
-  const [yearRange,    setYearRange]    = useState<[number, number]>([2010, 2024]);
-  const [query,        setQuery]        = useState("");
-  const [results,      setResults]      = useState<CountrySearchResult[]>([]);
-  const [searching,    setSearching]    = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [history,      setHistory]      = useState<CountryHistoryEntry[]>([]);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [tab,       setTab]       = useState<DashTab>("GDP");
+  const [yearRange, setYearRange] = useState<[number, number]>([2010, 2024]);
+  const [history,   setHistory]   = useState<CountryHistoryEntry[]>([]);
 
   // ── Load fetch history on mount and whenever the loaded country changes ──────
   useEffect(() => {
@@ -57,30 +52,6 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
     const years = dataset.gdpData.map(d => d.year);
     if (years.length) setYearRange([Math.min(...years), Math.max(...years)]);
   }, [dataset?.code]);  // only reset range when the country changes
-
-  // ── Country search (debounced 350 ms) ──────────────────────────────────────
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (query.length < 2) { setResults([]); setShowDropdown(false); return; }
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const hits = await searchCountries(query, token);
-        setResults(hits);
-        setShowDropdown(true);
-      } catch { /* ignore */ }
-      finally { setSearching(false); }
-    }, 350);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, token]);
-
-  // ── Select a country: trigger parent fetch + close search UI ───────────────
-  function selectCountry(code: string) {
-    setShowDropdown(false);
-    setQuery("");
-    setResults([]);
-    onSelectCountry(code);
-  }
 
   // ── Filtered data slices (memoized — only recalculate when dataset/range changes) ──
   const { gdp, exp, imp, bal } = useMemo(() => {
@@ -122,40 +93,9 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
       <div style={{ marginBottom: 20 }}>
         {/* Search bar row */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
-          <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 360 }}>
-            <Input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              onFocus={() => { if (query.length >= 2 && results.length) setShowDropdown(true); }}
-              onBlur={() => { setTimeout(() => setShowDropdown(false), 150); }}
-              placeholder="Search any country by name…"
-              className="pl-9"
-            />
-            <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 14, pointerEvents: "none" }}>
-              {searching ? "…" : "🔍"}
-            </span>
-            {showDropdown && results.length > 0 && (
-              <div style={{
-                position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
-                background: "#161929", border: "1px solid #2d3348", borderRadius: 8,
-                zIndex: 100, overflow: "hidden",
-              }}>
-                {results.map(c => (
-                  <button key={c.code} onMouseDown={() => selectCountry(c.code)} style={{
-                    display: "flex", alignItems: "center", gap: 8, width: "100%",
-                    background: "transparent", border: "none", borderBottom: "1px solid #1e2130",
-                    padding: "8px 14px", cursor: "pointer", color: "#e2e8f0", fontSize: 13,
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "#1e2130")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
-                    <span style={{ fontSize: 18 }}>{c.flag}</span>
-                    <span style={{ fontWeight: 600 }}>{c.name}</span>
-                    <span style={{ color: "#475569", fontSize: 11, marginLeft: "auto" }}>{c.region}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          <CountrySearchInput token={token} onSelect={onSelectCountry}
+            placeholder="Search any country by name…"
+            style={{ flex: "1 1 260px", maxWidth: 360 }} />
 
           {/* Year range slider — only shown after data loads */}
           {dataset && (
@@ -176,7 +116,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         {/* Popular quick-select */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
           {POPULAR_COUNTRIES.map(c => (
-            <button key={c.code} onClick={() => selectCountry(c.code)} disabled={loading} style={{
+            <button key={c.code} onClick={() => onSelectCountry(c.code)} disabled={loading} style={{
               display: "flex", alignItems: "center", gap: 6,
               background: dataset?.code === c.code ? "#00AAFF18" : "#161929",
               border: `1px solid ${dataset?.code === c.code ? "#00AAFF55" : "#2d3348"}`,
@@ -203,7 +143,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
             {history.map(h => {
               const isActive = dataset?.code === h.code;
               return (
-                <button key={h.code} onClick={() => selectCountry(h.code)} disabled={loading} style={{
+                <button key={h.code} onClick={() => onSelectCountry(h.code)} disabled={loading} style={{
                   display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2,
                   background: isActive ? "#00AAFF10" : "#0d1018",
                   border: `1px solid ${isActive ? "#00AAFF44" : "#1e2130"}`,

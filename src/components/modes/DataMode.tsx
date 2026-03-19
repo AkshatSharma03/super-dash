@@ -7,7 +7,7 @@ import { useState, useRef } from "react";
 import { analyzeCSVData } from "../../utils/api";
 import { parseCSV } from "../../utils/csv";
 import type { ParsedCSV, AIResponse } from "../../types";
-import { DynChart } from "../ui";
+import { ChartCard } from "../ui";
 import { Button }   from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -176,13 +176,7 @@ export default function DataMode() {
             </div>
           )}
 
-          {result.charts?.map(chart => (
-            <div key={chart.id} style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 12, padding: 18, marginBottom: 12 }}>
-              <h3 style={{ margin: "0 0 4px", fontSize: 14, color: "#e2e8f0", fontWeight: 600 }}>{chart.title}</h3>
-              {chart.description && <p style={{ margin: "0 0 12px", fontSize: 12, color: "#64748b" }}>{chart.description}</p>}
-              <DynChart chart={chart} />
-            </div>
-          ))}
+          {result.charts?.map(chart => <ChartCard key={chart.id} chart={chart} />)}
 
           {(result.followUps?.length ?? 0) > 0 && (
             <div style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 10, padding: 14 }}>

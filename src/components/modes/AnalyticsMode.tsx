@@ -10,7 +10,7 @@
 //   Z-Score Anomaly Detection · Hodrick-Prescott Filter · CAGR Analysis
 //   Pearson Correlation Matrix · Trade Openness Index
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useMobile } from "../../utils/useMobile";
 import {
   ComposedChart, Bar, Line, Area, BarChart,
@@ -18,10 +18,11 @@ import {
   ResponsiveContainer, ReferenceLine, Cell,
 } from "recharts";
 import type { CountryDataset, CountrySearchResult, AIResponse } from "../../types";
-import { searchCountries, getCountryHistory, queryAnalytics } from "../../utils/api";
+import { getCountryHistory, queryAnalytics } from "../../utils/api";
 import { TT, GRID, AX, LEG } from "../../config/styles";
-import { AnalyticsCard, Stat, DynChart } from "../ui";
+import { AnalyticsCard, Stat, DynChart, SourceList } from "../ui";
 import { POPULAR_COUNTRIES } from "../../data/suggestions";
+import CountrySearchInput from "../shared/CountrySearchInput";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -449,21 +450,7 @@ function AIResultPanel({ result }: { result: AIResponse }) {
         </div>
       ))}
       {result.sources && result.sources.length > 0 && (
-        <div style={{ marginTop: 12, display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-          <span style={{ fontSize: 10, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Sources:</span>
-          {result.sources.map((s, i) =>
-            s.url ? (
-              <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
-                style={{ fontSize: 11, color: "#00AAFF", background: "#161929", border: "1px solid #2d334870", borderRadius: 5, padding: "2px 8px", textDecoration: "none", transition: "border-color .15s" }}
-                onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#00AAFF66"; }}
-                onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#2d334870"; }}>
-                {s.title} ↗
-              </a>
-            ) : (
-              <span key={i} style={{ fontSize: 11, color: "#475569", background: "#161929", border: "1px solid #2d3348", borderRadius: 5, padding: "2px 8px" }}>{s.title}</span>
-            )
-          )}
-        </div>
+        <SourceList sources={result.sources} style={{ marginTop: 12 }} />
       )}
       {result.followUps && result.followUps.length > 0 && (
         <div style={{ marginTop: 10 }}>
@@ -489,40 +476,13 @@ interface SelectorProps {
 }
 
 function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorProps) {
-  const [query,        setQuery]        = useState("");
-  const [results,      setResults]      = useState<CountrySearchResult[]>([]);
-  const [searching,    setSearching]    = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [history,      setHistory]      = useState<CountrySearchResult[]>([]);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [history, setHistory] = useState<CountrySearchResult[]>([]);
 
   useEffect(() => {
     getCountryHistory(token)
       .then(h => setHistory(h.slice(0, 6).map(e => ({ code: e.code, name: e.name, flag: e.flag, region: e.region }))))
       .catch(() => {});
-  }, [token, dataset]);
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (query.length < 2) { setResults([]); setShowDropdown(false); return; }
-    debounceRef.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const hits = await searchCountries(query, token);
-        setResults(hits);
-        setShowDropdown(true);
-      } catch { /* ignore */ }
-      finally { setSearching(false); }
-    }, 350);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-  }, [query, token]);
-
-  function pick(code: string) {
-    setShowDropdown(false);
-    setQuery("");
-    setResults([]);
-    onSelect(code);
-  }
+  }, [token, dataset?.code]);
 
   const extraHistory = history.filter(h => !POPULAR_COUNTRIES.some(p => p.code === h.code));
 
@@ -546,34 +506,12 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
         {error && <span style={{ fontSize: 12, color: "#EF4444" }}>{error}</span>}
       </div>
 
-      {/* Search */}
-      <div style={{ position: "relative", marginBottom: 12 }}>
-        <input value={query} onChange={e => setQuery(e.target.value)}
-          onFocus={() => query.length >= 2 && results.length > 0 && setShowDropdown(true)}
-          onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
-          placeholder={searching ? "Searching…" : "Search any country…"}
-          style={{ width: "100%", background: "#0f1117", border: "1px solid #2d3348", borderRadius: 8, padding: "9px 14px", fontSize: 13, color: "#e2e8f0", outline: "none", boxSizing: "border-box" }}
-        />
-        {showDropdown && results.length > 0 && (
-          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "#0f1117", border: "1px solid #2d3348", borderRadius: 8, zIndex: 50, maxHeight: 220, overflowY: "auto", boxShadow: "0 8px 30px #00000066" }}>
-            {results.map(r => (
-              <button key={r.code} onMouseDown={() => pick(r.code)}
-                style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", background: "transparent", border: "none", padding: "9px 14px", cursor: "pointer", textAlign: "left" }}
-                onMouseEnter={e => ((e.currentTarget as HTMLButtonElement).style.background = "#1e2130")}
-                onMouseLeave={e => ((e.currentTarget as HTMLButtonElement).style.background = "transparent")}>
-                <span style={{ fontSize: 18 }}>{r.flag}</span>
-                <span style={{ fontSize: 13, color: "#e2e8f0", fontWeight: 600 }}>{r.name}</span>
-                <span style={{ fontSize: 11, color: "#475569", marginLeft: "auto" }}>{r.code}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <CountrySearchInput token={token} onSelect={onSelect} style={{ marginBottom: 12 }} />
 
       {/* Quick picks */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {POPULAR_COUNTRIES.map(c => (
-          <button key={c.code} onClick={() => pick(c.code)} style={{
+          <button key={c.code} onClick={() => onSelect(c.code)} style={{
             background: dataset?.code === c.code ? "#00AAFF18" : "#1e2130",
             border: `1px solid ${dataset?.code === c.code ? "#00AAFF66" : "#2d3348"}`,
             color:  dataset?.code === c.code ? "#00AAFF" : "#94a3b8",
@@ -585,7 +523,7 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
           </button>
         ))}
         {extraHistory.map(h => (
-          <button key={h.code} onClick={() => pick(h.code)} style={{
+          <button key={h.code} onClick={() => onSelect(h.code)} style={{
             background: "#1e2130", border: "1px dashed #2d3348",
             color: "#475569", borderRadius: 7, padding: "4px 10px", fontSize: 11,
             cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
