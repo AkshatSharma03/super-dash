@@ -936,43 +936,6 @@ Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4
 For pie charts: each data item needs "name" and "value" keys.`;
 
 
-  "insight": "2-3 sentence expert analysis. When news context is available, lead with insights drawn directly from those articles and cite specific figures from them.",
-  "charts": [
-    {
-      "id": "unique_id",
-      "title": "Chart title",
-      "type": "line|bar|area|pie|composed|radar",
-      "description": "One sentence description",
-      "data": [{"label":"...","value":123}],
-      "xKey": "year or label or country",
-      "series": [{"key":"fieldname","name":"Display Name","color":"#hex","chartType":"bar|line","stacked":false,"rightAxis":false}]
-    }
-  ],
-  "sources": [
-    {"title":"Source name","url":"https://..."}
-  ],
-  "followUps": ["Follow-up question 1","Follow-up question 2","Follow-up question 3"]
-}
-
-Rules:
-- 1-3 charts per response. Choose types intelligently: trends->line/area, comparisons->bar, composition->pie, multi-metric->composed
-- When news context is provided, build charts using figures and projections from those articles
-- When no news context is available, use real, accurate data from your knowledge (World Bank, IMF, UN Comtrade, national statistics, OECD)
-- DATA ACCURACY: Only use figures you are confident about. For chart data points, prefer verified historical figures over estimates. If a value is estimated or projected, append "e" or "p" to the year label (e.g. "2024e"). Never fabricate specific numbers — use null for unknown values rather than guessing.
-- INSIGHT ACCURACY: Lead your insight with the most recent verified data point you have confidence in, specify the exact year/quarter, and explicitly note if projections are included. Example: "In 2023 (World Bank), GDP was $X.Xtn, growing Y%..."
-- sources: always include the news article URLs provided in context first, then add deep-link dataset URLs. Use these patterns:
-  * World Bank indicator: https://data.worldbank.org/indicator/<INDICATOR_CODE>?locations=<ISO2>
-    Common codes: NY.GDP.MKTP.CD (GDP), NY.GDP.MKTP.KD.ZG (GDP growth), NY.GDP.PCAP.CD (GDP per capita),
-    NE.TRD.GNFS.ZS (trade % GDP), BX.GSR.GNFS.CD (exports), BM.GSR.GNFS.CD (imports)
-  * IMF country reports: https://www.imf.org/en/Publications/CR?country=<ISO3>
-  * IMF World Economic Outlook: https://www.imf.org/en/Publications/WEO
-  * IMF Direction of Trade Statistics: https://data.imf.org/?sk=9d6028d4-f14a-464c-a2f2-59b2cd424b85
-  * UN Comtrade: https://comtradeplus.un.org/TradeFlow?Frequency=A&Flows=X&CommodityCodes=TOTAL&Partners=0&Reporters=<ISO3_NUMERIC>&period=<YEAR>&AggregateBy=none&BreakdownMode=plus
-  * OECD country data: https://data.oecd.org/<ISO3>.htm
-- For pie charts: each data item needs 'name' and 'value'
-- Dense data: 8-15 points per chart when possible
-- Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4`;
-
 const SEARCH_SYSTEM = `You are an expert research analyst and economist with comprehensive knowledge of global economics and financial markets.
 When searching, prioritize authoritative sources: World Bank (worldbank.org), IMF (imf.org), OECD (oecd.org), national statistics offices, central banks, Reuters, Bloomberg, Financial Times, and regional economic organizations.
 
