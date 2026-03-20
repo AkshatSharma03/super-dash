@@ -207,11 +207,23 @@ export function ChartCard({ chart }: { chart: ChartConfig }) {
     );
   };
 
+  const src = chart._source;
+  const apiLabel: Record<string, string> = { worldbank: "World Bank", imf: "IMF", fred: "FRED" };
+
   return (
     <div style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 12, padding: 18, marginBottom: 12 }}>
       <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
         <div style={{ flex: 1 }}>
-          <h3 style={{ margin: "0 0 4px", fontSize: 13, color: "#e2e8f0", fontWeight: 700 }}>{chart.title}</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+            <h3 style={{ margin: 0, fontSize: 13, color: "#e2e8f0", fontWeight: 700 }}>{chart.title}</h3>
+            {src && (
+              <a href={src.url} target="_blank" rel="noopener noreferrer"
+                title={`Verified data · ${src.indicatorName} · Retrieved ${new Date(src.retrievedAt).toLocaleDateString()}`}
+                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: "#10B98115", color: "#10B981", border: "1px solid #10B98133", textDecoration: "none", textTransform: "uppercase", letterSpacing: "0.5px", flexShrink: 0 }}>
+                ✓ {apiLabel[src.api] ?? src.api} · {src.indicator}
+              </a>
+            )}
+          </div>
           {chart.description && <p style={{ margin: "0 0 8px", fontSize: 12, color: "#475569" }}>{chart.description}</p>}
         </div>
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>

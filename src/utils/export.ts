@@ -396,12 +396,19 @@ export function buildChatReportHTML(messages: Message[], sessionTitle = "AI Chat
     }
 
     const res = msg.content as AIResponse;
-    const chartsHTML = (res.charts ?? []).map(chart => `
+    const apiLabel: Record<string, string> = { worldbank: "World Bank", imf: "IMF", fred: "FRED" };
+    const chartsHTML = (res.charts ?? []).map(chart => {
+      const src = chart._source;
+      const verifiedBadge = src
+        ? `<a href="${src.url}" style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:#f0fdf4;color:#059669;border:1px solid #bbf7d0;text-decoration:none;margin-left:8px;text-transform:uppercase;letter-spacing:0.4px">✓ ${apiLabel[src.api] ?? src.api} · ${src.indicator}</a>`
+        : "";
+      return `
       <div style="margin:16px 0;padding:14px 16px;background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb">
-        <p style="margin:0 0 3px;font-size:13px;font-weight:700;color:#111827">${chart.title}</p>
+        <p style="margin:0 0 3px;font-size:13px;font-weight:700;color:#111827">${chart.title}${verifiedBadge}</p>
         ${chart.description ? `<p style="margin:0 0 10px;font-size:12px;color:#6b7280">${chart.description}</p>` : ""}
         ${chartToTableHTML(chart)}
-      </div>`).join("");
+      </div>`;
+    }).join("");
 
     const inlineSources = (res.sources ?? []);
     const srcHTML = inlineSources.length ? `
