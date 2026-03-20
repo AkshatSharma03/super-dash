@@ -9,6 +9,7 @@ import { performWebSearch } from "../../utils/api";
 import { getSearchTrie } from "../../algorithms/trie";
 import type { SearchResult } from "../../types";
 import { MarkdownText } from "../ui";
+import { buildSearchReportHTML, printHTML } from "../../utils/export";
 import { Button }  from "@/components/ui/button";
 import { Input }   from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -147,10 +148,17 @@ export default function SearchMode() {
               {result.webSearchUsed ? "🌐 Live Web Search" : "📚 Model Knowledge"}
             </Badge>
             <span style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>"{searched}"</span>
-            <Button variant="outline" size="sm" className="ml-auto text-xs"
-              onClick={() => { setResult(null); setError(null); setSearched(""); }}>
-              Clear
-            </Button>
+            <div className="ml-auto flex gap-2">
+              <Button variant="outline" size="sm" className="text-xs"
+                onClick={() => printHTML(buildSearchReportHTML(searched, result))}
+                title="Export research summary with cited sources as PDF/HTML">
+                Export ↓
+              </Button>
+              <Button variant="outline" size="sm" className="text-xs"
+                onClick={() => { setResult(null); setError(null); setSearched(""); }}>
+                Clear
+              </Button>
+            </div>
           </div>
 
           <div style={{ background: "#161929", border: `1px solid ${result.webSearchUsed ? "#10B98133" : "#F59E0B33"}`, borderLeft: `3px solid ${result.webSearchUsed ? "#10B981" : "#F59E0B"}`, borderRadius: "0 12px 12px 0", padding: 22, marginBottom: 14, animation: "fadeInUp .25s ease-out" }}>

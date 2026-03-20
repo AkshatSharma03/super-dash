@@ -2,7 +2,7 @@
 // UI PRIMITIVES  —  shared components used across all five modes.
 // Keeping these here avoids re-declaring identical elements in each mode file.
 // ─────────────────────────────────────────────────────────────────────────────
-import { ReactNode } from "react";
+import { ReactNode, useRef } from "react";
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
   PieChart, Pie, Cell, ComposedChart, XAxis, YAxis,
@@ -11,6 +11,7 @@ import {
 } from "recharts";
 import { P, TT, GRID, AX, LEG } from "../../config/styles";
 import type { BtnProps, KPIProps, CardProps, AnalyticsCardProps, ChartConfig, AISource } from "../../types";
+import { downloadBlob, toCSVString } from "../../utils/export";
 
 // ── Navigation / action button ────────────────────────────────────────────────
 
@@ -175,13 +176,60 @@ export function MarkdownText({ text }: { text?: string }) {
 
 // ── Chart card wrapper ────────────────────────────────────────────────────────
 
-/** Chart title + optional description + DynChart, inside a dark card. */
+const BTN_STYLE: React.CSSProperties = {
+  background: "transparent", border: "1px solid #2d3348", borderRadius: 5,
+  padding: "2px 7px", fontSize: 10, color: "#475569", cursor: "pointer",
+  transition: "all .15s",
+};
+
+/** Chart title + optional description + DynChart, inside a dark card.
+ *  Includes SVG and CSV download buttons in the top-right corner. */
 export function ChartCard({ chart }: { chart: ChartConfig }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleSVG = () => {
+    const svg = containerRef.current?.querySelector("svg");
+    if (!svg) return;
+    const clone = svg.cloneNode(true) as SVGElement;
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    const serialized = new XMLSerializer().serializeToString(clone);
+    downloadBlob(`${chart.title.replace(/[^a-z0-9]/gi, "_")}.svg`, serialized, "image/svg+xml");
+  };
+
+  const handleCSV = () => {
+    if (!chart.data?.length) return;
+    const headers = Object.keys(chart.data[0]);
+    const rows = chart.data.map(row => headers.map(k => row[k] as string | number | null));
+    downloadBlob(
+      `${chart.title.replace(/[^a-z0-9]/gi, "_")}.csv`,
+      toCSVString(headers, rows),
+      "text/csv;charset=utf-8",
+    );
+  };
+
   return (
     <div style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 12, padding: 18, marginBottom: 12 }}>
-      <h3 style={{ margin: "0 0 4px", fontSize: 13, color: "#e2e8f0", fontWeight: 700 }}>{chart.title}</h3>
-      {chart.description && <p style={{ margin: "0 0 12px", fontSize: 12, color: "#475569" }}>{chart.description}</p>}
-      <DynChart chart={chart} />
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
+        <div style={{ flex: 1 }}>
+          <h3 style={{ margin: "0 0 4px", fontSize: 13, color: "#e2e8f0", fontWeight: 700 }}>{chart.title}</h3>
+          {chart.description && <p style={{ margin: "0 0 8px", fontSize: 12, color: "#475569" }}>{chart.description}</p>}
+        </div>
+        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+          <button onClick={handleSVG} title="Download chart as SVG" style={BTN_STYLE}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#00AAFF"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#00AAFF66"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#475569"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
+            ↓ SVG
+          </button>
+          <button onClick={handleCSV} title="Download chart data as CSV" style={BTN_STYLE}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#10B981"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#10B98166"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#475569"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
+            ↓ CSV
+          </button>
+        </div>
+      </div>
+      <div ref={containerRef}>
+        <DynChart chart={chart} />
+      </div>
     </div>
   );
 }
