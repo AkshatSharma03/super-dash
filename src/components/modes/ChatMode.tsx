@@ -10,6 +10,7 @@ import { useMobile } from "../../utils/useMobile";
 import { askClaude, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
 import type { Message, AIResponse, ChatSession } from "../../types";
 import { ChartCard, SourceList } from "../ui";
+import { buildChatReportHTML, printHTML } from "../../utils/export";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -155,6 +156,11 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
     setLoading(false);
   };
 
+  const exportConversation = () => {
+    const title = sessions.find(s => s.id === activeSessionId)?.title ?? "AI Chat Report";
+    printHTML(buildChatReportHTML(messages, title));
+  };
+
   const isEmpty = messages.length === 0;
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -282,7 +288,12 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
               <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} title="Chat history">☰</Button>
             )}
             {messages.length > 0 && (
-              <Button variant="outline" size="sm" onClick={newChat} className="whitespace-nowrap">Clear</Button>
+              <>
+                <Button variant="outline" size="sm" onClick={newChat} className="whitespace-nowrap">Clear</Button>
+                <Button variant="outline" size="sm" onClick={exportConversation} className="whitespace-nowrap" title="Export conversation as PDF/HTML report with charts and citations">
+                  Export ↓
+                </Button>
+              </>
             )}
             <Input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && send(input)}

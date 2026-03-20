@@ -771,6 +771,8 @@ Rules:
 - 1-3 charts per response. Choose types intelligently: trends->line/area, comparisons->bar, composition->pie, multi-metric->composed
 - When news context is provided, build charts using figures and projections from those articles
 - When no news context is available, use real, accurate data from your knowledge (World Bank, IMF, UN Comtrade, national statistics, OECD)
+- DATA ACCURACY: Only use figures you are confident about. For chart data points, prefer verified historical figures over estimates. If a value is estimated or projected, append "e" or "p" to the year label (e.g. "2024e"). Never fabricate specific numbers — use null for unknown values rather than guessing.
+- INSIGHT ACCURACY: Lead your insight with the most recent verified data point you have confidence in, specify the exact year/quarter, and explicitly note if projections are included. Example: "In 2023 (World Bank), GDP was $X.Xtn, growing Y%..."
 - sources: always include the news article URLs provided in context first, then add deep-link dataset URLs. Use these patterns:
   * World Bank indicator: https://data.worldbank.org/indicator/<INDICATOR_CODE>?locations=<ISO2>
     Common codes: NY.GDP.MKTP.CD (GDP), NY.GDP.MKTP.KD.ZG (GDP growth), NY.GDP.PCAP.CD (GDP per capita),
