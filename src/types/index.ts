@@ -16,6 +16,16 @@ export interface ChartSeries {
   rightAxis?: boolean;        // binds to the secondary Y-axis in composed charts
 }
 
+/** Provenance metadata attached to charts produced by the verified data pipeline. */
+export interface ChartSource {
+  api: "worldbank" | "imf" | "fred";
+  indicator: string;
+  indicatorName: string;
+  countries?: string[];
+  retrievedAt: string; // ISO 8601
+  url: string;
+}
+
 /** Full configuration object returned by Claude and consumed by DynChart. */
 export interface ChartConfig {
   id: string;
@@ -25,6 +35,8 @@ export interface ChartConfig {
   data: Record<string, unknown>[];
   xKey?: string;
   series?: ChartSeries[];
+  /** Present only when data was fetched from a real API (World Bank / IMF / FRED). */
+  _source?: ChartSource;
 }
 
 // ── API response types ────────────────────────────────────────────────────────

@@ -743,12 +743,199 @@ async function callAnthropic(body, extraHeaders = {}) {
 
 // ── Generic system prompts (no hardcoded country) ──────────────────────────────
 
-const CHAT_SYSTEM = `You are an expert data analyst and economist with comprehensive knowledge of global economics, international trade, financial markets, macroeconomic policy, and economic history across all countries and regions.
+// ── Real data fetchers — World Bank, IMF DataMapper, FRED ────────────────────
 
-IMPORTANT: The user's message may contain a "Recent Verified News" section with live articles fetched from trusted sources. When present, treat this news as your PRIMARY source of truth for current events and projections — it supersedes your training knowledge. Use it to answer questions about ongoing conflicts, 2025/2026 developments, and current economic conditions. Never refuse to answer based on a knowledge cutoff when live news context has been provided.
+/**
+ * Fetch indicator data from the World Bank Open Data API.
+ * Returns sorted array of { country, countryCode, year, value, indicator, indicatorName }.
+ * No API key required. Country codes are ISO2 (US, CN, DE …).
+ */
+async function fetchWorldBankIndicator(countryCodes, indicator, startYear, endYear) {
+  const codes = Array.isArray(countryCodes) ? countryCodes.join(';') : countryCodes;
+  const url = `https://api.worldbank.org/v2/country/${codes}/indicator/${indicator}?format=json&date=${startYear}:${endYear}&per_page=500`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw new Error(`World Bank API ${res.status}`);
+  const json = await res.json();
+  if (!Array.isArray(json) || !json[1]) return [];
+  return json[1]
+    .filter(d => d.value !== null && d.value !== undefined)
+    .map(d => ({
+      country:       d.country?.value ?? codes,
+      countryCode:   d.countryiso3code ?? codes,
+      year:          parseInt(d.date, 10),
+      value:         d.value,
+      indicator:     d.indicator?.id ?? indicator,
+      indicatorName: d.indicator?.value ?? indicator,
+    }))
+    .sort((a, b) => a.year - b.year);
+}
 
-When a user asks a question, respond ONLY with a valid JSON object (no markdown, no preamble):
+/**
+ * Fetch cross-country indicator data from the IMF DataMapper API.
+ * Returns sorted array of { countryCode, year, value }.
+ * No API key required. Country codes are ISO3 (USA, CHN, DEU …).
+ */
+async function fetchIMFIndicator(indicator, countryCodes) {
+  const codes = Array.isArray(countryCodes) ? countryCodes.join('/') : countryCodes;
+  const url = `https://www.imf.org/external/datamapper/api/v1/${indicator}/${codes}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw new Error(`IMF API ${res.status}`);
+  const json = await res.json();
+  const values = json?.values?.[indicator];
+  if (!values) return [];
+  const rows = [];
+  for (const [countryCode, yearData] of Object.entries(values)) {
+    for (const [year, value] of Object.entries(yearData)) {
+      if (value !== null && value !== undefined)
+        rows.push({ countryCode, year: parseInt(year, 10), value });
+    }
+  }
+  return rows.sort((a, b) => a.year - b.year);
+}
+
+/**
+ * Fetch US economic series from the FRED API (Federal Reserve Bank of St. Louis).
+ * Returns sorted array of { year, value }.
+ * Requires FRED_API_KEY environment variable.
+ */
+async function fetchFREDSeries(seriesId, startYear, endYear) {
+  const apiKey = process.env.FRED_API_KEY;
+  if (!apiKey) throw new Error('FRED_API_KEY environment variable is not set');
+  const url = `https://api.stlouisfed.org/fred/series/observations?series_id=${seriesId}&api_key=${apiKey}&file_type=json&observation_start=${startYear}-01-01&observation_end=${endYear}-12-31&frequency=a&aggregation_method=avg`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
+  if (!res.ok) throw new Error(`FRED API ${res.status}`);
+  const json = await res.json();
+  return (json.observations || [])
+    .filter(o => o.value !== '.' && o.value !== null)
+    .map(o => ({ year: parseInt(o.date, 10), value: parseFloat(o.value) }))
+    .sort((a, b) => a.year - b.year);
+}
+
+/** Execute a data tool call and return the result as a string. */
+async function executeDataTool(name, input) {
+  if (name === 'fetch_world_bank') {
+    const { country_codes, indicator, start_year = 2000, end_year = 2024 } = input;
+    const rows = await fetchWorldBankIndicator(country_codes, indicator, start_year, end_year);
+    const sourceUrl = `https://data.worldbank.org/indicator/${indicator}?locations=${Array.isArray(country_codes) ? country_codes.join('-') : country_codes}`;
+    return JSON.stringify({ rows, source: 'World Bank Open Data', indicator, sourceUrl });
+  }
+  if (name === 'fetch_imf') {
+    const { indicator, country_codes } = input;
+    const rows = await fetchIMFIndicator(indicator, country_codes);
+    const sourceUrl = `https://www.imf.org/external/datamapper/${indicator}`;
+    return JSON.stringify({ rows, source: 'IMF DataMapper', indicator, sourceUrl });
+  }
+  if (name === 'fetch_fred') {
+    const { series_id, start_year = 2000, end_year = 2024 } = input;
+    const rows = await fetchFREDSeries(series_id, start_year, end_year);
+    const sourceUrl = `https://fred.stlouisfed.org/series/${series_id}`;
+    return JSON.stringify({ rows, source: 'FRED (Federal Reserve Bank of St. Louis)', series_id, sourceUrl });
+  }
+  throw new Error(`Unknown tool: ${name}`);
+}
+
+// Tool definitions passed to the Anthropic API
+const DATA_TOOLS = [
+  {
+    name: 'fetch_world_bank',
+    description: 'Fetch real, verified economic data from the World Bank Open Data API for any country and indicator. No API key required. Returns exact historical values.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        country_codes: {
+          type: 'array', items: { type: 'string' },
+          description: 'ISO2 country codes (e.g. ["US","CN","DE"]). Up to 5 countries.',
+        },
+        indicator: {
+          type: 'string',
+          description: 'World Bank indicator code. Common: NY.GDP.MKTP.CD (GDP $), NY.GDP.MKTP.KD.ZG (GDP growth %), NY.GDP.PCAP.CD (GDP/capita), FP.CPI.TOTL.ZG (inflation %), SL.UEM.TOTL.ZS (unemployment %), NE.EXP.GNFS.CD (exports $), NE.IMP.GNFS.CD (imports $), BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), NE.TRD.GNFS.ZS (trade % GDP), SP.POP.TOTL (population)',
+        },
+        start_year: { type: 'number', description: 'Start year (default 2000)' },
+        end_year:   { type: 'number', description: 'End year (default 2024)' },
+      },
+      required: ['country_codes', 'indicator'],
+    },
+  },
+  {
+    name: 'fetch_imf',
+    description: 'Fetch verified data from the IMF DataMapper API including WEO projections. No API key required. Best for cross-country comparisons and forward projections.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        indicator: {
+          type: 'string',
+          description: 'IMF indicator code. Common: NGDP_RPCH (real GDP growth %), PCPIPCH (inflation %), LUR (unemployment %), BCA_NGDPD (current account % GDP), GGXWDG_NGDP (govt debt % GDP), NID_NGDP (investment % GDP)',
+        },
+        country_codes: {
+          type: 'array', items: { type: 'string' },
+          description: 'ISO3 country codes (e.g. ["USA","CHN","DEU"]). Up to 6 countries.',
+        },
+      },
+      required: ['indicator', 'country_codes'],
+    },
+  },
+  {
+    name: 'fetch_fred',
+    description: 'Fetch US economic time series from FRED (Federal Reserve Bank of St. Louis). Requires FRED_API_KEY. Best for US-specific monetary, labour and GDP data.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        series_id: {
+          type: 'string',
+          description: 'FRED series ID. Common: GDP (nominal GDP $B), GDPC1 (real GDP $B), UNRATE (unemployment %), CPIAUCSL (CPI index), FEDFUNDS (fed funds rate %), DGS10 (10-year treasury %), PAYEMS (non-farm payrolls), INDPRO (industrial production)',
+        },
+        start_year: { type: 'number', description: 'Start year (default 2000)' },
+        end_year:   { type: 'number', description: 'End year (default 2024)' },
+      },
+      required: ['series_id'],
+    },
+  },
+];
+
+const VERIFIED_CHAT_SYSTEM = `You are an economic data analyst that only uses verified, real data from official APIs.
+
+STRICT RESEARCH-GRADE RULES — NO EXCEPTIONS:
+1. You MUST call fetch_world_bank, fetch_imf, or fetch_fred to get data before creating any chart.
+2. NEVER generate, estimate, recall, or approximate numerical values. Every number in chart data must come from a tool result.
+3. If tools return empty data or an error, say so clearly. Do NOT substitute placeholder or estimated values.
+4. Charts must contain ONLY values present in tool results. Do not interpolate missing years.
+
+WORKFLOW:
+- Analyse the query and identify which indicators and countries are needed
+- Call the appropriate tool(s) — you may call multiple tools in parallel
+- Build charts and insight using ONLY the returned rows
+- If a tool fails or returns no rows, report it and suggest the direct data URL
+
+Respond with this exact JSON (no markdown wrapper):
 {
+  "insight": "2-3 sentences citing specific verified figures with years and sources",
+  "charts": [
+    {
+      "id": "unique_id",
+      "title": "Descriptive chart title",
+      "type": "line|bar|area|pie|composed|radar",
+      "description": "Source: World Bank NY.GDP.MKTP.CD · Retrieved [date]",
+      "data": [...],
+      "xKey": "year",
+      "series": [{"key":"fieldname","name":"Display Name","color":"#hex"}],
+      "_source": {
+        "api": "worldbank|imf|fred",
+        "indicator": "indicator_code",
+        "indicatorName": "Human readable name",
+        "countries": ["US"],
+        "retrievedAt": "ISO 8601 timestamp",
+        "url": "direct URL to this dataset"
+      }
+    }
+  ],
+  "sources": [{"title": "World Bank · NY.GDP.MKTP.CD · GDP (current US$)", "url": "https://data.worldbank.org/indicator/NY.GDP.MKTP.CD"}],
+  "followUps": ["Follow-up question 1", "Follow-up question 2", "Follow-up question 3"]
+}
+
+Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4
+For pie charts: each data item needs "name" and "value" keys.`;
+
+
   "insight": "2-3 sentence expert analysis. When news context is available, lead with insights drawn directly from those articles and cite specific figures from them.",
   "charts": [
     {
@@ -809,7 +996,7 @@ Be specific — include exact figures, percentages, dates, and growth rates wher
 
 const CSV_SYSTEM = `You are an expert data analyst and visualization specialist. Analyze CSV datasets and generate Recharts-compatible chart configurations using real values from the data. Never use placeholder values. Return only valid JSON without any markdown wrapper.`;
 
-// ── API Routes (same as before, using updated CHAT_SYSTEM) ─────────────────────
+// ── API Routes ───────────────────────────────────────────────────────────────
 
 app.post('/api/chat', apiLimiter, async (req, res) => {
   let { messages } = req.body;
@@ -828,15 +1015,14 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
     if (cached) { if (IS_DEV) console.log('[cache hit] /api/chat'); return res.json(cached); }
   }
 
-  // Fetch news before calling AI, inject as context and retain as explicit sources
+  // Inject recent news as qualitative context only (not for generating chart data)
   let fetchedNewsSources = [];
   const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
   if (lastUserMsg) {
     try {
       const recentNews = await fetchVerifiedNews(lastUserMsg.content.slice(0, 200));
       if (recentNews.length > 0) {
-        const newsContext = `\n\nRecent Verified News (use these for context and cite them in sources):\n${JSON.stringify(recentNews)}`;
-        lastUserMsg.content = lastUserMsg.content + newsContext;
+        lastUserMsg.content += `\n\nRecent News Context (qualitative only — fetch real data via tools for charts):\n${JSON.stringify(recentNews)}`;
         fetchedNewsSources = recentNews.map(a => ({ title: `${a.source}: ${a.title}`, url: a.url }));
       }
     } catch (e) {
@@ -844,17 +1030,58 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
     }
   }
 
+  // ── Agentic loop: Claude calls real data APIs, then returns verified JSON ──
+  const MAX_DATA_TURNS = 6;
+  let loopMessages = [...messages];
+  let finalText = '';
+
   try {
-    const data = await callAnthropic({ model: MODEL, max_tokens: 4000, system: CHAT_SYSTEM, messages });
-    const text = data.content?.map(b => b.text || '').join('') || '{}';
+    for (let turn = 0; turn < MAX_DATA_TURNS; turn++) {
+      const data = await callAnthropic({
+        model: MODEL, max_tokens: 4000,
+        system: VERIFIED_CHAT_SYSTEM,
+        tools: DATA_TOOLS,
+        messages: loopMessages,
+      });
+
+      const toolUses = (data.content || []).filter(b => b.type === 'tool_use');
+
+      // No tool calls → Claude produced the final JSON answer
+      if (toolUses.length === 0 || data.stop_reason === 'end_turn') {
+        finalText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+        break;
+      }
+
+      // Execute each tool call against the real APIs
+      const toolResults = [];
+      for (const tu of toolUses) {
+        let resultContent;
+        try {
+          resultContent = await executeDataTool(tu.name, tu.input);
+          if (IS_DEV) console.log(`[data tool] ${tu.name}`, tu.input);
+        } catch (err) {
+          console.error(`[data tool error] ${tu.name}:`, err.message);
+          resultContent = JSON.stringify({ error: err.message, rows: [] });
+        }
+        toolResults.push({ type: 'tool_result', tool_use_id: tu.id, content: resultContent });
+      }
+
+      loopMessages = [
+        ...loopMessages,
+        { role: 'assistant', content: data.content },
+        { role: 'user',      content: toolResults },
+      ];
+    }
+
     let parsed;
     try {
-      const raw = JSON.parse(text.replace(/```json|```/g, '').trim());
-      parsed = validateAIResponse(raw) ?? { insight: text, charts: [], sources: [], followUps: [] };
+      const raw = JSON.parse(finalText.replace(/```json|```/g, '').trim());
+      parsed = validateAIResponse(raw) ?? { insight: finalText, charts: [], sources: [], followUps: [] };
     } catch {
-      parsed = { insight: text, charts: [], sources: [], followUps: [] };
+      parsed = { insight: finalText, charts: [], sources: [], followUps: [] };
     }
-    // Merge fetched news URLs into sources (deduplicate by URL)
+
+    // Merge news source URLs (qualitative context citations)
     const existingUrls = new Set((parsed.sources || []).map(s => s.url).filter(Boolean));
     for (const ns of fetchedNewsSources) {
       if (ns.url && !existingUrls.has(ns.url)) {
@@ -862,6 +1089,7 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
         existingUrls.add(ns.url);
       }
     }
+
     if (ck) apiCache.put(ck, parsed, TTL_CHAT_MS);
     track(req.user?.id || 'guest', 'chat_sent', {
       message_count: messages.length,
