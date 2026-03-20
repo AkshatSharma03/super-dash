@@ -838,7 +838,7 @@ async function executeDataTool(name, input) {
 const DATA_TOOLS = [
   {
     name: 'fetch_world_bank',
-    description: 'Fetch real, verified economic data from the World Bank Open Data API for any country and indicator. No API key required. Returns exact historical values.',
+    description: 'Fetch real, verified economic data from the World Bank Open Data API. Works for ALL countries including the USA. No API key required.',
     input_schema: {
       type: 'object',
       properties: {
@@ -848,7 +848,11 @@ const DATA_TOOLS = [
         },
         indicator: {
           type: 'string',
-          description: 'World Bank indicator code. Common: NY.GDP.MKTP.CD (GDP $), NY.GDP.MKTP.KD.ZG (GDP growth %), NY.GDP.PCAP.CD (GDP/capita), FP.CPI.TOTL.ZG (inflation %), SL.UEM.TOTL.ZS (unemployment %), NE.EXP.GNFS.CD (exports $), NE.IMP.GNFS.CD (imports $), BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), NE.TRD.GNFS.ZS (trade % GDP), SP.POP.TOTL (population)',
+          description: `World Bank indicator code. Key indicators:
+MACRO: NY.GDP.MKTP.CD (GDP $), NY.GDP.MKTP.KD.ZG (GDP growth %), NY.GDP.PCAP.CD (GDP/capita $), FP.CPI.TOTL.ZG (inflation %), SL.UEM.TOTL.ZS (unemployment %)
+MANUFACTURING (use for US manufacturing questions): NV.IND.MANF.CD (manufacturing value added $), NV.IND.MANF.KD.ZG (manufacturing value added growth %), SL.IND.MANF.ZS (employment in manufacturing % of total), NV.IND.TOTL.ZS (industry value added % GDP)
+TRADE: NE.EXP.GNFS.CD (exports $), NE.IMP.GNFS.CD (imports $), NE.TRD.GNFS.ZS (trade % GDP), BM.GSR.MNFCS.CD (imports of manufactures $), BX.GSR.MNFCS.CD (exports of manufactures $), TM.TAX.MANF.SM.AR.ZS (tariff rate on manufactured goods %)
+OTHER: BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), SP.POP.TOTL (population)`,
         },
         start_year: { type: 'number', description: 'Start year (default 2000)' },
         end_year:   { type: 'number', description: 'End year (default 2024)' },
@@ -876,13 +880,13 @@ const DATA_TOOLS = [
   },
   {
     name: 'fetch_fred',
-    description: 'Fetch US economic time series from FRED (Federal Reserve Bank of St. Louis). Requires FRED_API_KEY. Best for US-specific monetary, labour and GDP data.',
+    description: 'Fetch US economic time series from FRED (Federal Reserve Bank of St. Louis). Requires FRED_API_KEY env var. Use fetch_world_bank instead if unsure whether FRED is available.',
     input_schema: {
       type: 'object',
       properties: {
         series_id: {
           type: 'string',
-          description: 'FRED series ID. Common: GDP (nominal GDP $B), GDPC1 (real GDP $B), UNRATE (unemployment %), CPIAUCSL (CPI index), FEDFUNDS (fed funds rate %), DGS10 (10-year treasury %), PAYEMS (non-farm payrolls), INDPRO (industrial production)',
+          description: 'FRED series ID. Common: GDP (nominal GDP $B), GDPC1 (real GDP $B), UNRATE (unemployment %), CPIAUCSL (CPI index), FEDFUNDS (fed funds rate %), DGS10 (10-year treasury %), PAYEMS (non-farm payrolls), INDPRO (industrial production), MANEMP (manufacturing employees thousands), CES3000000008 (manufacturing hourly wages)',
         },
         start_year: { type: 'number', description: 'Start year (default 2000)' },
         end_year:   { type: 'number', description: 'End year (default 2024)' },
@@ -892,48 +896,63 @@ const DATA_TOOLS = [
   },
 ];
 
-const VERIFIED_CHAT_SYSTEM = `You are an economic data analyst that only uses verified, real data from official APIs.
+/** Build the system prompt dynamically so it reflects which tools are actually available. */
+function buildVerifiedChatSystem() {
+  const fredAvailable = !!process.env.FRED_API_KEY;
+  return `You are an economic data analyst. You ONLY show charts built from real data returned by tool calls.
 
-STRICT RESEARCH-GRADE RULES — NO EXCEPTIONS:
-1. You MUST call fetch_world_bank, fetch_imf, or fetch_fred to get data before creating any chart.
-2. NEVER generate, estimate, recall, or approximate numerical values. Every number in chart data must come from a tool result.
-3. If tools return empty data or an error, say so clearly. Do NOT substitute placeholder or estimated values.
-4. Charts must contain ONLY values present in tool results. Do not interpolate missing years.
+STRICT RULES — NO EXCEPTIONS:
+1. Call fetch_world_bank and/or fetch_imf${fredAvailable ? ' and/or fetch_fred' : ''} BEFORE creating any chart.
+2. NEVER generate, estimate, or recall any numerical values. Every number must come from a tool result.
+3. If a tool returns empty rows or an error, omit that chart and note it in the insight.
+4. Copy values exactly from tool results into chart data. Do not round, interpolate, or fill gaps.
 
-WORKFLOW:
-- Analyse the query and identify which indicators and countries are needed
-- Call the appropriate tool(s) — you may call multiple tools in parallel
-- Build charts and insight using ONLY the returned rows
-- If a tool fails or returns no rows, report it and suggest the direct data URL
+${fredAvailable ? '' : `IMPORTANT: FRED is not configured. For US data use fetch_world_bank with these indicators:
+- US manufacturing employment share: SL.IND.MANF.ZS
+- US manufacturing value added: NV.IND.MANF.CD
+- US manufacturing value added growth: NV.IND.MANF.KD.ZG
+- US imports of manufactures: BM.GSR.MNFCS.CD
+- US exports of manufactures: BX.GSR.MNFCS.CD
+- US trade openness: NE.TRD.GNFS.ZS
+- US tariff rate on manufactures: TM.TAX.MANF.SM.AR.ZS
+Fetch multiple indicators in separate tool calls and combine them into multi-series charts.
+
+`}WORKFLOW:
+- Identify which indicators and countries are needed for the question
+- Fire all required tool calls (can be parallel)
+- Map the returned rows directly into chart data arrays
+- Write insight citing specific figures with years from the tool results
 
 Respond with this exact JSON (no markdown wrapper):
 {
-  "insight": "2-3 sentences citing specific verified figures with years and sources",
+  "insight": "2-3 sentences citing specific verified figures with years and source names",
   "charts": [
     {
       "id": "unique_id",
       "title": "Descriptive chart title",
       "type": "line|bar|area|pie|composed|radar",
-      "description": "Source: World Bank NY.GDP.MKTP.CD · Retrieved [date]",
-      "data": [...],
+      "description": "Source: World Bank · NV.IND.MANF.CD",
+      "data": [],
       "xKey": "year",
       "series": [{"key":"fieldname","name":"Display Name","color":"#hex"}],
       "_source": {
         "api": "worldbank|imf|fred",
         "indicator": "indicator_code",
-        "indicatorName": "Human readable name",
+        "indicatorName": "Human readable indicator name",
         "countries": ["US"],
         "retrievedAt": "ISO 8601 timestamp",
-        "url": "direct URL to this dataset"
+        "url": "direct dataset URL"
       }
     }
   ],
-  "sources": [{"title": "World Bank · NY.GDP.MKTP.CD · GDP (current US$)", "url": "https://data.worldbank.org/indicator/NY.GDP.MKTP.CD"}],
-  "followUps": ["Follow-up question 1", "Follow-up question 2", "Follow-up question 3"]
+  "sources": [{"title": "World Bank · NV.IND.MANF.CD · Manufacturing value added", "url": "https://data.worldbank.org/indicator/NV.IND.MANF.CD"}],
+  "followUps": ["Question 1", "Question 2", "Question 3"]
 }
 
-Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4
-For pie charts: each data item needs "name" and "value" keys.`;
+For composed charts (two metrics): use "chartType":"bar" and "chartType":"line" in series, add "rightAxis":true to the line series.
+For pie charts: each data item needs "name" and "value" keys.
+Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4`;
+}
 
 
 const SEARCH_SYSTEM = `You are an expert research analyst and economist with comprehensive knowledge of global economics and financial markets.
@@ -993,17 +1012,29 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
     }
   }
 
+  // Only offer fetch_fred if the API key is configured — prevents Claude from
+  // trying and failing, which previously caused it to fall back to generated data.
+  const availableTools = process.env.FRED_API_KEY
+    ? DATA_TOOLS
+    : DATA_TOOLS.filter(t => t.name !== 'fetch_fred');
+
   // ── Agentic loop: Claude calls real data APIs, then returns verified JSON ──
   const MAX_DATA_TURNS = 6;
   let loopMessages = [...messages];
   let finalText = '';
 
+  // Track every indicator/series that returned ≥1 real data row.
+  // Charts referencing an indicator not in this set are stripped before
+  // returning to the client — this enforces the "no estimates" rule even
+  // when Claude ignores system-prompt instructions on tool failure.
+  const verifiedIndicators = new Set();
+
   try {
     for (let turn = 0; turn < MAX_DATA_TURNS; turn++) {
       const data = await callAnthropic({
         model: MODEL, max_tokens: 4000,
-        system: VERIFIED_CHAT_SYSTEM,
-        tools: DATA_TOOLS,
+        system: buildVerifiedChatSystem(),
+        tools: availableTools,
         messages: loopMessages,
       });
 
@@ -1021,7 +1052,13 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
         let resultContent;
         try {
           resultContent = await executeDataTool(tu.name, tu.input);
-          if (IS_DEV) console.log(`[data tool] ${tu.name}`, tu.input);
+          const parsed = JSON.parse(resultContent);
+          if (Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+            // Record which indicator actually returned real data
+            const key = tu.input.indicator ?? tu.input.series_id ?? tu.name;
+            verifiedIndicators.add(key);
+          }
+          if (IS_DEV) console.log(`[data tool] ${tu.name}`, tu.input, `→ ${JSON.parse(resultContent).rows?.length ?? 0} rows`);
         } catch (err) {
           console.error(`[data tool error] ${tu.name}:`, err.message);
           resultContent = JSON.stringify({ error: err.message, rows: [] });
@@ -1042,6 +1079,36 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       parsed = validateAIResponse(raw) ?? { insight: finalText, charts: [], sources: [], followUps: [] };
     } catch {
       parsed = { insight: finalText, charts: [], sources: [], followUps: [] };
+    }
+
+    // ── Server-side enforcement: remove any chart not backed by a real fetch ──
+    // A chart is kept only if its _source.indicator matches a key in
+    // verifiedIndicators. Charts without _source are always removed (Claude
+    // generated the data itself without calling a tool).
+    if (verifiedIndicators.size > 0 && Array.isArray(parsed.charts)) {
+      const before = parsed.charts.length;
+      parsed.charts = parsed.charts.filter(chart => {
+        if (!chart._source?.indicator) return false;
+        const ind = chart._source.indicator;
+        return [...verifiedIndicators].some(k => ind === k || ind.includes(k) || k.includes(ind));
+      });
+      const removed = before - parsed.charts.length;
+      if (removed > 0) {
+        console.warn(`[verified-data] stripped ${removed} chart(s) with no matching real tool result`);
+        if (parsed.charts.length === 0) {
+          parsed.insight = (parsed.insight ? parsed.insight + ' ' : '') +
+            '⚠ Some charts could not be shown because the underlying data could not be fetched from the official API — no estimated values are displayed.';
+        }
+      }
+    } else if (verifiedIndicators.size === 0) {
+      // No tool calls returned real data at all — remove all charts
+      if ((parsed.charts ?? []).length > 0) {
+        console.warn('[verified-data] no real data fetched — stripping all charts');
+        parsed.charts = [];
+        parsed.insight = (parsed.insight ? parsed.insight + ' ' : '') +
+          '⚠ Charts are not shown because no data could be fetched from the official APIs (World Bank, IMF). ' +
+          'Check that the APIs are reachable, or add a FRED_API_KEY environment variable for US data.';
+      }
     }
 
     // Merge news source URLs (qualitative context citations)
