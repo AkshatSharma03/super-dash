@@ -1,33 +1,39 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // UI PRIMITIVES  —  shared components used across all five modes.
-// Keeping these here avoids re-declaring identical elements in each mode file.
 // ─────────────────────────────────────────────────────────────────────────────
-import { ReactNode, useRef } from "react";
+import { useRef } from "react";
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
   PieChart, Pie, Cell, ComposedChart, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   RadarChart, Radar, PolarGrid, PolarAngleAxis,
 } from "recharts";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { P, TT, GRID, AX, LEG } from "../../config/styles";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { BtnProps, KPIProps, CardProps, AnalyticsCardProps, ChartConfig, AISource } from "../../types";
 import { downloadBlob, toCSVString } from "../../utils/export";
 
 // ── Navigation / action button ────────────────────────────────────────────────
 
 /** Tab / action button. Highlights in blue when `active`. */
-export function Btn({ onClick, children, active, style = {}, disabled = false }: BtnProps) {
+export function Btn({ onClick, children, active, disabled = false }: BtnProps) {
   return (
-    <button onClick={onClick} disabled={disabled} style={{
-      background: active ? "#00AAFF" : "transparent",
-      color: active ? "#fff" : "#64748b",
-      border: "none",
-      borderRadius: 7, padding: "6px 14px", fontSize: 12, fontWeight: active ? 700 : 500,
-      cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.5 : 1,
-      transition: "all .15s",
-      boxShadow: active ? "0 2px 8px #00AAFF44" : "none",
-      ...style,
-    }}>{children}</button>
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        "px-3.5 py-1.5 rounded-md text-xs font-medium transition-all duration-150 border-none cursor-pointer",
+        active
+          ? "bg-primary text-white font-bold shadow-[0_2px_8px_#00AAFF44]"
+          : "bg-transparent text-muted-foreground hover:text-foreground",
+        "disabled:cursor-not-allowed disabled:opacity-50"
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
@@ -37,12 +43,15 @@ export function Btn({ onClick, children, active, style = {}, disabled = false }:
 export function KPI({ label, value, sub, color = "#00AAFF", trend }: KPIProps) {
   const up = trend && (trend.startsWith("+") || trend.startsWith("↑"));
   return (
-    <div style={{ background: "#1e2130", borderRadius: 12, padding: "14px 16px", border: "1px solid #2d3348", borderTop: `3px solid ${color}`, overflow: "hidden", position: "relative" }}>
-      <div style={{ position: "absolute", top: 0, right: 0, width: 60, height: 60, borderRadius: "0 0 0 60px", background: color + "08", pointerEvents: "none" }} />
-      <p style={{ margin: "0 0 5px", fontSize: 10, color: "#475569", textTransform: "uppercase", letterSpacing: "0.8px", fontWeight: 600 }}>{label}</p>
-      <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color, letterSpacing: "-0.5px" }}>{value}</p>
-      <p style={{ margin: "0 0 2px", fontSize: 11, color: "#64748b" }}>{sub}</p>
-      {trend && <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: up ? "#10B981" : "#EF4444" }}>{trend}</p>}
+    <div
+      className="bg-muted rounded-xl p-4 border border-border overflow-hidden relative"
+      style={{ borderTopColor: color, borderTopWidth: 3 }}
+    >
+      <div className="absolute top-0 right-0 w-16 h-16 rounded-[0_0_0_60px] pointer-events-none" style={{ background: color + "08" }} />
+      <p className="text-[10px] uppercase tracking-[0.8px] font-semibold text-muted-foreground mb-1.5">{label}</p>
+      <p className="text-[22px] font-extrabold mb-0.5 tracking-[-0.5px]" style={{ color }}>{value}</p>
+      <p className="text-[11px] text-muted-foreground mb-0.5">{sub}</p>
+      {trend && <p className={cn("text-[11px] font-semibold", up ? "text-emerald-400" : "text-destructive")}>{trend}</p>}
     </div>
   );
 }
@@ -52,8 +61,8 @@ export function KPI({ label, value, sub, color = "#00AAFF", trend }: KPIProps) {
 /** Simple titled container used in DashboardMode. */
 export function Card({ title, children }: CardProps) {
   return (
-    <div style={{ background: "#1e2130", borderRadius: 12, padding: 18, border: "1px solid #2d3348", marginBottom: 18 }}>
-      <h3 style={{ margin: "0 0 14px", fontSize: 12, color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.6px" }}>{title}</h3>
+    <div className="bg-muted rounded-xl p-4 border border-border mb-4">
+      <h3 className="text-[11px] text-muted-foreground font-bold uppercase tracking-[0.6px] mb-3.5">{title}</h3>
       {children}
     </div>
   );
@@ -62,17 +71,23 @@ export function Card({ title, children }: CardProps) {
 /** Extended card with badge pill and subtitle — used in AnalyticsMode panels. */
 export function AnalyticsCard({ title, subtitle, badge, badgeColor = "#00AAFF", children }: AnalyticsCardProps) {
   return (
-    <div style={{ background: "#1e2130", borderRadius: 12, padding: 20, border: "1px solid #2d3348", borderTop: `2px solid ${badgeColor}44` }}>
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+    <div
+      className="bg-muted rounded-xl p-5 border border-border"
+      style={{ borderTopColor: `${badgeColor}44`, borderTopWidth: 2 }}
+    >
+      <div className="mb-3.5">
+        <div className="flex items-center gap-2 mb-1.5">
           {badge && (
-            <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: badgeColor + "22", color: badgeColor, border: `1px solid ${badgeColor}44`, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            <span
+              className="text-[9px] font-bold px-2 py-0.5 rounded uppercase tracking-[0.5px]"
+              style={{ background: badgeColor + "22", color: badgeColor, border: `1px solid ${badgeColor}44` }}
+            >
               {badge}
             </span>
           )}
         </div>
-        <h3 style={{ margin: "0 0 4px", fontSize: 13, color: "#e2e8f0", fontWeight: 700, letterSpacing: "-0.2px" }}>{title}</h3>
-        {subtitle && <p style={{ margin: 0, fontSize: 11, color: "#475569", lineHeight: 1.5 }}>{subtitle}</p>}
+        <h3 className="text-[13px] text-foreground font-bold tracking-[-0.2px] mb-1">{title}</h3>
+        {subtitle && <p className="text-[11px] text-muted-foreground leading-relaxed">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -82,105 +97,40 @@ export function AnalyticsCard({ title, subtitle, badge, badgeColor = "#00AAFF", 
 /** Single stat display used inside AnalyticsMode panel headers. */
 export function Stat({ label, value, color = "#e2e8f0" }: { label: string; value: string; color?: string }) {
   return (
-    <div style={{ textAlign: "center" }}>
-      <p style={{ margin: "0 0 2px", fontSize: 10, color: "#64748b", textTransform: "uppercase", letterSpacing: 0.8 }}>{label}</p>
-      <p style={{ margin: 0, fontSize: 16, fontWeight: 800, color }}>{value}</p>
+    <div className="text-center">
+      <p className="text-[10px] text-muted-foreground uppercase tracking-[0.8px] mb-0.5">{label}</p>
+      <p className="text-base font-extrabold" style={{ color }}>{value}</p>
     </div>
   );
 }
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
 
-/** Renders **bold** spans inline within a line of text. */
-function RenderInline({ text }: { text: string }) {
-  return (
-    <>
-      {text.split(/(\*\*[^*]+\*\*)/).map((p, i) =>
-        p.startsWith("**") && p.endsWith("**")
-          ? <strong key={i} style={{ color: "#e2e8f0" }}>{p.slice(2, -2)}</strong>
-          : <span key={i}>{p}</span>
-      )}
-    </>
-  );
-}
-
 /**
- * Lightweight markdown renderer supporting:
- *   ##/### headers, **bold**, bullet lists (- • *), numbered lists (1.)
+ * Renders markdown text using react-markdown with dark-theme styling.
  * Used by SearchMode to display Claude's research summaries.
  */
 export function MarkdownText({ text }: { text?: string }) {
-  if (!text) return <span style={{ color: "#64748b" }}>No content.</span>;
-  const lines = text.split("\n");
-  const out: ReactNode[] = [];
-  let i = 0;
-
-  while (i < lines.length) {
-    const line = lines[i];
-    if (!line.trim()) { i++; continue; }
-
-    // ## / ### headings
-    if (/^#{2,3}\s/.test(line)) {
-      out.push(<h4 key={i} style={{ margin: "16px 0 8px", color: "#e2e8f0", fontSize: 14, fontWeight: 700 }}>
-        <RenderInline text={line.replace(/^#+\s/, "")} />
-      </h4>);
-      i++; continue;
-    }
-
-    // **Bold-only line** treated as a section heading
-    if (/^\*\*[^*]+\*\*:?$/.test(line.trim())) {
-      out.push(<h4 key={i} style={{ margin: "14px 0 6px", color: "#e2e8f0", fontSize: 13, fontWeight: 700 }}>
-        {line.replace(/\*\*/g, "")}
-      </h4>);
-      i++; continue;
-    }
-
-    // Bullet list — collect consecutive bullet lines into one <ul>
-    if (/^[-•*]\s/.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^[-•*]\s/.test(lines[i]))
-        items.push(lines[i++].replace(/^[-•*]\s/, ""));
-      out.push(<ul key={`ul${i}`} style={{ margin: "6px 0 10px", paddingLeft: 20 }}>
-        {items.map((item, ii) => (
-          <li key={ii} style={{ color: "#cbd5e1", fontSize: 14, lineHeight: 1.7, marginBottom: 3 }}>
-            <RenderInline text={item} />
-          </li>
-        ))}
-      </ul>);
-      continue;
-    }
-
-    // Numbered list — collect consecutive numbered lines into one <ol>
-    if (/^\d+\.\s/.test(line)) {
-      const items: string[] = [];
-      while (i < lines.length && /^\d+\.\s/.test(lines[i]))
-        items.push(lines[i++].replace(/^\d+\.\s/, ""));
-      out.push(<ol key={`ol${i}`} style={{ margin: "6px 0 10px", paddingLeft: 20 }}>
-        {items.map((item, ii) => (
-          <li key={ii} style={{ color: "#cbd5e1", fontSize: 14, lineHeight: 1.7, marginBottom: 3 }}>
-            <RenderInline text={item} />
-          </li>
-        ))}
-      </ol>);
-      continue;
-    }
-
-    // Default: paragraph
-    out.push(<p key={i} style={{ margin: "0 0 10px", fontSize: 14, color: "#cbd5e1", lineHeight: 1.75 }}>
-      <RenderInline text={line} />
-    </p>);
-    i++;
-  }
-  return <div>{out}</div>;
+  if (!text) return <span className="text-muted-foreground">No content.</span>;
+  return (
+    <Markdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        h2: ({ children }) => <h4 className="text-sm font-bold text-foreground mt-4 mb-2">{children}</h4>,
+        h3: ({ children }) => <h4 className="text-sm font-bold text-foreground mt-3.5 mb-1.5">{children}</h4>,
+        p: ({ children }) => <p className="text-sm text-slate-300 leading-[1.75] mb-2.5">{children}</p>,
+        ul: ({ children }) => <ul className="list-disc pl-5 mb-2.5">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal pl-5 mb-2.5">{children}</ol>,
+        li: ({ children }) => <li className="text-sm text-slate-300 leading-[1.7] mb-0.5">{children}</li>,
+        strong: ({ children }) => <strong className="text-foreground font-semibold">{children}</strong>,
+      }}
+    >
+      {text}
+    </Markdown>
+  );
 }
 
 // ── Chart card wrapper ────────────────────────────────────────────────────────
-
-const BTN_STYLE: React.CSSProperties = {
-  background: "transparent", border: "1px solid #2d3348", borderRadius: 5,
-  padding: "2px 7px", fontSize: 10, color: "#475569", cursor: "pointer",
-  transition: "all .15s",
-};
 
 /** Chart title + optional description + DynChart, inside a dark card.
  *  Includes SVG and CSV download buttons in the top-right corner. */
@@ -211,32 +161,34 @@ export function ChartCard({ chart }: { chart: ChartConfig }) {
   const apiLabel: Record<string, string> = { worldbank: "World Bank", imf: "IMF", fred: "FRED" };
 
   return (
-    <div style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 12, padding: 18, marginBottom: 12 }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-            <h3 style={{ margin: 0, fontSize: 13, color: "#e2e8f0", fontWeight: 700 }}>{chart.title}</h3>
+    <div className="bg-muted border border-border rounded-xl p-4 mb-3">
+      <div className="flex items-start gap-2 mb-1">
+        <div className="flex-1">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h3 className="text-[13px] text-foreground font-bold">{chart.title}</h3>
             {src && (
-              <a href={src.url} target="_blank" rel="noopener noreferrer"
+              <a
+                href={src.url}
+                target="_blank"
+                rel="noopener noreferrer"
                 title={`Verified data · ${src.indicatorName} · Retrieved ${new Date(src.retrievedAt).toLocaleDateString()}`}
-                style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: "#10B98115", color: "#10B981", border: "1px solid #10B98133", textDecoration: "none", textTransform: "uppercase", letterSpacing: "0.5px", flexShrink: 0 }}>
+                className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded text-emerald-400 border border-emerald-400/30 bg-emerald-500/10 no-underline uppercase tracking-[0.5px] shrink-0 hover:bg-emerald-500/20 transition-colors"
+              >
                 ✓ {apiLabel[src.api] ?? src.api} · {src.indicator}
               </a>
             )}
           </div>
-          {chart.description && <p style={{ margin: "0 0 8px", fontSize: 12, color: "#475569" }}>{chart.description}</p>}
+          {chart.description && <p className="text-xs text-muted-foreground mb-2">{chart.description}</p>}
         </div>
-        <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-          <button onClick={handleSVG} title="Download chart as SVG" style={BTN_STYLE}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#00AAFF"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#00AAFF66"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#475569"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
+        <div className="flex gap-1 shrink-0">
+          <Button variant="outline" size="sm" onClick={handleSVG} title="Download chart as SVG"
+            className="h-6 px-2 text-[10px] hover:text-primary hover:border-primary/50">
             ↓ SVG
-          </button>
-          <button onClick={handleCSV} title="Download chart data as CSV" style={BTN_STYLE}
-            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#10B981"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#10B98166"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#475569"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#2d3348"; }}>
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleCSV} title="Download chart data as CSV"
+            className="h-6 px-2 text-[10px] hover:text-emerald-400 hover:border-emerald-400/50">
             ↓ CSV
-          </button>
+          </Button>
         </div>
       </div>
       <div ref={containerRef}>
@@ -252,18 +204,23 @@ export function ChartCard({ chart }: { chart: ChartConfig }) {
 export function SourceList({ sources, style }: { sources: AISource[]; style?: React.CSSProperties }) {
   if (!sources.length) return null;
   return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", ...style }}>
-      <span style={{ fontSize: 10, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px" }}>Sources:</span>
+    <div className="flex gap-1.5 flex-wrap items-center" style={style}>
+      <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-[0.5px]">Sources:</span>
       {sources.map((s, i) =>
         s.url ? (
-          <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
-            style={{ fontSize: 11, color: "#00AAFF", background: "#161929", border: "1px solid #2d334870", borderRadius: 5, padding: "2px 8px", textDecoration: "none", transition: "border-color .15s" }}
-            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#00AAFF66"; }}
-            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.borderColor = "#2d334870"; }}>
+          <a
+            key={i}
+            href={s.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] text-primary bg-card border border-border/70 rounded px-2 py-0.5 no-underline hover:border-primary/40 transition-colors"
+          >
             {s.title} ↗
           </a>
         ) : (
-          <span key={i} style={{ fontSize: 11, color: "#475569", background: "#161929", border: "1px solid #2d3348", borderRadius: 5, padding: "2px 8px" }}>{s.title}</span>
+          <span key={i} className="text-[11px] text-muted-foreground bg-card border border-border rounded px-2 py-0.5">
+            {s.title}
+          </span>
         )
       )}
     </div>
@@ -280,7 +237,7 @@ export function SourceList({ sources, style }: { sources: AISource[]; style?: Re
  */
 export function DynChart({ chart }: { chart: ChartConfig }) {
   const { type, data, xKey, series = [] } = chart;
-  if (!data?.length) return <p style={{ color: "#64748b", fontSize: 13 }}>No data.</p>;
+  if (!data?.length) return <p className="text-muted-foreground text-sm">No data.</p>;
   const h = 270;
   const M = { top: 5, right: 20, left: 0, bottom: 5 };
 

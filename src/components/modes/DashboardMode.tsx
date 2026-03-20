@@ -208,8 +208,8 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         </div>
 
         {/* Sub-tab selector */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 18, background: "#1e2130", borderRadius: 10, padding: 4, width: "fit-content" }}>
-          {DASH_TABS.map(t => <Btn key={t} onClick={() => setTab(t)} active={tab === t} style={{ fontSize: 12 }}>{t}</Btn>)}
+        <div className="flex gap-1 mb-4 bg-muted rounded-xl p-1 w-fit">
+          {DASH_TABS.map(t => <Btn key={t} onClick={() => setTab(t)} active={tab === t}>{t}</Btn>)}
         </div>
 
         {/* ── GDP tab ── */}

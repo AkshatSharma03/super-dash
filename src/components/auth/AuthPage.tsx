@@ -10,6 +10,7 @@ import { Input }   from "@/components/ui/input";
 import { Label }   from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface AuthPageProps {
   onAuth: (token: string, user: User) => void;
@@ -47,7 +48,6 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
     if (token) {
       setResetToken(token);
       setView("reset");
-      // Clean the token from the URL without a page reload
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
@@ -95,7 +95,6 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
     try {
       const res = await requestPasswordReset(email);
       setSuccess("If an account with that email exists, a reset link has been sent.");
-      // Dev/no-SMTP mode: server returns the link directly
       if (res.resetUrl) setDevResetUrl(res.resetUrl);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong";
@@ -128,13 +127,9 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
 
   const renderForgotForm = () => (
     <>
-      <div style={{ marginBottom: 22 }}>
-        <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>
-          Reset your password
-        </h2>
-        <p style={{ margin: 0, fontSize: 12, color: "#475569" }}>
-          Enter your email and we'll send a reset link
-        </p>
+      <div className="mb-5">
+        <h2 className="text-xl font-extrabold text-white tracking-[-0.3px] mb-1.5">Reset your password</h2>
+        <p className="text-xs text-muted-foreground">Enter your email and we'll send a reset link</p>
       </div>
 
       <div className="flex flex-col gap-3.5">
@@ -162,13 +157,11 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
       )}
 
       {devResetUrl && (
-        <div style={{ marginTop: 12, padding: "10px 12px", background: "#1a1f2e", border: "1px solid #2d3860", borderRadius: 8 }}>
-          <p style={{ margin: "0 0 6px", fontSize: 11, color: "#64748b", fontWeight: 600 }}>
+        <div className="mt-3 p-3 bg-[#1a1f2e] border border-[#2d3860] rounded-lg">
+          <p className="text-[11px] text-muted-foreground font-semibold mb-1.5">
             DEV MODE — no SMTP configured. Use this link to reset:
           </p>
-          <a href={devResetUrl} style={{ fontSize: 11, color: "#00AAFF", wordBreak: "break-all" }}>
-            {devResetUrl}
-          </a>
+          <a href={devResetUrl} className="text-[11px] text-primary break-all">{devResetUrl}</a>
         </div>
       )}
 
@@ -177,7 +170,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
         {loading ? "Sending…" : "Send reset link →"}
       </Button>
 
-      <p style={{ textAlign: "center", fontSize: 11, color: "#334155", marginTop: 18 }}>
+      <p className="text-center text-[11px] text-border mt-4">
         Remembered it?{" "}
         <Button variant="link" size="sm" onClick={switchToLogin} className="h-auto p-0 text-xs text-primary">
           Back to sign in
@@ -188,13 +181,9 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
 
   const renderResetForm = () => (
     <>
-      <div style={{ marginBottom: 22 }}>
-        <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>
-          Choose a new password
-        </h2>
-        <p style={{ margin: 0, fontSize: 12, color: "#475569" }}>
-          Must be at least 8 characters
-        </p>
+      <div className="mb-5">
+        <h2 className="text-xl font-extrabold text-white tracking-[-0.3px] mb-1.5">Choose a new password</h2>
+        <p className="text-xs text-muted-foreground">Must be at least 8 characters</p>
       </div>
 
       <div className="flex flex-col gap-3.5">
@@ -236,11 +225,11 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
 
   const renderAuthForm = () => (
     <>
-      <div style={{ marginBottom: 22 }}>
-        <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>
+      <div className="mb-5">
+        <h2 className="text-xl font-extrabold text-white tracking-[-0.3px] mb-1.5">
           {view === "login" ? "Welcome back" : "Create your account"}
         </h2>
-        <p style={{ margin: 0, fontSize: 12, color: "#475569" }}>
+        <p className="text-xs text-muted-foreground">
           {view === "login"
             ? "Sign in to access your dashboard and chat history"
             : "Start generating economic charts — it's free"}
@@ -248,10 +237,13 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
       </div>
 
       {/* Tab toggle */}
-      <div style={{ display: "flex", background: "#161929", borderRadius: 9, padding: 3, marginBottom: 22, border: "1px solid #2d3348" }}>
+      <div className="flex bg-card rounded-xl p-[3px] mb-5 border border-border">
         {(["login", "register"] as const).map(t => (
           <button key={t} onClick={() => t === "login" ? switchToLogin() : switchToRegister()}
-            style={{ flex: 1, background: view === t ? "#2a3045" : "transparent", border: "none", borderRadius: 7, padding: "7px 0", fontSize: 12, fontWeight: 600, color: view === t ? "#e2e8f0" : "#475569", cursor: "pointer", transition: "all .15s" }}>
+            className={cn(
+              "flex-1 rounded-lg py-1.5 text-xs font-semibold transition-all border-none cursor-pointer",
+              view === t ? "bg-secondary text-foreground" : "bg-transparent text-muted-foreground"
+            )}>
             {t === "login" ? "Sign in" : "Register"}
           </button>
         ))}
@@ -269,11 +261,11 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
           <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
         </div>
         <div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+          <div className="flex justify-between items-center mb-1.5">
             <Label htmlFor="password">Password</Label>
             {view === "login" && (
               <button onClick={switchToForgot}
-                style={{ background: "none", border: "none", padding: 0, fontSize: 11, color: "#00AAFF", cursor: "pointer", lineHeight: 1 }}>
+                className="bg-transparent border-none p-0 text-[11px] text-primary cursor-pointer leading-none">
                 Forgot password?
               </button>
             )}
@@ -294,7 +286,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
         {loading ? "Please wait…" : view === "login" ? "Sign in →" : "Create account →"}
       </Button>
 
-      <p style={{ textAlign: "center", fontSize: 11, color: "#334155", marginTop: 18 }}>
+      <p className="text-center text-[11px] text-border mt-4">
         {view === "login" ? "Don't have an account? " : "Already have an account? "}
         <Button variant="link" size="sm" onClick={() => view === "login" ? switchToRegister() : switchToLogin()}
           className="h-auto p-0 text-xs text-primary">
@@ -302,59 +294,62 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
         </Button>
       </p>
 
-      <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "18px 0 0" }}>
-        <div style={{ flex: 1, height: 1, background: "#1e2130" }} />
-        <span style={{ fontSize: 11, color: "#334155" }}>or</span>
-        <div style={{ flex: 1, height: 1, background: "#1e2130" }} />
+      <div className="flex items-center gap-2.5 mt-4">
+        <div className="flex-1 h-px bg-muted" />
+        <span className="text-[11px] text-border">or</span>
+        <div className="flex-1 h-px bg-muted" />
       </div>
       <Button variant="outline" onClick={continueAsGuest} disabled={guestLoading} className="mt-3 w-full">
         {guestLoading ? "Starting…" : "Continue without account →"}
       </Button>
-      <p style={{ textAlign: "center", fontSize: 10, color: "#334155", marginTop: 8 }}>No email required · Chat history not saved</p>
+      <p className="text-center text-[10px] text-border mt-2">No email required · Chat history not saved</p>
     </>
   );
 
   return (
-    <div style={{ fontFamily: "Inter,sans-serif", background: "#0f1117", minHeight: "100vh", color: "#e2e8f0" }}>
+    <div className="bg-background min-h-screen text-foreground" style={{ fontFamily: "Inter,sans-serif" }}>
 
       {/* ── Top nav ── */}
-      <div style={{ padding: "12px 32px", borderBottom: "1px solid #1e2130", display: "flex", alignItems: "center", gap: 12, background: "#0a0d14" }}>
-        <div style={{ width: 32, height: 32, borderRadius: 8, background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: "0 0 12px #00AAFF44" }}>📊</div>
-        <span style={{ fontSize: 15, fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>EconChart</span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+      <nav className="px-8 py-3 border-b border-muted flex items-center gap-3 bg-popover">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base shadow-[0_0_12px_#00AAFF44]"
+          style={{ background: "linear-gradient(135deg,#00AAFF,#8B5CF6)" }}>
+          📊
+        </div>
+        <span className="text-[15px] font-extrabold text-white tracking-[-0.3px]">EconChart</span>
+        <div className="ml-auto flex gap-2">
           <Button variant="outline" size="sm" onClick={switchToLogin}>Sign in</Button>
           <Button size="sm" onClick={continueAsGuest} disabled={guestLoading}
             className="bg-gradient-to-r from-[#00AAFF] to-[#0088DD] shadow-[0_2px_10px_#00AAFF44]">
             {guestLoading ? "Starting…" : "Get started free"}
           </Button>
         </div>
-      </div>
+      </nav>
 
       {/* ── Body: hero + form ── */}
-      <div style={{ display: "flex", minHeight: "calc(100vh - 63px)", flexWrap: "wrap" }}>
+      <div className="flex min-h-[calc(100vh-63px)] flex-wrap">
 
         {/* Left: hero */}
-        <div style={{ flex: 1, minWidth: 320, padding: "60px 56px", display: "flex", flexDirection: "column", justifyContent: "center" }}>
-          <div style={{ maxWidth: 540 }}>
-            <div style={{ fontSize: 10, color: "#00AAFF", fontWeight: 700, textTransform: "uppercase", letterSpacing: 2, marginBottom: 20, background: "#00AAFF12", border: "1px solid #00AAFF30", borderRadius: 20, display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 14px" }}>
-              <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00AAFF", display: "inline-block", animation: "pulse 2s ease-in-out infinite" }} />
+        <div className="flex-1 min-w-[320px] px-14 py-[60px] flex flex-col justify-center">
+          <div className="max-w-[540px]">
+            <div className="text-[10px] text-primary font-bold uppercase tracking-[2px] mb-5 bg-primary/10 border border-primary/30 rounded-full inline-flex items-center gap-1.5 px-3.5 py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" style={{ animation: "pulse 2s ease-in-out infinite" }} />
               Economic Intelligence Platform
             </div>
-            <h1 style={{ margin: "0 0 16px", fontSize: 38, fontWeight: 900, lineHeight: 1.15, color: "#fff", letterSpacing: "-0.5px" }}>
+            <h1 className="text-[38px] font-black leading-[1.15] text-white tracking-[-0.5px] mb-4">
               Generate accurate dynamic charts for any economic query
             </h1>
-            <p style={{ margin: "0 0 40px", fontSize: 14, color: "#64748b", lineHeight: 1.8 }}>
+            <p className="text-sm text-muted-foreground leading-[1.8] mb-10">
               Ask questions in plain language. Get interactive, publication-ready charts backed by World Bank, IMF, UN Comtrade, and OECD data — for any country or region in the world.
             </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="flex flex-col gap-3.5">
               {FEATURES.map(([icon, title, desc]) => (
-                <div key={title} style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-                  <div style={{ width: 34, height: 34, borderRadius: 8, background: "#161929", border: "1px solid #2d3348", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>
+                <div key={title} className="flex gap-3.5 items-start">
+                  <div className="w-9 h-9 rounded-lg bg-card border border-border flex items-center justify-center text-[15px] shrink-0">
                     {icon}
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#cbd5e1", marginBottom: 2 }}>{title}</div>
-                    <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.55 }}>{desc}</div>
+                    <div className="text-[13px] font-semibold text-slate-300 mb-0.5">{title}</div>
+                    <div className="text-xs text-muted-foreground leading-[1.55]">{desc}</div>
                   </div>
                 </div>
               ))}
@@ -363,7 +358,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
         </div>
 
         {/* Right: auth form */}
-        <div style={{ width: 420, flexShrink: 0, padding: "60px 44px", borderLeft: "1px solid #1e2130", display: "flex", flexDirection: "column", justifyContent: "center", background: "#0a0d14" }}>
+        <div className="w-[420px] shrink-0 px-11 py-[60px] border-l border-muted flex flex-col justify-center bg-popover">
           {view === "forgot" && renderForgotForm()}
           {view === "reset"  && renderResetForm()}
           {(view === "login" || view === "register") && renderAuthForm()}

@@ -2,7 +2,7 @@
 // SHARED TYPES  —  single source of truth for all interfaces used across modes.
 // Import from here rather than re-declaring locally in component files.
 // ─────────────────────────────────────────────────────────────────────────────
-import type { ReactNode, CSSProperties } from "react";
+import type { ReactNode } from "react";
 
 // ── Chart types ───────────────────────────────────────────────────────────────
 
@@ -142,7 +142,6 @@ export interface BtnProps {
   onClick: () => void;
   children: ReactNode;
   active?: boolean;
-  style?: CSSProperties;
   disabled?: boolean;
 }
 
