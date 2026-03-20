@@ -75,6 +75,14 @@ export function deleteAccount(token: string, password: string) {
   return del<{ ok: boolean }>("/api/auth/account", token, { password });
 }
 
+export function requestPasswordReset(email: string) {
+  return post<{ ok: boolean; resetUrl?: string }>("/api/auth/forgot-password", { email });
+}
+
+export function resetPassword(token: string, newPassword: string) {
+  return post<{ ok: boolean }>("/api/auth/reset-password", { token, newPassword });
+}
+
 // ── Chat sessions ─────────────────────────────────────────────────────────────
 
 export function getSessions(token: string) {
