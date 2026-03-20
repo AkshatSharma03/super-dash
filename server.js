@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import Database from 'better-sqlite3';
@@ -182,6 +182,13 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON chat_sessions(user_id);
+
+  CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    token      TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL,
+    used       INTEGER NOT NULL DEFAULT 0
+  );
 `);
 
 // ── Prepared statements ──────────────────────────────────────────────────────
@@ -203,6 +210,10 @@ const stmt = {
   updatePassword:  db.prepare('UPDATE users SET hashed_password = ? WHERE id = ?'),
   deleteUser:      db.prepare('DELETE FROM users WHERE id = ?'),
   sessionMessages: db.prepare('SELECT messages FROM chat_sessions WHERE user_id = ?'),
+  insertResetToken:        db.prepare('INSERT INTO password_reset_tokens (token, user_id, expires_at, used) VALUES (?, ?, ?, 0)'),
+  getResetToken:           db.prepare('SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0'),
+  markResetTokenUsed:      db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE token = ?'),
+  deleteExpiredResetTokens: db.prepare('DELETE FROM password_reset_tokens WHERE expires_at < ?'),
 };
 
 // ── Validation and utilities ─────────────────────────────────────────────────
@@ -1107,6 +1118,75 @@ app.delete('/api/auth/account', requireAuth, authLimiter, async (req, res) => {
   const match = await bcrypt.compare(String(password), user.hashed_password);
   if (!match) return res.status(401).json({ error: 'Password is incorrect' });
   stmt.deleteUser.run(req.user.id);
+  res.json({ ok: true });
+});
+
+// Forgot password — generates a secure reset token (1-hour TTL).
+// If SMTP_HOST is configured the link is emailed; otherwise it is returned in
+// the response so the feature works in dev / simple deployments without a mail server.
+app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'email is required' });
+  const em = String(email).toLowerCase().trim();
+
+  // Purge stale tokens first
+  stmt.deleteExpiredResetTokens.run(Date.now());
+
+  const user = stmt.userByEmail.get(em);
+  // Always return 200 to avoid leaking whether an email is registered
+  if (!user) return res.json({ ok: true });
+
+  const token    = randomBytes(32).toString('hex');
+  const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
+  stmt.insertResetToken.run(token, user.id, expiresAt);
+
+  const APP_URL  = process.env.APP_URL || `http://localhost:${PORT}`;
+  const resetUrl = `${APP_URL}/?reset=${token}`;
+
+  // If SMTP is configured, send the email; otherwise return the link directly.
+  const smtpHost = process.env.SMTP_HOST;
+  if (smtpHost) {
+    try {
+      const nodemailer = await import('nodemailer');
+      const transporter = nodemailer.default.createTransport({
+        host:   smtpHost,
+        port:   Number(process.env.SMTP_PORT  || 587),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      });
+      await transporter.sendMail({
+        from:    process.env.SMTP_FROM || `"EconChart" <noreply@${smtpHost}>`,
+        to:      em,
+        subject: 'Reset your EconChart password',
+        text:    `Click the link below to reset your password (valid for 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
+        html:    `<p>Click the link below to reset your password (valid for 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
+      });
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error('Failed to send reset email:', err);
+      return res.status(500).json({ error: 'Failed to send reset email' });
+    }
+  }
+
+  // No SMTP configured — return the link so the feature works without a mail server
+  res.json({ ok: true, resetUrl });
+});
+
+// Reset password — validates the token and sets the new password.
+app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword)
+    return res.status(400).json({ error: 'token and newPassword are required' });
+  if (String(newPassword).length < 8)
+    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+  const row = stmt.getResetToken.get(String(token));
+  if (!row)           return res.status(400).json({ error: 'Invalid or already-used reset link' });
+  if (row.expires_at < Date.now()) return res.status(400).json({ error: 'Reset link has expired. Please request a new one.' });
+
+  const hashed = await bcrypt.hash(String(newPassword), BCRYPT_ROUNDS);
+  stmt.updatePassword.run(hashed, row.user_id);
+  stmt.markResetTokenUsed.run(String(token));
   res.json({ ok: true });
 });
 
