@@ -993,17 +993,29 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
     }
   }
 
+  // Only offer fetch_fred if the API key is configured — prevents Claude from
+  // trying and failing, which previously caused it to fall back to generated data.
+  const availableTools = process.env.FRED_API_KEY
+    ? DATA_TOOLS
+    : DATA_TOOLS.filter(t => t.name !== 'fetch_fred');
+
   // ── Agentic loop: Claude calls real data APIs, then returns verified JSON ──
   const MAX_DATA_TURNS = 6;
   let loopMessages = [...messages];
   let finalText = '';
+
+  // Track every indicator/series that returned ≥1 real data row.
+  // Charts referencing an indicator not in this set are stripped before
+  // returning to the client — this enforces the "no estimates" rule even
+  // when Claude ignores system-prompt instructions on tool failure.
+  const verifiedIndicators = new Set();
 
   try {
     for (let turn = 0; turn < MAX_DATA_TURNS; turn++) {
       const data = await callAnthropic({
         model: MODEL, max_tokens: 4000,
         system: VERIFIED_CHAT_SYSTEM,
-        tools: DATA_TOOLS,
+        tools: availableTools,
         messages: loopMessages,
       });
 
@@ -1021,7 +1033,13 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
         let resultContent;
         try {
           resultContent = await executeDataTool(tu.name, tu.input);
-          if (IS_DEV) console.log(`[data tool] ${tu.name}`, tu.input);
+          const parsed = JSON.parse(resultContent);
+          if (Array.isArray(parsed.rows) && parsed.rows.length > 0) {
+            // Record which indicator actually returned real data
+            const key = tu.input.indicator ?? tu.input.series_id ?? tu.name;
+            verifiedIndicators.add(key);
+          }
+          if (IS_DEV) console.log(`[data tool] ${tu.name}`, tu.input, `→ ${JSON.parse(resultContent).rows?.length ?? 0} rows`);
         } catch (err) {
           console.error(`[data tool error] ${tu.name}:`, err.message);
           resultContent = JSON.stringify({ error: err.message, rows: [] });
@@ -1042,6 +1060,36 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       parsed = validateAIResponse(raw) ?? { insight: finalText, charts: [], sources: [], followUps: [] };
     } catch {
       parsed = { insight: finalText, charts: [], sources: [], followUps: [] };
+    }
+
+    // ── Server-side enforcement: remove any chart not backed by a real fetch ──
+    // A chart is kept only if its _source.indicator matches a key in
+    // verifiedIndicators. Charts without _source are always removed (Claude
+    // generated the data itself without calling a tool).
+    if (verifiedIndicators.size > 0 && Array.isArray(parsed.charts)) {
+      const before = parsed.charts.length;
+      parsed.charts = parsed.charts.filter(chart => {
+        if (!chart._source?.indicator) return false;
+        const ind = chart._source.indicator;
+        return [...verifiedIndicators].some(k => ind === k || ind.includes(k) || k.includes(ind));
+      });
+      const removed = before - parsed.charts.length;
+      if (removed > 0) {
+        console.warn(`[verified-data] stripped ${removed} chart(s) with no matching real tool result`);
+        if (parsed.charts.length === 0) {
+          parsed.insight = (parsed.insight ? parsed.insight + ' ' : '') +
+            '⚠ Some charts could not be shown because the underlying data could not be fetched from the official API — no estimated values are displayed.';
+        }
+      }
+    } else if (verifiedIndicators.size === 0) {
+      // No tool calls returned real data at all — remove all charts
+      if ((parsed.charts ?? []).length > 0) {
+        console.warn('[verified-data] no real data fetched — stripping all charts');
+        parsed.charts = [];
+        parsed.insight = (parsed.insight ? parsed.insight + ' ' : '') +
+          '⚠ Charts are not shown because no data could be fetched from the official APIs (World Bank, IMF). ' +
+          'Check that the APIs are reachable, or add a FRED_API_KEY environment variable for US data.';
+      }
     }
 
     // Merge news source URLs (qualitative context citations)
