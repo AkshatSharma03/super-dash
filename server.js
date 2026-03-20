@@ -1075,7 +1075,13 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
 
     let parsed;
     try {
-      const raw = JSON.parse(finalText.replace(/```json|```/g, '').trim());
+      // Strip markdown fences then find the outermost {...} block so that any
+      // leading/trailing prose from Claude doesn't break JSON.parse.
+      const stripped = finalText.replace(/```json|```/g, '');
+      const start = stripped.indexOf('{');
+      const end   = stripped.lastIndexOf('}');
+      const jsonStr = start !== -1 && end > start ? stripped.slice(start, end + 1) : stripped.trim();
+      const raw = JSON.parse(jsonStr);
       parsed = validateAIResponse(raw) ?? { insight: finalText, charts: [], sources: [], followUps: [] };
     } catch {
       parsed = { insight: finalText, charts: [], sources: [], followUps: [] };
