@@ -86,7 +86,7 @@ export default function SettingsPanel({ user, token, onClose, onLogout }: Props)
 
         {/* Header */}
         <SheetHeader className="px-5 py-3.5 border-b border-border bg-[#080b10] flex-row items-center gap-2.5 space-y-0">
-          <div style={{ width: 28, height: 28, borderRadius: 8, background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>⚙</div>
+          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[13px]" style={{ background: "linear-gradient(135deg,#00AAFF,#8B5CF6)" }}>⚙</div>
           <SheetTitle className="text-sm font-bold flex-1">Account Settings</SheetTitle>
         </SheetHeader>
 
@@ -94,18 +94,19 @@ export default function SettingsPanel({ user, token, onClose, onLogout }: Props)
 
           {/* Profile + Usage */}
           <Section title="Profile">
-            <div style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: 16, marginBottom: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: memberSince ? 10 : 0 }}>
-                <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, color: "#fff", flexShrink: 0, boxShadow: "0 0 14px #00AAFF33" }}>
+            <div className="bg-[#161929] border border-[#2d3348] rounded-[10px] p-4 mb-3">
+              <div className={`flex items-center gap-3 ${memberSince ? "mb-2.5" : ""}`}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-[17px] font-bold text-white shrink-0 shadow-[0_0_14px_#00AAFF33]"
+                  style={{ background: "linear-gradient(135deg,#00AAFF,#8B5CF6)" }}>
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#e2e8f0" }}>{user.name}</div>
-                  <div style={{ fontSize: 12, color: "#475569" }}>{user.email}</div>
+                  <div className="text-[13px] font-bold text-slate-100">{user.name}</div>
+                  <div className="text-xs text-slate-600">{user.email}</div>
                 </div>
               </div>
               {memberSince && (
-                <div style={{ fontSize: 11, color: "#3d4460", paddingTop: 10, borderTop: "1px solid #1e2130" }}>Member since {memberSince}</div>
+                <div className="text-[11px] text-[#3d4460] pt-2.5 border-t border-[#1e2130]">Member since {memberSince}</div>
               )}
             </div>
             {usageError ? (
@@ -115,10 +116,10 @@ export default function SettingsPanel({ user, token, onClose, onLogout }: Props)
             ) : (
               <div className="grid grid-cols-2 gap-2.5">
                 {[["💬", "Conversations", usage.sessionCount.toString()], ["✉️", "Messages sent", usage.messageCount.toString()]].map(([icon, label, value]) => (
-                  <div key={label} style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 8, padding: "12px 14px" }}>
-                    <div style={{ fontSize: 18, marginBottom: 4 }}>{icon}</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: "#e2e8f0" }}>{value}</div>
-                    <div style={{ fontSize: 11, color: "#64748b" }}>{label}</div>
+                  <div key={label} className="bg-[#1e2130] border border-[#2d3348] rounded-lg px-3.5 py-3">
+                    <div className="text-lg mb-1">{icon}</div>
+                    <div className="text-xl font-extrabold text-slate-100">{value}</div>
+                    <div className="text-[11px] text-slate-500">{label}</div>
                   </div>
                 ))}
               </div>
@@ -153,7 +154,7 @@ export default function SettingsPanel({ user, token, onClose, onLogout }: Props)
 
           {/* Danger zone */}
           <Section title="Danger Zone">
-            <div style={{ border: "1px solid #EF444433", borderRadius: 10, padding: 16, background: "#EF444408" }}>
+            <div className="border border-[#EF444433] rounded-[10px] p-4 bg-[#EF444408]">
               <p className="text-sm text-muted-foreground mb-3 leading-relaxed">
                 Permanently delete your account and all saved chat history. This cannot be undone.
               </p>
