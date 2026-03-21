@@ -50,7 +50,7 @@ export const SearchSchema = z.object({
 
 export const AnalyzeCsvSchema = z.object({
   headers: z.array(z.string().max(100)).min(1).max(MAX_CSV_COLS),
-  rows:    z.array(z.array(z.unknown())).max(MAX_CSV_ROWS),
+  rows:    z.array(z.record(z.string(), z.unknown())).max(MAX_CSV_ROWS),
   context: z.string().max(MAX_CONTEXT_CHARS).optional(),
 });
 

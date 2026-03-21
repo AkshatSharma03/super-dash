@@ -75,6 +75,10 @@ export function deleteAccount(token: string, password: string) {
   return del<{ ok: boolean }>("/api/auth/account", token, { password });
 }
 
+export function logoutApi(token: string) {
+  return post<{ ok: boolean }>("/api/auth/logout", {}, token);
+}
+
 export function requestPasswordReset(email: string) {
   return post<{ ok: boolean; resetUrl?: string }>("/api/auth/forgot-password", { email });
 }
