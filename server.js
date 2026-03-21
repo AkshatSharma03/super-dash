@@ -765,6 +765,105 @@ async function callAnthropic(body, extraHeaders = {}) {
   return res.json();
 }
 
+// ── SSE + streaming helpers ────────────────────────────────────────────────────
+
+/** Write a named SSE event with JSON payload. */
+function sseWrite(res, event, data) {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+/** Call Anthropic with stream:true; returns the raw fetch Response. */
+async function callAnthropicStream(body) {
+  const res = await fetch(ANTHROPIC_BASE, {
+    method: 'POST',
+    headers: {
+      'Content-Type':      'application/json',
+      'x-api-key':         ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({ ...body, stream: true }),
+    signal: AbortSignal.timeout(ANTHROPIC_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`);
+  return res;
+}
+
+/**
+ * Stream one Anthropic turn, calling onTextDelta(delta) for each text token.
+ * Returns { text, toolUses, content, stopReason } after the turn completes.
+ */
+async function streamAnthropicTurn(body, onTextDelta) {
+  const streamRes = await callAnthropicStream(body);
+  const reader = streamRes.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let text = '';
+  const toolUses = [];
+  let currentTU = null;
+  let currentInput = '';
+  let stopReason = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6);
+        if (raw === '[DONE]') continue;
+        let event;
+        try { event = JSON.parse(raw); } catch { continue; }
+        if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+          currentTU = { type: 'tool_use', id: event.content_block.id, name: event.content_block.name, input: {} };
+          currentInput = '';
+        } else if (event.type === 'content_block_delta') {
+          if (event.delta?.type === 'text_delta') {
+            text += event.delta.text;
+            onTextDelta?.(event.delta.text);
+          } else if (event.delta?.type === 'input_json_delta' && currentTU) {
+            currentInput += event.delta.partial_json;
+          }
+        } else if (event.type === 'content_block_stop') {
+          if (currentTU) {
+            try { currentTU.input = JSON.parse(currentInput); } catch { currentTU.input = {}; }
+            toolUses.push(currentTU);
+            currentTU = null;
+            currentInput = '';
+          }
+        } else if (event.type === 'message_delta') {
+          if (event.delta?.stop_reason) stopReason = event.delta.stop_reason;
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const content = [];
+  if (text) content.push({ type: 'text', text });
+  content.push(...toolUses);
+  return { text, toolUses, content, stopReason };
+}
+
+/** Human-readable status line shown to the user during a tool call. */
+function toolStatusText(name, input) {
+  if (name === 'fetch_world_bank') {
+    const ind = input.indicator ?? '';
+    const cc  = Array.isArray(input.countries) ? input.countries.join(', ') : (input.country ?? '');
+    return `Fetching World Bank data (${ind}${cc ? ' · ' + cc : ''})…`;
+  }
+  if (name === 'fetch_imf') {
+    const ind = input.indicator ?? input.series ?? '';
+    const cc  = Array.isArray(input.countries) ? input.countries.join(', ') : '';
+    return `Fetching IMF data (${ind}${cc ? ' · ' + cc : ''})…`;
+  }
+  if (name === 'fetch_fred') return `Fetching FRED data (${input.series_id ?? ''})…`;
+  return 'Fetching economic data…';
+}
+
 // ── Generic system prompts (no hardcoded country) ──────────────────────────────
 
 // ── Real data fetchers — World Bank, IMF DataMapper, FRED ────────────────────
@@ -923,12 +1022,23 @@ OTHER: BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), 
 /** Build the system prompt dynamically so it reflects which tools are actually available. */
 function buildVerifiedChatSystem() {
   const fredAvailable = !!process.env.FRED_API_KEY;
-  return `You are an economic data analyst. You ONLY show charts built from real data returned by tool calls.
+  return `You are EconChart, an AI assistant specialising in economic data and financial analysis.
 
-STRICT RULES — NO EXCEPTIONS:
+── SCOPE GUARD ──────────────────────────────────────────────────────────────
+You ONLY respond to:
+1. Greetings and basic courtesies (hello, thanks, etc.) — reply warmly in 1–2 sentences; no data fetching; no CHARTS_DATA section.
+2. Economics, finance, trade, markets, GDP, inflation, employment, monetary/fiscal policy, central banks, economic indicators, international trade, development, poverty, currency, economic history, and related topics.
+3. Requests to analyse, compare, or chart economic/financial data.
+
+For ANY off-topic question (sports, entertainment, animals, personal advice, cooking, general science trivia, etc.) respond with EXACTLY this message and nothing else:
+"I'm EconChart — I specialise in economic data and analysis. I'm not able to help with that topic, but feel free to ask about GDP, inflation, trade flows, monetary policy, or any economic indicator!"
+(No CHARTS_DATA for off-topic or greeting responses.)
+─────────────────────────────────────────────────────────────────────────────
+
+STRICT DATA RULES — NO EXCEPTIONS:
 1. Call fetch_world_bank and/or fetch_imf${fredAvailable ? ' and/or fetch_fred' : ''} BEFORE creating any chart.
 2. NEVER generate, estimate, or recall any numerical values. Every number must come from a tool result.
-3. If a tool returns empty rows or an error, omit that chart and note it in the insight.
+3. If a tool returns empty rows or an error, omit that chart and note it in the analysis.
 4. Copy values exactly from tool results into chart data. Do not round, interpolate, or fill gaps.
 
 ${fredAvailable ? '' : `IMPORTANT: FRED is not configured. For US data use fetch_world_bank with these indicators:
@@ -941,41 +1051,26 @@ ${fredAvailable ? '' : `IMPORTANT: FRED is not configured. For US data use fetch
 - US tariff rate on manufactures: TM.TAX.MANF.SM.AR.ZS
 Fetch multiple indicators in separate tool calls and combine them into multi-series charts.
 
-`}WORKFLOW:
-- Identify which indicators and countries are needed for the question
-- Fire all required tool calls (can be parallel)
-- Map the returned rows directly into chart data arrays
-- Write insight citing specific figures with years from the tool results
+`}WORKFLOW for economics questions:
+- Identify which indicators and countries are needed.
+- Fire all required tool calls (can be parallel).
+- Map the returned rows directly into chart data arrays.
+- Write your analysis citing specific figures with years from the tool results.
 
-Respond with this exact JSON (no markdown wrapper):
-{
-  "insight": "2-3 sentences citing specific verified figures with years and source names",
-  "charts": [
-    {
-      "id": "unique_id",
-      "title": "Descriptive chart title",
-      "type": "line|bar|area|pie|composed|radar",
-      "description": "Source: World Bank · NV.IND.MANF.CD",
-      "data": [],
-      "xKey": "year",
-      "series": [{"key":"fieldname","name":"Display Name","color":"#hex"}],
-      "_source": {
-        "api": "worldbank|imf|fred",
-        "indicator": "indicator_code",
-        "indicatorName": "Human readable indicator name",
-        "countries": ["US"],
-        "retrievedAt": "ISO 8601 timestamp",
-        "url": "direct dataset URL"
-      }
-    }
-  ],
-  "sources": [{"title": "World Bank · NV.IND.MANF.CD · Manufacturing value added", "url": "https://data.worldbank.org/indicator/NV.IND.MANF.CD"}],
-  "followUps": ["Question 1", "Question 2", "Question 3"]
-}
+RESPONSE FORMAT for economics questions (streaming-friendly — two parts):
+Part 1 — Write your 2–3 sentence plain-text analysis directly. No JSON, no markdown.
+Part 2 — On a new line write the exact marker CHARTS_DATA: followed immediately by the JSON object.
 
-For composed charts (two metrics): use "chartType":"bar" and "chartType":"line" in series, add "rightAxis":true to the line series.
-For pie charts: each data item needs "name" and "value" keys.
-Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4`;
+Example:
+China's GDP grew by 4.6 % in 2023 per World Bank data, down from the 8 %+ rates seen in the early 2010s. The slowdown reflects a structural shift from manufacturing toward services and domestic consumption.
+CHARTS_DATA:{"charts":[{"id":"cn_gdp","title":"China GDP Growth (%)","type":"line","description":"Source: World Bank · NY.GDP.MKTP.KD.ZG","data":[],"xKey":"year","series":[{"key":"value","name":"GDP Growth %","color":"#00AAFF"}],"_source":{"api":"worldbank","indicator":"NY.GDP.MKTP.KD.ZG","countries":["CN"],"retrievedAt":"2024-01-01T00:00:00Z","url":"https://data.worldbank.org/indicator/NY.GDP.MKTP.KD.ZG"}}],"sources":[{"title":"World Bank · NY.GDP.MKTP.KD.ZG","url":"https://data.worldbank.org/indicator/NY.GDP.MKTP.KD.ZG"}],"followUps":["Compare China and India GDP","Show China per capita GDP","What drove China's slowdown?"]}
+
+Chart schema:
+- type: "line"|"bar"|"area"|"pie"|"composed"|"radar"
+- _source is required on every chart with api, indicator, countries, retrievedAt, url.
+- For composed charts: use "chartType":"bar"/"line" in series; add "rightAxis":true to the line series.
+- For pie charts: each data item needs "name" and "value" keys.
+- Colors: #00AAFF, #F59E0B, #10B981, #EF4444, #8B5CF6, #F97316, #06B6D4`;
 }
 
 
@@ -1004,6 +1099,9 @@ const CSV_SYSTEM = `You are an expert data analyst and visualization specialist.
 
 // ── API Routes ───────────────────────────────────────────────────────────────
 
+// Marker Claude writes to separate plain-text insight from the JSON chart blob.
+const CHARTS_MARKER = 'CHARTS_DATA:';
+
 app.post('/api/chat', apiLimiter, async (req, res) => {
   const body = validate(ChatSchema, req.body, res);
   if (!body) return;
@@ -1011,11 +1109,24 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
 
   messages = messages.slice(-MAX_HISTORY);
 
+  // ── Set SSE headers ──────────────────────────────────────────────────────────
+  res.setHeader('Content-Type',  'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection',    'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // disable nginx/Railway response buffering
+  res.flushHeaders();
+
+  // Cache check — single-turn requests only
   const isSingleTurn = messages.length === 1;
   const ck = isSingleTurn ? cacheKey('/chat', messages) : null;
   if (ck) {
     const cached = apiCache.get(ck);
-    if (cached) { if (IS_DEV) console.log('[cache hit] /api/chat'); return res.json(cached); }
+    if (cached) {
+      if (IS_DEV) console.log('[cache hit] /api/chat');
+      sseWrite(res, 'done', { result: cached });
+      res.end();
+      return;
+    }
   }
 
   // Inject recent news as qualitative context only (not for generating chart data)
@@ -1033,53 +1144,74 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
     }
   }
 
-  // Only offer fetch_fred if the API key is configured — prevents Claude from
-  // trying and failing, which previously caused it to fall back to generated data.
   const availableTools = process.env.FRED_API_KEY
     ? DATA_TOOLS
     : DATA_TOOLS.filter(t => t.name !== 'fetch_fred');
 
-  // ── Agentic loop: Claude calls real data APIs, then returns verified JSON ──
+  // ── Agentic streaming loop ───────────────────────────────────────────────────
   const MAX_DATA_TURNS = 6;
   let loopMessages = [...messages];
   let finalText = '';
-
-  // Track every indicator/series that returned ≥1 real data row.
-  // Charts referencing an indicator not in this set are stripped before
-  // returning to the client — this enforces the "no estimates" rule even
-  // when Claude ignores system-prompt instructions on tool failure.
   const verifiedIndicators = new Set();
 
   try {
     for (let turn = 0; turn < MAX_DATA_TURNS; turn++) {
-      const data = await callAnthropic({
-        model: MODEL, max_tokens: 4000,
-        system: buildVerifiedChatSystem(),
-        tools: availableTools,
-        messages: loopMessages,
-      });
+      // Per-turn streaming state: forward insight text tokens to client,
+      // stopping when the CHARTS_DATA: marker is encountered.
+      let turnText   = '';
+      let forwarded  = 0;   // chars of turnText already sent as 'text' events
+      let markerPos  = -1;  // index of CHARTS_DATA: in turnText, or -1
 
-      const toolUses = (data.content || []).filter(b => b.type === 'tool_use');
+      const onDelta = (delta) => {
+        turnText += delta;
+        if (markerPos !== -1) return; // past the marker — buffer silently
 
-      // No tool calls → Claude produced the final JSON answer
-      if (toolUses.length === 0 || data.stop_reason === 'end_turn') {
-        finalText = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('');
+        const mi = turnText.indexOf(CHARTS_MARKER);
+        if (mi !== -1) {
+          markerPos = mi;
+          // Forward all insight text before the marker
+          if (mi > forwarded) sseWrite(res, 'text', { delta: turnText.slice(forwarded, mi) });
+          forwarded = mi;
+        } else {
+          // Forward chars that can't be part of a split marker (keep a small look-behind buffer)
+          const safeEnd = Math.max(forwarded, turnText.length - CHARTS_MARKER.length);
+          if (safeEnd > forwarded) {
+            sseWrite(res, 'text', { delta: turnText.slice(forwarded, safeEnd) });
+            forwarded = safeEnd;
+          }
+        }
+      };
+
+      const { toolUses, content, stopReason } = await streamAnthropicTurn(
+        { model: MODEL, max_tokens: 4000, system: buildVerifiedChatSystem(), tools: availableTools, messages: loopMessages },
+        onDelta,
+      );
+
+      if (toolUses.length === 0 || stopReason === 'end_turn') {
+        // Final turn — flush any insight text not yet forwarded
+        const mi = markerPos !== -1 ? markerPos : turnText.indexOf(CHARTS_MARKER);
+        if (mi !== -1) {
+          if (mi > forwarded) sseWrite(res, 'text', { delta: turnText.slice(forwarded, mi) });
+        } else if (forwarded < turnText.length) {
+          sseWrite(res, 'text', { delta: turnText.slice(forwarded) });
+        }
+        finalText = turnText;
         break;
       }
 
-      // Execute each tool call against the real APIs
+      // Tool call turn — execute tools and report status to the client
       const toolResults = [];
       for (const tu of toolUses) {
+        sseWrite(res, 'status', { text: toolStatusText(tu.name, tu.input) });
         let resultContent;
         try {
           resultContent = await executeDataTool(tu.name, tu.input);
-          const parsed = JSON.parse(resultContent);
-          if (Array.isArray(parsed.rows) && parsed.rows.length > 0) {
-            // Record which indicator actually returned real data
+          const toolData = JSON.parse(resultContent);
+          if (Array.isArray(toolData.rows) && toolData.rows.length > 0) {
             const key = tu.input.indicator ?? tu.input.series_id ?? tu.name;
             verifiedIndicators.add(key);
           }
-          if (IS_DEV) console.log(`[data tool] ${tu.name}`, tu.input, `→ ${JSON.parse(resultContent).rows?.length ?? 0} rows`);
+          if (IS_DEV) console.log(`[data tool] ${tu.name}`, tu.input, `→ ${toolData.rows?.length ?? 0} rows`);
         } catch (err) {
           console.error(`[data tool error] ${tu.name}:`, err.message);
           resultContent = JSON.stringify({ error: err.message, rows: [] });
@@ -1089,29 +1221,38 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
 
       loopMessages = [
         ...loopMessages,
-        { role: 'assistant', content: data.content },
+        { role: 'assistant', content },
         { role: 'user',      content: toolResults },
       ];
     }
 
+    // ── Parse the two-part response ──────────────────────────────────────────
     let parsed;
     try {
-      // Strip markdown fences then find the outermost {...} block so that any
-      // leading/trailing prose from Claude doesn't break JSON.parse.
-      const stripped = finalText.replace(/```json|```/g, '');
-      const start = stripped.indexOf('{');
-      const end   = stripped.lastIndexOf('}');
-      const jsonStr = start !== -1 && end > start ? stripped.slice(start, end + 1) : stripped.trim();
-      const raw = JSON.parse(jsonStr);
-      parsed = validateAIResponse(raw) ?? { insight: finalText, charts: [], sources: [], followUps: [] };
+      const mi = finalText.indexOf(CHARTS_MARKER);
+      const insightText = (mi !== -1 ? finalText.slice(0, mi) : finalText).trim();
+      const chartsRaw   = mi !== -1 ? finalText.slice(mi + CHARTS_MARKER.length).trim() : '';
+
+      let chartsData = {};
+      if (chartsRaw) {
+        try {
+          const clean = chartsRaw.replace(/```json|```/g, '');
+          const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
+          chartsData = JSON.parse(s !== -1 && e > s ? clean.slice(s, e + 1) : clean);
+        } catch { /* leave chartsData empty */ }
+      }
+
+      parsed = validateAIResponse({
+        insight:   insightText,
+        charts:    chartsData.charts    ?? [],
+        sources:   chartsData.sources   ?? [],
+        followUps: chartsData.followUps ?? [],
+      }) ?? { insight: insightText, charts: [], sources: [], followUps: [] };
     } catch {
       parsed = { insight: finalText, charts: [], sources: [], followUps: [] };
     }
 
-    // ── Server-side enforcement: remove any chart not backed by a real fetch ──
-    // A chart is kept only if its _source.indicator matches a key in
-    // verifiedIndicators. Charts without _source are always removed (Claude
-    // generated the data itself without calling a tool).
+    // ── Strip charts not backed by a real tool result ────────────────────────
     if (verifiedIndicators.size > 0 && Array.isArray(parsed.charts)) {
       const before = parsed.charts.length;
       parsed.charts = parsed.charts.filter(chart => {
@@ -1123,22 +1264,16 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       if (removed > 0) {
         console.warn(`[verified-data] stripped ${removed} chart(s) with no matching real tool result`);
         if (parsed.charts.length === 0) {
-          parsed.insight = (parsed.insight ? parsed.insight + ' ' : '') +
-            '⚠ Some charts could not be shown because the underlying data could not be fetched from the official API — no estimated values are displayed.';
+          parsed.insight += ' ⚠ Some charts could not be shown because the underlying data could not be fetched from the official API — no estimated values are displayed.';
         }
       }
-    } else if (verifiedIndicators.size === 0) {
-      // No tool calls returned real data at all — remove all charts
-      if ((parsed.charts ?? []).length > 0) {
-        console.warn('[verified-data] no real data fetched — stripping all charts');
-        parsed.charts = [];
-        parsed.insight = (parsed.insight ? parsed.insight + ' ' : '') +
-          '⚠ Charts are not shown because no data could be fetched from the official APIs (World Bank, IMF). ' +
-          'Check that the APIs are reachable, or add a FRED_API_KEY environment variable for US data.';
-      }
+    } else if (verifiedIndicators.size === 0 && (parsed.charts ?? []).length > 0) {
+      console.warn('[verified-data] no real data fetched — stripping all charts');
+      parsed.charts = [];
+      parsed.insight += ' ⚠ Charts are not shown because no data could be fetched from the official APIs (World Bank, IMF). Check that the APIs are reachable, or add a FRED_API_KEY environment variable for US data.';
     }
 
-    // Merge news source URLs (qualitative context citations)
+    // Merge news source citations
     const existingUrls = new Set((parsed.sources || []).map(s => s.url).filter(Boolean));
     for (const ns of fetchedNewsSources) {
       if (ns.url && !existingUrls.has(ns.url)) {
@@ -1149,14 +1284,17 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
 
     if (ck) apiCache.put(ck, parsed, TTL_CHAT_MS);
     track(req.user?.id || 'guest', 'chat_sent', {
-      message_count: messages.length,
-      charts_returned: parsed.charts?.length ?? 0,
+      message_count:    messages.length,
+      charts_returned:  parsed.charts?.length ?? 0,
       has_news_context: fetchedNewsSources.length > 0,
     });
-    res.json(parsed);
+
+    sseWrite(res, 'done', { result: parsed });
+    res.end();
   } catch (e) {
     console.error('/api/chat error:', e.message);
-    res.status(502).json({ error: e.message });
+    sseWrite(res, 'error', { message: e.message });
+    res.end();
   }
 });
 

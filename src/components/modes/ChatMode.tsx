@@ -5,7 +5,7 @@
 import { useState, useRef, useEffect } from "react";
 import { CHAT_SUGGESTIONS } from "../../data/suggestions";
 import { useMobile } from "../../utils/useMobile";
-import { askClaude, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
+import { askClaudeStream, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
 import type { Message, AIResponse, ChatSession } from "../../types";
 import { ChartCard, SourceList } from "../ui";
 import { buildChatReportHTML, printHTML } from "../../utils/export";
@@ -62,6 +62,47 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
   );
 }
 
+// ── Streaming placeholder shown while a response is in progress ───────────────
+
+function StreamingMessage({ statusText, insightSoFar }: { statusText: string; insightSoFar: string }) {
+  return (
+    <div className="mb-5" style={{ animation: "fadeInUp .25s ease-out" }}>
+      {/* Insight text streaming in */}
+      {insightSoFar && (
+        <div className="bg-[#1a1d2e] border border-border border-l-[3px] border-l-accent rounded-[0_12px_12px_0] p-4 mb-3.5">
+          <div className="flex gap-2 items-center mb-2">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0"
+              style={{ background: "linear-gradient(135deg,#8B5CF6,#6D28D9)" }}>✦</div>
+            <span className="text-[10px] text-accent font-bold uppercase tracking-[0.8px]">Analysis</span>
+          </div>
+          <p className="text-sm text-slate-300 leading-[1.75]">
+            {insightSoFar}
+            <span className="inline-block w-0.5 h-[1em] bg-accent ml-0.5 align-middle"
+              style={{ animation: "typingDot 1s ease-in-out infinite" }} />
+          </p>
+        </div>
+      )}
+
+      {/* Status / loading indicator */}
+      {!insightSoFar && (
+        <div className="bg-[#1a1d2e] border border-accent/20 border-l-[3px] border-l-accent rounded-[0_12px_12px_0] px-4 py-3 inline-flex gap-2.5 items-center mb-4">
+          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0"
+            style={{ background: "linear-gradient(135deg,#8B5CF6,#6D28D9)" }}>✦</div>
+          <span className="text-[13px] text-muted-foreground">
+            {statusText || "Generating charts and analysis"}
+          </span>
+          <div className="flex gap-0.75 items-center">
+            {[0, 1, 2].map(i => (
+              <span key={i} className="w-1.5 h-1.5 rounded-full bg-accent block"
+                style={{ animation: `typingDot 1.2s ease-in-out ${i * 0.22}s infinite` }} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── ChatMode root ─────────────────────────────────────────────────────────────
 
 interface ChatModeProps { token: string; isGuest?: boolean; }
@@ -70,6 +111,8 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
   const [messages,         setMessages]         = useState<Message[]>([]);
   const [input,            setInput]            = useState("");
   const [loading,          setLoading]          = useState(false);
+  const [statusText,       setStatusText]       = useState("");
+  const [streamingInsight, setStreamingInsight] = useState("");
   const [sessions,         setSessions]         = useState<ChatSession[]>([]);
   const [activeSessionId,  setActiveSessionId]  = useState<string | null>(null);
   const [sessionsLoading,  setSessionsLoading]  = useState(true);
@@ -87,7 +130,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
       .finally(() => setSessionsLoading(false));
   }, [token]);
 
-  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingInsight]);
 
   const newChat = () => {
     setMessages([]);
@@ -119,33 +162,52 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
     const nextMessages: Message[] = [...messages, { role: "user", content: q }];
     setMessages(nextMessages);
     setLoading(true);
+    setStatusText("");
+    setStreamingInsight("");
 
     try {
       const history = nextMessages.map(m => ({
         role:    m.role,
         content: m.role === "user" ? m.content as string : JSON.stringify(m.content),
       }));
-      const result = await askClaude(history);
-      const finalMessages: Message[] = [...nextMessages, { role: "assistant", content: result }];
-      setMessages(finalMessages);
 
-      if (!isGuest) {
-        const sessionTitle = q.slice(0, 60) + (q.length > 60 ? "…" : "");
-        if (!activeSessionId) {
-          const session = await createSession(token, sessionTitle);
-          setActiveSessionId(session.id);
-          await updateSession(token, session.id, { messages: finalMessages as unknown[] });
-          setSessions(prev => [{ id: session.id, title: session.title, createdAt: session.createdAt, updatedAt: session.updatedAt }, ...prev]);
-        } else {
-          await updateSession(token, activeSessionId, { messages: finalMessages as unknown[] });
-          setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, updatedAt: new Date().toISOString() } : s));
-        }
-      }
+      let finalMessages: Message[] = nextMessages;
+
+      await askClaudeStream(history, {
+        onStatus: (text) => { setStatusText(text); },
+        onText:   (delta) => { setStreamingInsight(prev => prev + delta); },
+        onDone:   async (result) => {
+          setStreamingInsight("");
+          setStatusText("");
+          finalMessages = [...nextMessages, { role: "assistant", content: result }];
+          setMessages(finalMessages);
+
+          if (!isGuest) {
+            const sessionTitle = q.slice(0, 60) + (q.length > 60 ? "…" : "");
+            if (!activeSessionId) {
+              const session = await createSession(token, sessionTitle);
+              setActiveSessionId(session.id);
+              await updateSession(token, session.id, { messages: finalMessages as unknown[] });
+              setSessions(prev => [{ id: session.id, title: session.title, createdAt: session.createdAt, updatedAt: session.updatedAt }, ...prev]);
+            } else {
+              await updateSession(token, activeSessionId, { messages: finalMessages as unknown[] });
+              setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, updatedAt: new Date().toISOString() } : s));
+            }
+          }
+        },
+        onError: (message) => {
+          setStreamingInsight("");
+          setStatusText("");
+          setMessages(prev => [...prev, { role: "assistant", content: { error: "Error: " + message, charts: [], followUps: [] } }]);
+        },
+      }, token);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setMessages(prev => [...prev, { role: "assistant", content: { error: "Error: " + msg, charts: [], followUps: [] } }]);
     }
     setLoading(false);
+    setStatusText("");
+    setStreamingInsight("");
   };
 
   const exportConversation = () => {
@@ -232,7 +294,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="flex-1 overflow-y-auto pb-2">
 
-          {isEmpty ? (
+          {isEmpty && !loading ? (
             <div className="max-w-[640px] mx-auto pt-5" style={{ animation: "fadeInUp .3s ease-out" }}>
               <div className="text-center mb-7">
                 <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-[26px] mx-auto mb-3.5 shadow-[0_0_24px_#8B5CF644]"
@@ -258,17 +320,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
                 <ChatMessage key={i} msg={m} onFollowUp={q => { setInput(q); inputRef.current?.focus(); }} />
               ))}
               {loading && (
-                <div className="bg-[#1a1d2e] border border-accent/20 border-l-[3px] border-l-accent rounded-[0_12px_12px_0] px-4 py-3 inline-flex gap-2.5 items-center mb-4">
-                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0"
-                    style={{ background: "linear-gradient(135deg,#8B5CF6,#6D28D9)" }}>✦</div>
-                  <span className="text-[13px] text-muted-foreground">Generating charts and analysis</span>
-                  <div className="flex gap-0.75 items-center">
-                    {[0, 1, 2].map(i => (
-                      <span key={i} className="w-1.5 h-1.5 rounded-full bg-accent block"
-                        style={{ animation: `typingDot 1.2s ease-in-out ${i * 0.22}s infinite` }} />
-                    ))}
-                  </div>
-                </div>
+                <StreamingMessage statusText={statusText} insightSoFar={streamingInsight} />
               )}
               <div ref={bottomRef} />
             </div>
