@@ -48,7 +48,7 @@ Every algorithm is written from first principles with **zero ML libraries**.
 
 ### 6 · Z-Score Anomaly Detection (`src/algorithms/anomaly.ts`)
 - Computes rolling mean and standard deviation across **6 economic metrics** simultaneously
-- Flags outliers at |z| > 2 with directional icons and severity colouring (mild / moderate / severe)
+- Flags outliers at |z| > 1.5 with directional icons and severity colouring (moderate / strong / extreme)
 - Handles structural breaks (e.g. 2020 COVID shock) correctly
 
 ### 7 · K-Means++ Clustering (`src/algorithms/kmeans.ts`)
@@ -67,12 +67,12 @@ Every algorithm is written from first principles with **zero ML libraries**.
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                     React 18 + TypeScript                        │
+│                React 18 + TypeScript + Tailwind CSS              │
 │  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌───────────────┐  │
 │  │  Country │  │  Chat /  │  │ Analytics │  │    Export     │  │
 │  │   Data   │  │  Search  │  │ (8 algos) │  │ CSV/JSON/HTML │  │
 │  └──────────┘  └──────────┘  └───────────┘  └───────────────┘  │
-│         shared: ui/, config/styles.ts, utils/useMobile.ts        │
+│     shadcn/ui components · shared/CountrySearchInput · ui/       │
 └───────────────────────────┬──────────────────────────────────────┘
                             │ fetch /api/*
 ┌───────────────────────────▼──────────────────────────────────────┐
@@ -96,9 +96,11 @@ Every algorithm is written from first principles with **zero ML libraries**.
 
 ### Frontend
 - **Strict TypeScript** — `strict: true`, zero `any` escapes
+- **Tailwind CSS + shadcn/ui** — all layout and structural styling uses Tailwind utility classes; shadcn components provide accessible primitives (Button, Input, Alert, Badge, Slider, Sheet, etc.)
+- **`react-markdown` + `remark-gfm`** — renders AI-generated markdown responses (replaces custom parser)
 - **`useMobile()` hook** — viewport-reactive boolean; drives responsive layout changes across all modes
 - **Off-screen SVG extraction** — `ExportMode` renders fixed-size Recharts charts in a hidden container, then serialises them with `XMLSerializer` to embed in downloadable HTML reports
-- **Single style source of truth** — all Recharts constants (`TT`, `GRID`, `AX`, `LEG`, `P`, `C`) in `src/config/styles.ts`
+- **Single chart style source of truth** — all Recharts constants (`TT`, `GRID`, `AX`, `LEG`, `P`, `C`) in `src/config/styles.ts`
 
 ---
 
@@ -120,6 +122,7 @@ src/
 ├── App.tsx                       # Shell: auth gate, header, mode routing
 ├── types/index.ts                # All shared TypeScript interfaces
 ├── config/styles.ts              # Recharts theme constants
+├── lib/utils.ts                  # cn() helper (clsx + tailwind-merge)
 ├── utils/
 │   ├── api.ts                    # All API calls (Claude, search, country, auth)
 │   ├── csv.ts                    # RFC 4180-compliant CSV parser (state machine)
@@ -137,8 +140,22 @@ src/
 ├── components/
 │   ├── auth/
 │   │   ├── AuthPage.tsx          # Login / register landing page
-│   │   └── SettingsPanel.tsx     # Account settings drawer
-│   ├── ui/index.tsx              # Shared primitives: Btn, KPI, Card, DynChart…
+│   │   └── SettingsPanel.tsx     # Account settings slide-in drawer
+│   ├── shared/
+│   │   └── CountrySearchInput.tsx  # Debounced country search with dropdown
+│   ├── ui/
+│   │   ├── index.tsx             # Custom primitives: Btn, KPI, Card, AnalyticsCard, Stat, DynChart…
+│   │   ├── alert.tsx             # shadcn Alert
+│   │   ├── badge.tsx             # shadcn Badge
+│   │   ├── button.tsx            # shadcn Button
+│   │   ├── card.tsx              # shadcn Card
+│   │   ├── input.tsx             # shadcn Input
+│   │   ├── label.tsx             # shadcn Label
+│   │   ├── separator.tsx         # shadcn Separator
+│   │   ├── sheet.tsx             # shadcn Sheet (slide-in panel)
+│   │   ├── skeleton.tsx          # shadcn Skeleton
+│   │   ├── slider.tsx            # shadcn Slider (year-range filter)
+│   │   └── textarea.tsx          # shadcn Textarea
 │   └── modes/
 │       ├── DashboardMode.tsx     # Country Data tab
 │       ├── ChatMode.tsx          # AI Chat tab (persistent sessions)
@@ -147,7 +164,7 @@ src/
 │       ├── AnalyticsMode.tsx     # 8-algorithm analytics tab
 │       └── ExportMode.tsx        # Export & Reports tab
 └── data/
-    └── kazakhstan.ts             # Suggestion chips + search corpus
+    └── suggestions.ts            # Suggestion chips + popular countries + search corpus
 
 server.js                         # Express 5 API + World Bank proxy + auth
 ```
@@ -186,7 +203,11 @@ Open [http://localhost:5173](http://localhost:5173) in development or [http://lo
 |-------|-----------|
 | Frontend | React 18 · TypeScript 5 (strict) |
 | Build | Vite 5 |
+| Styling | Tailwind CSS 3 · shadcn/ui · Radix UI primitives |
+| Markdown | react-markdown 10 · remark-gfm |
+| Icons | lucide-react |
 | Charts | Recharts 2 |
+| Toasts | Sonner |
 | Backend | Express 5 · Node ≥ 20 |
 | Database | better-sqlite3 |
 | AI | Anthropic Claude API (tool-use agentic loop) |

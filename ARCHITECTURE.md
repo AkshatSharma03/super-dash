@@ -20,7 +20,10 @@ The app supports two tiers: **guest users** (instant access, in-memory sessions)
 | Layer | Technology |
 |---|---|
 | Frontend | React 18, TypeScript 5, Vite 5 |
-| Styling | Tailwind CSS 3 (dark mode), Radix UI, shadcn |
+| Styling | Tailwind CSS 3 (dark mode), shadcn/ui, Radix UI primitives |
+| Markdown | react-markdown 10, remark-gfm 4 |
+| Icons | lucide-react |
+| Toasts | Sonner |
 | Charts | Recharts 2 |
 | Backend | Express 5, Node.js ≥ 20 |
 | Database | SQLite via better-sqlite3 |
@@ -40,7 +43,9 @@ super-dash/
 ├── src/
 │   ├── App.tsx                 # Auth gate, header, mode router
 │   ├── types/index.ts          # All shared TypeScript interfaces
-│   ├── config/styles.ts        # Recharts theme constants
+│   ├── config/styles.ts        # Recharts theme constants (TT, GRID, AX, LEG, P)
+│   ├── lib/utils.ts            # cn() helper (clsx + tailwind-merge)
+│   ├── analytics.ts            # PostHog client wrapper
 │   ├── algorithms/             # 8 statistical algorithms (from scratch)
 │   │   ├── regression.ts       # OLS linear regression + 95% CI forecast
 │   │   ├── cagr.ts             # Compound Annual Growth Rate
@@ -51,7 +56,11 @@ super-dash/
 │   │   ├── kmeans.ts           # K-Means++ clustering
 │   │   └── trie.ts             # Trie autocomplete (O(m) prefix search)
 │   ├── components/
-│   │   ├── auth/               # Login/register, settings panel
+│   │   ├── auth/
+│   │   │   ├── AuthPage.tsx        # Login/register landing page
+│   │   │   └── SettingsPanel.tsx   # Account settings slide-in drawer
+│   │   ├── shared/
+│   │   │   └── CountrySearchInput.tsx  # Debounced search input with dropdown
 │   │   ├── modes/              # 6 main feature modes
 │   │   │   ├── ChatMode.tsx
 │   │   │   ├── SearchMode.tsx
@@ -59,11 +68,24 @@ super-dash/
 │   │   │   ├── DashboardMode.tsx
 │   │   │   ├── AnalyticsMode.tsx
 │   │   │   └── ExportMode.tsx
-│   │   └── ui/                 # Reusable UI primitives
+│   │   └── ui/
+│   │       ├── index.tsx       # Custom primitives: Btn, KPI, Card, AnalyticsCard, Stat, DynChart, MarkdownText, SourceList, ChartCard
+│   │       ├── alert.tsx       # shadcn Alert (destructive / success / warning variants)
+│   │       ├── badge.tsx       # shadcn Badge
+│   │       ├── button.tsx      # shadcn Button
+│   │       ├── card.tsx        # shadcn Card
+│   │       ├── input.tsx       # shadcn Input
+│   │       ├── label.tsx       # shadcn Label
+│   │       ├── separator.tsx   # shadcn Separator
+│   │       ├── sheet.tsx       # shadcn Sheet (slide-in panel)
+│   │       ├── skeleton.tsx    # shadcn Skeleton
+│   │       ├── slider.tsx      # shadcn Slider (year-range filter)
+│   │       └── textarea.tsx    # shadcn Textarea
 │   └── utils/
-│       ├── api.ts              # Typed fetch helpers
+│       ├── api.ts              # Typed fetch helpers for all endpoints
 │       ├── csv.ts              # RFC 4180 CSV parser (state machine)
-│       └── export.ts           # Download/clipboard/HTML report builder
+│       ├── export.ts           # Download/clipboard/HTML report builder
+│       └── useMobile.ts        # Viewport-reactive mobile breakpoint hook
 └── .github/workflows/ci.yml    # Typecheck + test + build on PR
 ```
 
@@ -138,24 +160,31 @@ CREATE INDEX idx_sessions_user_id ON chat_sessions(user_id);
 
 ## Key Architectural Decisions
 
-### 1. All Algorithms Built from Scratch
+### 1. Tailwind CSS + shadcn/ui — Zero Inline Styles for Structure
+All layout and structural styling uses **Tailwind utility classes**. shadcn/ui provides accessible, unstyled-first primitives (Button, Input, Alert, Badge, Slider, Sheet, etc.) built on Radix UI. Inline `style` props are reserved exclusively for values that cannot be expressed statically in Tailwind — dynamic data-driven colours (e.g. chart badge tints, cluster colours, growth cell colours) and CSS gradients/animations with custom keyframes.
+
+`react-markdown` with `remark-gfm` renders AI-generated markdown in Chat and Search responses — replacing the earlier hand-written parser.
+
+**Why**: Tailwind collocates styles with markup for fast iteration; shadcn components are copy-owned (no version lock-in) and fully type-safe; dynamic colours from data remain readable as inline objects without cluttering the Tailwind config with hundreds of arbitrary values.
+
+### 3. All Algorithms Built from Scratch
 No ML libraries (no scikit-learn equivalent for JS). Every algorithm is a pure TypeScript function with deterministic, auditable math:
 
 - **Regression**: Normal equation `(XᵀX)⁻¹Xᵀy` with 95% confidence interval bands
-- **HP Filter**: Banded matrix with Gaussian elimination (λ = 6.25 for annual data)
+- **HP Filter**: Banded matrix with Gaussian elimination (λ = 100 for annual data)
 - **K-Means**: K-Means++ seeding (D²-weighted) with Z-score normalization before clustering
 - **Trie**: Singleton prefix tree loaded once at startup; O(m) lookup where m = query length
 
 **Why**: Full transparency for users who want to understand the math; no dependency risk; easier to unit test.
 
-### 2. In-Memory LRU Cache + SQLite Persistent Cache
+### 4. In-Memory LRU Cache + SQLite Persistent Cache
 Two-layer caching:
 - **LRU cache** (custom doubly-linked list + Map, O(1) get/put, 200 entries): short-lived responses for chat (1h TTL) and search (30m TTL)
 - **SQLite `country_cache`**: survives server restarts; 7-day TTL for expensive World Bank/IMF API calls
 
 **Why**: World Bank API responses are slow (~800ms). Caching them avoids re-fetching data that rarely changes.
 
-### 3. Data Source Fallback Chain
+### 5. Data Source Fallback Chain
 ```
 World Bank (primary) → IMF → OECD (OECD members only)
 ```
@@ -163,27 +192,27 @@ Claude auto-generates missing sector/partner breakdowns when the APIs don't retu
 
 **Why**: No single API covers all 200+ countries completely. Graceful degradation beats an error page.
 
-### 4. Agentic Web Search Loop
+### 6. Agentic Web Search Loop
 The `/api/search` endpoint runs Claude in a tool-use loop. Claude decides when to call `web_search_20250305`, inspects results, and may search again (up to 8 turns) before composing a final answer.
 
 **Why**: A single search query often yields insufficient depth. The agentic loop lets Claude iteratively refine its research — closer to how a human analyst would work.
 
-### 5. Guest-First UX, Zero Friction
+### 7. Guest-First UX, Zero Friction
 `POST /api/auth/guest` issues a 24-hour JWT in one request with no DB write. Guest sessions live in memory only. On registration, the user seamlessly upgrades to persistent storage.
 
 **Why**: Requiring sign-up before showing value is a conversion killer for a data tool. Let users experience the product first.
 
-### 6. RFC 4180 CSV Parser (No Library)
+### 8. RFC 4180 CSV Parser (No Library)
 The CSV parser in `src/utils/csv.ts` is a hand-written state machine that handles quoted fields, embedded commas, and embedded newlines.
 
 **Why**: Most JS CSV libraries add unnecessary weight; this is ~100 lines, fully tested, and precisely scoped to what the app needs.
 
-### 7. Mode-Based State Architecture
+### 9. Mode-Based State Architecture
 `App.tsx` holds the selected country dataset in top-level state. All six modes read from this shared state. When you fetch a country in Dashboard mode and switch to Analytics mode, the data is already there.
 
 **Why**: Avoids redundant API calls. Country data is expensive to fetch; fetching it once and sharing it is the right tradeoff.
 
-### 8. Server-Side API Key Isolation
+### 10. Server-Side API Key Isolation
 The Anthropic API key, NewsAPI key, and external data source calls all live in `server.js`. The Vite client bundle never sees these secrets.
 
 **Why**: Basic security hygiene — API keys in client bundles get scraped.
