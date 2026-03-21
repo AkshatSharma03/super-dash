@@ -69,7 +69,7 @@ function ExportBtn({ label, icon, onClick, disabled, full }: ExportBtnProps) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <p style={{ fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.8px", margin: "20px 0 8px" }}>
+    <p className="text-[10px] font-bold text-slate-600 uppercase tracking-[0.8px] mt-5 mb-2">
       {children}
     </p>
   );
@@ -83,18 +83,19 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div style={{ background: "#0d1018", border: "1px solid #1e2130", borderRadius: 12, padding: "20px 22px", flex: 1, minWidth: 0 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: 16 }}>
-        <div style={{ width: 32, height: 32, borderRadius: 8, background: color + "22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{icon}</div>
+    <div className="bg-[#0d1018] border border-[#1e2130] rounded-xl px-[22px] py-5 flex-1 min-w-0">
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base shrink-0" style={{ background: color + "22" }}>{icon}</div>
         <div>
-          <p style={{ margin: 0, fontSize: 14, fontWeight: 700, color: "#e2e8f0" }}>{title}</p>
+          <p className="text-sm font-bold text-slate-100">{title}</p>
           {dataset
-            ? <p style={{ margin: 0, fontSize: 11, color: "#475569" }}>{dataset.flag} {dataset.name} · {dataset.gdpData.length} years of data</p>
-            : <p style={{ margin: 0, fontSize: 11, color: "#374151" }}>{empty}</p>
+            ? <p className="text-[11px] text-slate-600">{dataset.flag} {dataset.name} · {dataset.gdpData.length} years of data</p>
+            : <p className="text-[11px] text-gray-700">{empty}</p>
           }
         </div>
         {dataset && (
-          <div style={{ marginLeft: "auto", padding: "2px 8px", borderRadius: 4, background: color + "22", border: `1px solid ${color}44`, fontSize: 10, fontWeight: 700, color, letterSpacing: "0.4px" }}>
+          <div className="ml-auto px-2 py-0.5 rounded text-[10px] font-bold tracking-[0.4px]"
+            style={{ background: color + "22", border: `1px solid ${color}44`, color }}>
             LOADED
           </div>
         )}
@@ -215,7 +216,7 @@ function HiddenCharts({ dataset, refs }: HiddenChartsProps) {
   const W = 680, tickStyle = { fill: "#6b7280", fontSize: 11 };
 
   return (
-    <div style={{ position: "fixed", left: -9999, top: 0, width: W, pointerEvents: "none", visibility: "hidden" }}>
+    <div className="fixed top-0 -left-[9999px] pointer-events-none invisible" style={{ width: W }}>
       <div ref={refs.gdp}>
         <LineChart width={W} height={240} data={dataset.gdpData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
           <CartesianGrid {...LG} />
@@ -396,20 +397,20 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
   }
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+    <div className="max-w-[1100px] mx-auto">
 
       {dashDataset && <HiddenCharts dataset={dashDataset} refs={chartRefs} />}
 
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ margin: "0 0 4px", fontSize: 22, fontWeight: 800, color: "#e2e8f0", letterSpacing: "-0.3px" }}>
+      <div className="mb-6">
+        <h1 className="text-[22px] font-extrabold text-slate-100 tracking-tight mb-1">
           📤 Export &amp; Reports
         </h1>
-        <p style={{ margin: 0, fontSize: 13, color: "#475569" }}>
+        <p className="text-[13px] text-slate-600">
           Download country data as CSV / JSON · Generate standalone HTML reports with embedded charts · Print to PDF
         </p>
       </div>
 
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexDirection: isMobile ? "column" : "row" }}>
+      <div className={`flex gap-4 items-start ${isMobile ? "flex-col" : ""}`}>
 
         <Panel title="Country Data" icon="🌍" color="#00AAFF"
           dataset={dashDataset}
@@ -418,13 +419,13 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
           {dashDataset ? (
             <>
               <SectionTitle>Raw Data Downloads</SectionTitle>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+              <div className="grid grid-cols-2 gap-1.5">
                 <ExportBtn icon="📉" label="GDP CSV"           onClick={() => handleDashCSV("gdp")} />
                 <ExportBtn icon="📦" label="Exports CSV"       onClick={() => handleDashCSV("exports")} />
                 <ExportBtn icon="📥" label="Imports CSV"       onClick={() => handleDashCSV("imports")} />
                 <ExportBtn icon="⚖️" label="Trade Balance CSV" onClick={() => handleDashCSV("balance")} />
               </div>
-              <div style={{ marginTop: 6 }}>
+              <div className="mt-1.5">
                 <ExportBtn icon="🗂" label="Full Dataset JSON" onClick={handleDashJSON} full />
               </div>
 
@@ -432,11 +433,11 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               <ExportBtn icon="📋" label="Copy summary to clipboard" onClick={() => handleCopySummary(dashDataset)} full />
 
               <SectionTitle>Full Report</SectionTitle>
-              <p style={{ fontSize: 11, color: "#374151", margin: "0 0 8px" }}>
+              <p className="text-[11px] text-gray-700 mb-2">
                 Generates a standalone .html file with embedded SVG charts, KPI cards, and data tables.
               </p>
-              <div style={{ display: "flex", gap: 6 }}>
-                <div style={{ flex: 1 }}>
+              <div className="flex gap-1.5">
+                <div className="flex-1">
                   <ExportBtn
                     icon={generating === "dash" ? "⏳" : "⬇"}
                     label={generating === "dash" ? "Generating…" : "Download HTML"}
@@ -445,7 +446,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
                     full
                   />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div className="flex-1">
                   <ExportBtn
                     icon="🖨"
                     label="Print / Save PDF"
@@ -457,12 +458,12 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               </div>
 
               <SectionTitle>Preview — GDP Data ({dashDataset.gdpData.length} rows)</SectionTitle>
-              <div style={{ overflowX: "auto", borderRadius: 6, border: "1px solid #1e2130" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <div className="overflow-x-auto rounded-md border border-[#1e2130]">
+                <table className="w-full border-collapse text-[11px]">
                   <thead>
-                    <tr style={{ background: "#161929" }}>
+                    <tr className="bg-[#161929]">
                       {["Year","GDP ($B)","Growth %","GDP/Capita"].map(h => (
-                        <th key={h} style={{ padding: "6px 10px", textAlign: "right", color: "#475569", fontWeight: 600, borderBottom: "1px solid #1e2130", whiteSpace: "nowrap" }}>
+                        <th key={h} className="px-2.5 py-1.5 text-right text-slate-600 font-semibold border-b border-b-[#1e2130] whitespace-nowrap">
                           {h}
                         </th>
                       ))}
@@ -471,12 +472,13 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
                   <tbody>
                     {dashDataset.gdpData.slice(-8).map(d => (
                       <tr key={d.year}>
-                        <td style={{ padding: "5px 10px", textAlign: "right", color: "#94a3b8", borderBottom: "1px solid #0f1117" }}>{d.year}</td>
-                        <td style={{ padding: "5px 10px", textAlign: "right", color: "#e2e8f0", borderBottom: "1px solid #0f1117", fontWeight: 600 }}>${d.gdp_bn}B</td>
-                        <td style={{ padding: "5px 10px", textAlign: "right", borderBottom: "1px solid #0f1117", color: (d.gdp_growth ?? 0) >= 0 ? "#10b981" : "#ef4444", fontWeight: 600 }}>
+                        <td className="px-2.5 py-1 text-right text-slate-400 border-b border-b-[#0f1117]">{d.year}</td>
+                        <td className="px-2.5 py-1 text-right text-slate-100 font-semibold border-b border-b-[#0f1117]">${d.gdp_bn}B</td>
+                        <td className="px-2.5 py-1 text-right font-semibold border-b border-b-[#0f1117]"
+                          style={{ color: (d.gdp_growth ?? 0) >= 0 ? "#10b981" : "#ef4444" }}>
                           {d.gdp_growth != null ? `${d.gdp_growth > 0 ? "+" : ""}${d.gdp_growth}%` : "—"}
                         </td>
-                        <td style={{ padding: "5px 10px", textAlign: "right", color: "#94a3b8", borderBottom: "1px solid #0f1117" }}>
+                        <td className="px-2.5 py-1 text-right text-slate-400 border-b border-b-[#0f1117]">
                           {d.gdp_per_capita != null ? `$${d.gdp_per_capita.toLocaleString()}` : "—"}
                         </td>
                       </tr>
@@ -486,9 +488,9 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               </div>
             </>
           ) : (
-            <div style={{ textAlign: "center", padding: "40px 0", color: "#374151" }}>
-              <div style={{ fontSize: 40, marginBottom: 10 }}>🌍</div>
-              <p style={{ margin: 0, fontSize: 13 }}>Load a country in the <strong style={{ color: "#00AAFF" }}>Country Data</strong> tab first</p>
+            <div className="text-center py-10 text-gray-700">
+              <div className="text-[40px] mb-2.5">🌍</div>
+              <p className="text-[13px]">Load a country in the <strong className="text-[#00AAFF]">Country Data</strong> tab first</p>
             </div>
           )}
         </Panel>
@@ -500,7 +502,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
           {analyticsDataset ? (
             <>
               <SectionTitle>Individual Algorithm CSVs</SectionTitle>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <div className="flex flex-col gap-1.5">
                 {ALGO_DEFS.map(({ key, name, icon }) => (
                   <ExportBtn
                     key={key}
@@ -517,14 +519,14 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               <ExportBtn icon="🗂" label="All Algorithm Results → JSON" onClick={handleAlgoJSON} full />
 
               <SectionTitle>Result Summary</SectionTitle>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4 }}>
+              <div className="grid grid-cols-2 gap-1">
                 {ALGO_DEFS.map(({ key, name }) => {
                   const csv = algoCsvs[key];
                   const rows = csv ? csv.split("\n").length - 1 : 0;
                   return (
-                    <div key={key} style={{ background: "#161929", borderRadius: 6, padding: "7px 10px", border: "1px solid #1e2130" }}>
-                      <p style={{ margin: 0, fontSize: 10, color: "#475569", fontWeight: 600 }}>{name}</p>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: csv ? "#e2e8f0" : "#374151" }}>
+                    <div key={key} className="bg-[#161929] rounded-md px-2.5 py-[7px] border border-[#1e2130]">
+                      <p className="text-[10px] text-slate-600 font-semibold">{name}</p>
+                      <p className={`text-[13px] font-bold ${csv ? "text-slate-100" : "text-gray-700"}`}>
                         {csv ? `${rows} rows` : "—"}
                       </p>
                     </div>
@@ -533,25 +535,25 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               </div>
             </>
           ) : (
-            <div style={{ textAlign: "center", padding: "40px 0", color: "#374151" }}>
-              <div style={{ fontSize: 40, marginBottom: 10 }}>🧮</div>
-              <p style={{ margin: 0, fontSize: 13 }}>Load a country in the <strong style={{ color: "#EF4444" }}>Analytics</strong> tab first</p>
+            <div className="text-center py-10 text-gray-700">
+              <div className="text-[40px] mb-2.5">🧮</div>
+              <p className="text-[13px]">Load a country in the <strong className="text-[#EF4444]">Analytics</strong> tab first</p>
             </div>
           )}
         </Panel>
       </div>
 
-      <div style={{ marginTop: 20, background: "#0d1018", border: "1px solid #1e2130", borderRadius: 10, padding: "16px 20px" }}>
-        <p style={{ margin: "0 0 10px", fontSize: 12, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.6px" }}>File Formats</p>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)", gap: 10 }}>
+      <div className="mt-5 bg-[#0d1018] border border-[#1e2130] rounded-[10px] px-5 py-4">
+        <p className="text-xs font-bold text-slate-600 uppercase tracking-[0.6px] mb-2.5">File Formats</p>
+        <div className={`grid gap-2.5 ${isMobile ? "grid-cols-1" : "grid-cols-3"}`}>
           {[
             { fmt: "CSV", desc: "Comma-separated values — opens in Excel, Google Sheets, pandas, R, etc.", color: "#10b981" },
             { fmt: "JSON", desc: "Structured object — all fields included, suitable for API ingestion or archiving.", color: "#f59e0b" },
             { fmt: "HTML Report", desc: "Standalone file with embedded SVG charts and tables — shareable, offline-ready, printable as PDF.", color: "#00AAFF" },
           ].map(({ fmt, desc, color }) => (
-            <div key={fmt} style={{ background: "#161929", borderRadius: 7, padding: "10px 12px", border: `1px solid ${color}33` }}>
-              <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, color }}>{fmt}</p>
-              <p style={{ margin: 0, fontSize: 11, color: "#475569", lineHeight: 1.5 }}>{desc}</p>
+            <div key={fmt} className="bg-[#161929] rounded-[7px] px-3 py-2.5" style={{ border: `1px solid ${color}33` }}>
+              <p className="mb-1 text-[11px] font-bold" style={{ color }}>{fmt}</p>
+              <p className="text-[11px] text-slate-600 leading-relaxed">{desc}</p>
             </div>
           ))}
         </div>

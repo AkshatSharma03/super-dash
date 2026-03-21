@@ -90,12 +90,12 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
   return (
     <>
       {/* ── Country selector ─────────────────────────────────────────────── */}
-      <div style={{ marginBottom: 20 }}>
+      <div className="mb-5">
         {/* Search bar row */}
-        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+        <div className="flex gap-2.5 items-center mb-3.5 flex-wrap">
           <CountrySearchInput token={token} onSelect={onSelectCountry}
             placeholder="Search any country by name…"
-            style={{ flex: "1 1 260px", maxWidth: 360 }} />
+            className="flex-[1_1_260px] max-w-[360px]" />
 
           {/* Year range slider — only shown after data loads */}
           {dataset && (
@@ -114,47 +114,49 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         </div>
 
         {/* Popular quick-select */}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
-          {POPULAR_COUNTRIES.map(c => (
-            <button key={c.code} onClick={() => onSelectCountry(c.code)} disabled={loading} style={{
-              display: "flex", alignItems: "center", gap: 6,
-              background: dataset?.code === c.code ? "#00AAFF18" : "#161929",
-              border: `1px solid ${dataset?.code === c.code ? "#00AAFF55" : "#2d3348"}`,
-              borderRadius: 8, padding: "5px 12px", cursor: loading ? "not-allowed" : "pointer",
-              color: dataset?.code === c.code ? "#00AAFF" : "#94a3b8",
-              fontSize: 12, fontWeight: dataset?.code === c.code ? 700 : 500, transition: "all .15s",
-            }}
-            onMouseEnter={e => { if (dataset?.code !== c.code) { e.currentTarget.style.borderColor = "#475569"; e.currentTarget.style.color = "#e2e8f0"; }}}
-            onMouseLeave={e => { if (dataset?.code !== c.code) { e.currentTarget.style.borderColor = "#2d3348"; e.currentTarget.style.color = "#94a3b8"; }}}>
-              <span style={{ fontSize: 16 }}>{c.flag}</span>
-              {c.name}
-            </button>
-          ))}
+        <div className="flex flex-wrap gap-[7px]">
+          {POPULAR_COUNTRIES.map(c => {
+            const active = dataset?.code === c.code;
+            return (
+              <button key={c.code} onClick={() => onSelectCountry(c.code)} disabled={loading}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs transition-all"
+                style={{
+                  background:  active ? "#00AAFF18" : "#161929",
+                  border:      `1px solid ${active ? "#00AAFF55" : "#2d3348"}`,
+                  color:       active ? "#00AAFF" : "#94a3b8",
+                  fontWeight:  active ? 700 : 500,
+                  cursor:      loading ? "not-allowed" : "pointer",
+                }}>
+                <span className="text-base">{c.flag}</span>
+                {c.name}
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {/* ── Previously fetched history ────────────────────────────────────── */}
       {history.length > 0 && (
-        <div style={{ marginBottom: 22 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#475569", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 10 }}>
+        <div className="mb-5">
+          <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-[0.6px] mb-2.5">
             Previously fetched
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <div className="flex flex-wrap gap-2">
             {history.map(h => {
               const isActive = dataset?.code === h.code;
               return (
-                <button key={h.code} onClick={() => onSelectCountry(h.code)} disabled={loading} style={{
-                  display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 2,
-                  background: isActive ? "#00AAFF10" : "#0d1018",
-                  border: `1px solid ${isActive ? "#00AAFF44" : "#1e2130"}`,
-                  borderRadius: 10, padding: "8px 14px", cursor: loading ? "not-allowed" : "pointer",
-                  transition: "all .15s", minWidth: 120,
-                }}>
-                  <span style={{ fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
-                    <span style={{ fontSize: 20 }}>{h.flag}</span>
-                    <span style={{ fontWeight: 600, color: isActive ? "#00AAFF" : "#e2e8f0", fontSize: 13 }}>{h.name}</span>
+                <button key={h.code} onClick={() => onSelectCountry(h.code)} disabled={loading}
+                  className="flex flex-col items-start gap-0.5 rounded-[10px] px-3.5 py-2 transition-all min-w-[120px]"
+                  style={{
+                    background: isActive ? "#00AAFF10" : "#0d1018",
+                    border:     `1px solid ${isActive ? "#00AAFF44" : "#1e2130"}`,
+                    cursor:     loading ? "not-allowed" : "pointer",
+                  }}>
+                  <span className="text-sm flex items-center gap-1.5">
+                    <span className="text-xl">{h.flag}</span>
+                    <span className="font-semibold text-[13px]" style={{ color: isActive ? "#00AAFF" : "#e2e8f0" }}>{h.name}</span>
                   </span>
-                  <span style={{ fontSize: 10, color: "#334155" }}>{h.region} · cached {timeAgo(h.cachedAt)}</span>
+                  <span className="text-[10px] text-slate-700">{h.region} · cached {timeAgo(h.cachedAt)}</span>
                 </button>
               );
             })}
@@ -164,10 +166,10 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
 
       {/* ── Loading ───────────────────────────────────────────────────────── */}
       {loading && (
-        <div style={{ textAlign: "center", padding: "60px 0", color: "#475569" }}>
-          <div style={{ fontSize: 28, marginBottom: 12, display: "inline-block", animation: "spin 1.2s linear infinite" }}>⟳</div>
-          <div style={{ fontSize: 14 }}>Fetching data from World Bank…</div>
-          <div style={{ fontSize: 12, marginTop: 6, color: "#334155" }}>GDP, trade totals + AI-estimated sector breakdown</div>
+        <div className="text-center py-[60px] text-slate-600">
+          <div className="text-[28px] mb-3 inline-block" style={{ animation: "spin 1.2s linear infinite" }}>⟳</div>
+          <div className="text-sm">Fetching data from World Bank…</div>
+          <div className="text-xs mt-1.5 text-slate-700">GDP, trade totals + AI-estimated sector breakdown</div>
         </div>
       )}
 
@@ -181,10 +183,10 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
 
       {/* ── Empty state ───────────────────────────────────────────────────── */}
       {!loading && !error && !dataset && (
-        <div style={{ textAlign: "center", padding: "60px 0", color: "#475569" }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>🌍</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#64748b", marginBottom: 8 }}>Select a country to load its data</div>
-          <div style={{ fontSize: 13, color: "#334155" }}>Real GDP data from World Bank · Cached locally for 7 days</div>
+        <div className="text-center py-[60px] text-slate-600">
+          <div className="text-[40px] mb-3">🌍</div>
+          <div className="text-base font-bold text-slate-500 mb-2">Select a country to load its data</div>
+          <div className="text-[13px] text-slate-700">Real GDP data from World Bank · Cached locally for 7 days</div>
         </div>
       )}
 
@@ -192,24 +194,24 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
       {!loading && !error && dataset && (<>
 
         {/* Provenance + refresh bar */}
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <div className="flex items-center gap-2.5 mb-4 flex-wrap">
           <Badge variant="default">{dataset.flag} {dataset.name} · {dataset.region}</Badge>
           {dataset._meta?.stale && <Badge variant="warning">⚠ Stale cache</Badge>}
-          <span style={{ fontSize: 11, color: "#475569" }}>{dataset._meta?.sources.join(" · ")}</span>
-          <span style={{ marginLeft: "auto", fontSize: 11, color: "#334155" }}>Cached {cachedAgo}</span>
+          <span className="text-[11px] text-slate-600">{dataset._meta?.sources.join(" · ")}</span>
+          <span className="ml-auto text-[11px] text-slate-700">Cached {cachedAgo}</span>
           <Button variant="outline" size="sm" onClick={onRefresh} className="text-xs hover:text-primary hover:border-primary/50">
             ↻ Refresh
           </Button>
         </div>
 
         {/* KPI row */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))", gap: 12, marginBottom: 18 }}>
+        <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))" }}>
           {dataset.kpis.map(k => <KPI key={k.label} label={k.label} value={k.value} sub={k.sub} trend={k.trend} color={k.color} />)}
         </div>
 
         {/* Sub-tab selector */}
-        <div style={{ display: "flex", gap: 4, marginBottom: 18, background: "#1e2130", borderRadius: 10, padding: 4, width: "fit-content" }}>
-          {DASH_TABS.map(t => <Btn key={t} onClick={() => setTab(t)} active={tab === t} style={{ fontSize: 12 }}>{t}</Btn>)}
+        <div className="flex gap-1 mb-4 bg-muted rounded-xl p-1 w-fit">
+          {DASH_TABS.map(t => <Btn key={t} onClick={() => setTab(t)} active={tab === t}>{t}</Btn>)}
         </div>
 
         {/* ── GDP tab ── */}
@@ -229,7 +231,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               </ComposedChart>
             </ResponsiveContainer>
           </Card>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          <div className="grid grid-cols-2 gap-4">
             <Card title="Real GDP Growth Rate (%)">
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={gdp} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
@@ -270,7 +272,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               </BarChart>
             </ResponsiveContainer>
           </Card>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          <div className="grid grid-cols-2 gap-4">
             <Card title="Export Breakdown (latest year)">
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
@@ -310,7 +312,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               </AreaChart>
             </ResponsiveContainer>
           </Card>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+          <div className="grid grid-cols-2 gap-4">
             <Card title="Top 3 Import Partners ($B)">
               <ResponsiveContainer width="100%" height={220}>
                 <LineChart data={imp} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>

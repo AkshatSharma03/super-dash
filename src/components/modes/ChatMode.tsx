@@ -1,8 +1,6 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // AI CHAT MODE  —  conversational interface backed by Claude via /api/chat.
 // Left sidebar: persistent chat history (sessions). Right: active conversation.
-// Sessions are created on the first message and synced to the backend after
-// each assistant response.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useRef, useEffect } from "react";
 import { CHAT_SUGGESTIONS } from "../../data/suggestions";
@@ -14,14 +12,16 @@ import { buildChatReportHTML, printHTML } from "../../utils/export";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 
 // ── ChatMessage sub-component ─────────────────────────────────────────────────
 
 function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string) => void }) {
   if (msg.role === "user") return (
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 14 }}>
-      <div style={{ background: "linear-gradient(135deg, #0099EE, #0077CC)", color: "#fff", borderRadius: "14px 14px 3px 14px", padding: "10px 16px", maxWidth: "72%", fontSize: 14, lineHeight: 1.55, boxShadow: "0 2px 8px #00AAFF30" }}>
+    <div className="flex justify-end mb-3.5">
+      <div className="text-white rounded-[14px_14px_3px_14px] px-4 py-2.5 max-w-[72%] text-sm leading-[1.55] shadow-[0_2px_8px_#00AAFF30]"
+        style={{ background: "linear-gradient(135deg, #0099EE, #0077CC)" }}>
         {msg.content}
       </div>
     </div>
@@ -29,14 +29,15 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
 
   const { insight, charts = [], sources = [], followUps = [], error }: AIResponse = msg.content ?? {};
   return (
-    <div style={{ marginBottom: 22, animation: "fadeInUp .25s ease-out" }}>
+    <div className="mb-5" style={{ animation: "fadeInUp .25s ease-out" }}>
       {insight && (
-        <div style={{ background: "#1a1d2e", border: "1px solid #2d3348", borderLeft: "3px solid #8B5CF6", borderRadius: "0 12px 12px 0", padding: 16, marginBottom: 14 }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
-            <div style={{ width: 20, height: 20, borderRadius: "50%", background: "linear-gradient(135deg,#8B5CF6,#6D28D9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, flexShrink: 0 }}>✦</div>
-            <span style={{ fontSize: 10, color: "#8B5CF6", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px" }}>Analysis</span>
+        <div className="bg-[#1a1d2e] border border-border border-l-[3px] border-l-accent rounded-[0_12px_12px_0] p-4 mb-3.5">
+          <div className="flex gap-2 items-center mb-2">
+            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0"
+              style={{ background: "linear-gradient(135deg,#8B5CF6,#6D28D9)" }}>✦</div>
+            <span className="text-[10px] text-accent font-bold uppercase tracking-[0.8px]">Analysis</span>
           </div>
-          <p style={{ margin: 0, fontSize: 14, color: "#cbd5e1", lineHeight: 1.75 }}>{insight}</p>
+          <p className="text-sm text-slate-300 leading-[1.75]">{insight}</p>
         </div>
       )}
       {error && (
@@ -46,14 +47,12 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
         </Alert>
       )}
       {charts.map(chart => <ChartCard key={chart.id} chart={chart} />)}
-      <SourceList sources={sources} style={{ marginBottom: 10 }} />
+      <SourceList sources={sources} className="mb-2.5" />
       {followUps.length > 0 && (
-        <div style={{ display: "flex", gap: 7, flexWrap: "wrap" }}>
+        <div className="flex gap-1.5 flex-wrap">
           {followUps.map((q, i) => (
             <button key={i} onClick={() => onFollowUp(q)}
-              style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 20, padding: "5px 12px", fontSize: 12, color: "#64748b", cursor: "pointer", transition: "all .15s" }}
-              onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF666"; el.style.color = "#8B5CF6"; el.style.background = "#8B5CF610"; }}
-              onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.color = "#64748b"; el.style.background = "#161929"; }}>
+              className="bg-card border border-border rounded-full px-3 py-1.5 text-xs text-muted-foreground cursor-pointer transition-all hover:border-accent/40 hover:text-accent hover:bg-accent/10">
               {q}
             </button>
           ))}
@@ -88,10 +87,8 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
       .finally(() => setSessionsLoading(false));
   }, [token]);
 
-  // Auto-scroll when messages change (not on every loading toggle to avoid stutter)
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
-  // ── Start a brand-new chat ──────────────────────────────────────────────────
   const newChat = () => {
     setMessages([]);
     setActiveSessionId(null);
@@ -99,17 +96,15 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
     inputRef.current?.focus();
   };
 
-  // ── Load an existing session ────────────────────────────────────────────────
   const loadSession = async (sessionId: string) => {
     if (sessionId === activeSessionId) return;
     try {
       const session = await getSession(token, sessionId);
       setMessages(session.messages as Message[]);
       setActiveSessionId(sessionId);
-    } catch { /* silently ignore — session still selectable */ }
+    } catch { /* silently ignore */ }
   };
 
-  // ── Delete a session ────────────────────────────────────────────────────────
   const removeSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
     await deleteSession(token, sessionId).catch(() => {});
@@ -117,7 +112,6 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
     if (activeSessionId === sessionId) newChat();
   };
 
-  // ── Send a message ──────────────────────────────────────────────────────────
   const send = async (query: string) => {
     if (!query.trim() || loading) return;
     const q = query.trim();
@@ -127,7 +121,6 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
     setLoading(true);
 
     try {
-      // Serialize history for Claude
       const history = nextMessages.map(m => ({
         role:    m.role,
         content: m.role === "user" ? m.content as string : JSON.stringify(m.content),
@@ -136,7 +129,6 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
       const finalMessages: Message[] = [...nextMessages, { role: "assistant", content: result }];
       setMessages(finalMessages);
 
-      // Guests: chat works fully but history is not persisted to the server
       if (!isGuest) {
         const sessionTitle = q.slice(0, 60) + (q.length > 60 ? "…" : "");
         if (!activeSessionId) {
@@ -163,27 +155,22 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
 
   const isEmpty = messages.length === 0;
 
-  // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div style={{ display: "flex", height: "100%", gap: 0, overflow: "hidden" }}>
+    <div className="flex h-full gap-0 overflow-hidden">
 
       {/* Mobile sidebar backdrop */}
       {isMobile && sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)}
-          style={{ position: "fixed", inset: 0, background: "#000000aa", zIndex: 99 }} />
+        <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/67 z-[99]" />
       )}
 
       {/* ── Left sidebar: session history ── */}
-      <div style={isMobile ? {
-        position: "fixed", top: 0, left: sidebarOpen ? 0 : -260, width: 260,
-        height: "100%", background: "#0a0d14", borderRight: "1px solid #1e2130",
-        zIndex: 100, display: "flex", flexDirection: "column",
-        padding: "12px 12px", transition: "left .25s ease",
-      } : {
-        width: 210, flexShrink: 0, display: "flex", flexDirection: "column",
-        borderRight: "1px solid #1e2130", paddingRight: 0, marginRight: 16,
-      }}>
-
+      <div className={cn(
+        "flex flex-col",
+        isMobile
+          ? cn("fixed top-0 h-full w-[260px] bg-popover border-r border-muted z-[100] p-3 transition-[left] duration-250 ease-in-out",
+              sidebarOpen ? "left-0" : "left-[-260px]")
+          : "w-[210px] shrink-0 border-r border-muted mr-4"
+      )}>
         <div className="flex gap-1.5 mb-2.5">
           <Button variant="outline" size="sm" onClick={newChat} className="flex-1 justify-start gap-1.5 text-xs">
             <span>✦</span> New chat
@@ -193,21 +180,21 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
           )}
         </div>
 
-        <div style={{ flex: 1, overflowY: "auto" }}>
+        <div className="flex-1 overflow-y-auto">
           {isGuest ? (
-            <div style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "12px 12px", marginBottom: 8 }}>
-              <p style={{ margin: "0 0 8px", fontSize: 12, color: "#94a3b8", lineHeight: 1.55 }}>
+            <div className="bg-card border border-border rounded-lg p-3 mb-2">
+              <p className="text-xs text-slate-400 leading-[1.55] mb-2">
                 You're in guest mode. Chats are not saved between sessions.
               </p>
               <a href="#" onClick={e => { e.preventDefault(); window.location.reload(); }}
-                style={{ fontSize: 11, fontWeight: 700, color: "#00AAFF", textDecoration: "none" }}>
+                className="text-[11px] font-bold text-primary no-underline">
                 Sign up free to save history →
               </a>
             </div>
           ) : sessionsLoading ? (
-            <p style={{ fontSize: 11, color: "#334155", padding: "4px 2px" }}>Loading…</p>
+            <p className="text-[11px] text-border px-0.5 py-1">Loading…</p>
           ) : sessions.length === 0 ? (
-            <p style={{ fontSize: 11, color: "#334155", padding: "4px 2px", lineHeight: 1.5 }}>No saved chats yet.<br />Your conversations will appear here.</p>
+            <p className="text-[11px] text-border px-0.5 py-1 leading-relaxed">No saved chats yet.<br />Your conversations will appear here.</p>
           ) : (
             sessions.map(s => {
               const isActive  = s.id === activeSessionId;
@@ -216,15 +203,21 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
                 <div key={s.id} onClick={() => loadSession(s.id)}
                   onMouseEnter={() => setHoveredSession(s.id)}
                   onMouseLeave={() => setHoveredSession(null)}
-                  style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 10px", marginBottom: 2, borderRadius: 7, cursor: "pointer", background: isActive ? "#8B5CF622" : isHovered ? "#1e2130" : "transparent", border: `1px solid ${isActive ? "#8B5CF644" : "transparent"}`, transition: "all .1s" }}>
-                  <span style={{ flex: 1, fontSize: 12, color: isActive ? "#e2e8f0" : "#94a3b8", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", lineHeight: 1.4 }}>
+                  className={cn(
+                    "flex items-center gap-1.5 px-2.5 py-2 mb-0.5 rounded-md cursor-pointer transition-all duration-100 border",
+                    isActive
+                      ? "bg-accent/15 border-accent/25"
+                      : isHovered
+                        ? "bg-muted border-transparent"
+                        : "bg-transparent border-transparent"
+                  )}>
+                  <span className={cn("flex-1 text-xs overflow-hidden text-ellipsis whitespace-nowrap leading-[1.4]",
+                    isActive ? "text-foreground" : "text-slate-400")}>
                     {s.title}
                   </span>
                   {isHovered && (
                     <button onClick={e => removeSession(e, s.id)}
-                      style={{ background: "transparent", border: "none", color: "#64748b", cursor: "pointer", fontSize: 14, padding: "0 2px", lineHeight: 1, flexShrink: 0 }}
-                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; }}
-                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "#64748b"; }}>
+                      className="bg-transparent border-none text-muted-foreground cursor-pointer text-sm px-0.5 leading-none shrink-0 hover:text-destructive transition-colors">
                       ×
                     </button>
                   )}
@@ -236,42 +229,43 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
       </div>
 
       {/* ── Right: active conversation ── */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-        <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 overflow-y-auto pb-2">
 
           {isEmpty ? (
-            <div style={{ maxWidth: 640, margin: "0 auto", paddingTop: 20, animation: "fadeInUp .3s ease-out" }}>
-              <div style={{ textAlign: "center", marginBottom: 28 }}>
-                <div style={{ width: 56, height: 56, borderRadius: 16, background: "linear-gradient(135deg,#8B5CF6,#00AAFF)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 26, margin: "0 auto 14px", boxShadow: "0 0 24px #8B5CF644" }}>💬</div>
-                <h2 style={{ margin: "0 0 8px", fontSize: 18, fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>Ask anything about any economy</h2>
-                <p style={{ margin: 0, fontSize: 13, color: "#475569", lineHeight: 1.65 }}>
+            <div className="max-w-[640px] mx-auto pt-5" style={{ animation: "fadeInUp .3s ease-out" }}>
+              <div className="text-center mb-7">
+                <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-[26px] mx-auto mb-3.5 shadow-[0_0_24px_#8B5CF644]"
+                  style={{ background: "linear-gradient(135deg,#8B5CF6,#00AAFF)" }}>💬</div>
+                <h2 className="text-lg font-extrabold text-white tracking-[-0.3px] mb-2">Ask anything about any economy</h2>
+                <p className="text-[13px] text-muted-foreground leading-[1.65]">
                   Generate interactive charts and expert analysis from World Bank, IMF, UN Comtrade, and OECD data.<br />
                   Ask about any country, sector, or time period.
                 </p>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
+              <div className={cn("grid gap-2", isMobile ? "grid-cols-1" : "grid-cols-2")}>
                 {CHAT_SUGGESTIONS.map((s, i) => (
                   <button key={i} onClick={() => send(s)}
-                    style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: "12px 14px", fontSize: 12, color: "#64748b", cursor: "pointer", textAlign: "left", lineHeight: 1.5, transition: "all .15s" }}
-                    onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#8B5CF666"; el.style.color = "#cbd5e1"; el.style.background = "#1a1d2e"; }}
-                    onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.borderColor = "#2d3348"; el.style.color = "#64748b"; el.style.background = "#161929"; }}>
+                    className="bg-card border border-border rounded-xl px-3.5 py-3 text-xs text-muted-foreground cursor-pointer text-left leading-relaxed transition-all hover:border-accent/40 hover:text-slate-300 hover:bg-[#1a1d2e]">
                     {s}
                   </button>
                 ))}
               </div>
             </div>
           ) : (
-            <div style={{ maxWidth: 820, margin: "0 auto" }}>
+            <div className="max-w-[820px] mx-auto">
               {messages.map((m, i) => (
                 <ChatMessage key={i} msg={m} onFollowUp={q => { setInput(q); inputRef.current?.focus(); }} />
               ))}
               {loading && (
-                <div style={{ background: "#1a1d2e", border: "1px solid #8B5CF633", borderLeft: "3px solid #8B5CF6", borderRadius: "0 12px 12px 0", padding: "12px 16px", display: "inline-flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
-                  <div style={{ width: 20, height: 20, borderRadius: "50%", background: "linear-gradient(135deg,#8B5CF6,#6D28D9)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, flexShrink: 0 }}>✦</div>
-                  <span style={{ fontSize: 13, color: "#64748b" }}>Generating charts and analysis</span>
-                  <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                <div className="bg-[#1a1d2e] border border-accent/20 border-l-[3px] border-l-accent rounded-[0_12px_12px_0] px-4 py-3 inline-flex gap-2.5 items-center mb-4">
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0"
+                    style={{ background: "linear-gradient(135deg,#8B5CF6,#6D28D9)" }}>✦</div>
+                  <span className="text-[13px] text-muted-foreground">Generating charts and analysis</span>
+                  <div className="flex gap-0.75 items-center">
                     {[0, 1, 2].map(i => (
-                      <span key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#8B5CF6", display: "block", animation: `typingDot 1.2s ease-in-out ${i * 0.22}s infinite` }} />
+                      <span key={i} className="w-1.5 h-1.5 rounded-full bg-accent block"
+                        style={{ animation: `typingDot 1.2s ease-in-out ${i * 0.22}s infinite` }} />
                     ))}
                   </div>
                 </div>
@@ -282,8 +276,8 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
         </div>
 
         {/* ── Input bar ── */}
-        <div style={{ borderTop: "1px solid #1e2130", paddingTop: 12, flexShrink: 0 }}>
-          <div style={{ maxWidth: 820, margin: "0 auto", display: "flex", gap: 8 }}>
+        <div className="border-t border-muted pt-3 shrink-0">
+          <div className="max-w-[820px] mx-auto flex gap-2">
             {isMobile && (
               <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} title="Chat history">☰</Button>
             )}
@@ -304,7 +298,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
               {loading ? "…" : "Send →"}
             </Button>
           </div>
-          <p style={{ textAlign: "center", fontSize: 10, color: "#2d3348", marginTop: 8 }}>
+          <p className="text-center text-[10px] text-border mt-2">
             Powered by Claude · World Bank · IMF · UN Comtrade · OECD · Enter to send
           </p>
         </div>

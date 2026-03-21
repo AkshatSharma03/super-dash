@@ -14,6 +14,7 @@ import { Button }  from "@/components/ui/button";
 import { Input }   from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge }   from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 
 export default function SearchMode() {
@@ -62,11 +63,11 @@ export default function SearchMode() {
   };
 
   return (
-    <div style={{ maxWidth: 860, margin: "0 auto" }}>
+    <div className="max-w-[860px] mx-auto">
 
       {/* ── Search bar with Trie autocomplete ── */}
-      <div style={{ position: "relative", marginBottom: 18 }}>
-        <div className={`flex gap-2 ${isMobile ? "flex-col" : ""}`}>
+      <div className="relative mb-4">
+        <div className={cn("flex gap-2", isMobile && "flex-col")}>
           <Input
             value={query}
             onChange={e => handleQueryChange(e.target.value)}
@@ -78,7 +79,7 @@ export default function SearchMode() {
             onFocus={() => query.trim().length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
             disabled={loading}
             placeholder="Search for US, China, EU, Japan economic data, trade stats, news…"
-            className="flex-1 h-11 text-sm focus-visible:ring-green-500 focus-visible:border-green-500"
+            className="flex-1 h-11 text-sm focus-visible:ring-emerald-500 focus-visible:border-emerald-500"
           />
           <Button onClick={() => doSearch(query)} disabled={loading || !query.trim()}
             className="h-11 px-6 whitespace-nowrap bg-gradient-to-br from-[#10B981] to-[#059669] shadow-[0_2px_10px_#10B98144] font-bold">
@@ -88,15 +89,16 @@ export default function SearchMode() {
 
         {/* Trie autocomplete dropdown */}
         {showSuggestions && suggestions.length > 0 && (
-          <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 54, background: "#1e2130", border: "1px solid #10B98155", borderRadius: 10, zIndex: 100, overflow: "hidden" }}>
-            <div style={{ padding: "6px 12px", fontSize: 10, color: "#10B981", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, borderBottom: "1px solid #2d3348" }}>
+          <div className="absolute top-[calc(100%+4px)] left-0 right-[54px] bg-muted border border-emerald-500/30 rounded-xl z-[100] overflow-hidden">
+            <div className="px-3 py-1.5 text-[10px] text-emerald-500 font-bold uppercase tracking-[0.8px] border-b border-border">
               Trie Suggestions — O(m) prefix match
             </div>
             {suggestions.map((s, i) => (
               <button key={i} onMouseDown={() => doSearch(s)}
-                style={{ display: "block", width: "100%", textAlign: "left", background: "transparent", border: "none", padding: "9px 14px", fontSize: 13, color: "#94a3b8", cursor: "pointer", borderBottom: i < suggestions.length - 1 ? "1px solid #2d334844" : "none" }}
-                onMouseEnter={e => { e.currentTarget.style.background = "#10B98118"; e.currentTarget.style.color = "#e2e8f0"; }}
-                onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#94a3b8"; }}>
+                className={cn(
+                  "block w-full text-left bg-transparent border-none px-3.5 py-2.5 text-[13px] text-slate-400 cursor-pointer transition-colors hover:bg-emerald-500/10 hover:text-foreground",
+                  i < suggestions.length - 1 && "border-b border-border/25"
+                )}>
                 {s}
               </button>
             ))}
@@ -107,13 +109,11 @@ export default function SearchMode() {
       {/* ── Suggested searches ── */}
       {!result && !loading && !error && (
         <>
-          <p style={{ fontSize: 10, color: "#475569", marginBottom: 8, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px" }}>Suggested searches</p>
-          <div className={`grid gap-1.5 mb-6 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}>
+          <p className="text-[10px] text-muted-foreground mb-2 font-semibold uppercase tracking-[0.6px]">Suggested searches</p>
+          <div className={cn("grid gap-1.5 mb-6", isMobile ? "grid-cols-1" : "grid-cols-2")}>
             {SEARCH_SUGGESTIONS.map((s, i) => (
               <button key={i} onClick={() => doSearch(s)}
-                style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#64748b", cursor: "pointer", textAlign: "left", lineHeight: 1.45, transition: "all .15s" }}
-                onMouseEnter={e => { const el = e.currentTarget; el.style.borderColor = "#10B98166"; el.style.color = "#cbd5e1"; el.style.background = "#10B98108"; }}
-                onMouseLeave={e => { const el = e.currentTarget; el.style.borderColor = "#2d3348"; el.style.color = "#64748b"; el.style.background = "#161929"; }}>
+                className="bg-card border border-border rounded-lg px-3.5 py-2.5 text-xs text-muted-foreground cursor-pointer text-left leading-[1.45] transition-all hover:border-emerald-500/40 hover:text-slate-300 hover:bg-emerald-500/5">
                 {s}
               </button>
             ))}
@@ -123,11 +123,11 @@ export default function SearchMode() {
 
       {/* ── Loading ── */}
       {loading && (
-        <div style={{ background: "#161929", border: "1px solid #10B98133", borderLeft: "3px solid #10B981", borderRadius: "0 12px 12px 0", padding: "18px 20px", display: "flex", alignItems: "center", gap: 14, animation: "fadeInUp .2s ease-out" }}>
-          <div style={{ width: 32, height: 32, borderRadius: "50%", border: "2.5px solid #1e2130", borderTop: "2.5px solid #10B981", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+        <div className="bg-card border border-emerald-500/20 border-l-[3px] border-l-emerald-500 rounded-[0_12px_12px_0] px-5 py-4 flex items-center gap-3.5" style={{ animation: "fadeInUp .2s ease-out" }}>
+          <div className="w-8 h-8 rounded-full border-[2.5px] border-muted border-t-emerald-500 animate-spin shrink-0" />
           <div>
-            <p style={{ margin: "0 0 3px", fontSize: 14, color: "#e2e8f0", fontWeight: 600 }}>Searching the web…</p>
-            <p style={{ margin: 0, fontSize: 12, color: "#475569" }}>Querying World Bank, IMF, Reuters, Bloomberg and authoritative sources</p>
+            <p className="text-sm text-foreground font-semibold mb-0.5">Searching the web…</p>
+            <p className="text-xs text-muted-foreground">Querying World Bank, IMF, Reuters, Bloomberg and authoritative sources</p>
           </div>
         </div>
       )}
@@ -147,7 +147,7 @@ export default function SearchMode() {
             <Badge variant={result.webSearchUsed ? "success" : "warning"}>
               {result.webSearchUsed ? "🌐 Live Web Search" : "📚 Model Knowledge"}
             </Badge>
-            <span style={{ fontSize: 12, color: "#64748b", fontStyle: "italic" }}>"{searched}"</span>
+            <span className="text-xs text-muted-foreground italic">"{searched}"</span>
             <div className="ml-auto flex gap-2">
               <Button variant="outline" size="sm" className="text-xs"
                 onClick={() => printHTML(buildSearchReportHTML(searched, result))}
@@ -161,10 +161,18 @@ export default function SearchMode() {
             </div>
           </div>
 
-          <div style={{ background: "#161929", border: `1px solid ${result.webSearchUsed ? "#10B98133" : "#F59E0B33"}`, borderLeft: `3px solid ${result.webSearchUsed ? "#10B981" : "#F59E0B"}`, borderRadius: "0 12px 12px 0", padding: 22, marginBottom: 14, animation: "fadeInUp .25s ease-out" }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14 }}>
-              <span style={{ fontSize: 14 }}>{result.webSearchUsed ? "🌐" : "📚"}</span>
-              <span style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.7px", color: result.webSearchUsed ? "#10B981" : "#F59E0B" }}>Research Summary</span>
+          <div
+            className={cn(
+              "bg-card rounded-[0_12px_12px_0] p-5 mb-3.5 border border-l-[3px]",
+              result.webSearchUsed ? "border-emerald-500/20 border-l-emerald-500" : "border-amber-500/20 border-l-amber-500"
+            )}
+            style={{ animation: "fadeInUp .25s ease-out" }}
+          >
+            <div className="flex gap-2 items-center mb-3.5">
+              <span className="text-sm">{result.webSearchUsed ? "🌐" : "📚"}</span>
+              <span className={cn("text-[10px] font-bold uppercase tracking-[0.7px]", result.webSearchUsed ? "text-emerald-500" : "text-amber-500")}>
+                Research Summary
+              </span>
               {!result.webSearchUsed && (
                 <Badge variant="warning" className="text-[9px]">Training data — may be outdated</Badge>
               )}
@@ -174,20 +182,18 @@ export default function SearchMode() {
 
           {/* Source list */}
           {result.sources.length > 0 && (
-            <div style={{ background: "#1e2130", border: "1px solid #2d3348", borderRadius: 10, padding: 16, marginBottom: 16 }}>
-              <p style={{ margin: "0 0 10px", fontSize: 11, color: "#64748b", fontWeight: 600, textTransform: "uppercase" }}>
+            <div className="bg-muted border border-border rounded-xl p-4 mb-4">
+              <p className="text-[11px] text-muted-foreground font-semibold uppercase mb-2.5">
                 Sources ({result.sources.length})
               </p>
               <div className="flex flex-col gap-1.5">
                 {result.sources.slice(0, 8).map((s, i) =>
                   s.url
                     ? <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
-                        style={{ fontSize: 12, color: "#00AAFF", textDecoration: "none", display: "flex", alignItems: "flex-start", gap: 6 }}
-                        onMouseEnter={e => { e.currentTarget.style.textDecoration = "underline"; }}
-                        onMouseLeave={e => { e.currentTarget.style.textDecoration = "none"; }}>
-                        <span style={{ color: "#64748b", flexShrink: 0 }}>↗</span>{s.title}
+                        className="text-xs text-primary no-underline flex items-start gap-1.5 hover:underline">
+                        <span className="text-muted-foreground shrink-0">↗</span>{s.title}
                       </a>
-                    : <span key={i} style={{ fontSize: 12, color: "#64748b", display: "flex", alignItems: "center", gap: 6 }}>
+                    : <span key={i} className="text-xs text-muted-foreground flex items-center gap-1.5">
                         <span>📚</span>{s.title}
                       </span>
                 )}
@@ -196,14 +202,14 @@ export default function SearchMode() {
           )}
 
           {/* Follow-up search */}
-          <div style={{ background: "#161929", border: "1px solid #2d3348", borderRadius: 10, padding: 14 }}>
-            <p style={{ margin: "0 0 8px", fontSize: 10, color: "#475569", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.6px" }}>Refine or follow up</p>
-            <div className={`flex gap-2 ${isMobile ? "flex-col" : ""}`}>
+          <div className="bg-card border border-border rounded-xl p-3.5">
+            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-[0.6px] mb-2">Refine or follow up</p>
+            <div className={cn("flex gap-2", isMobile && "flex-col")}>
               <Input value={followQuery} onChange={e => setFollowQuery(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && doSearch(followQuery)}
                 disabled={loading}
                 placeholder="Enter a follow-up or related search…"
-                className="flex-1 focus-visible:ring-green-500 focus-visible:border-green-500" />
+                className="flex-1 focus-visible:ring-emerald-500 focus-visible:border-emerald-500" />
               <Button onClick={() => doSearch(followQuery)} disabled={loading || !followQuery.trim()}
                 className="bg-[#10B981] hover:bg-[#059669] font-bold">
                 Search
@@ -213,7 +219,7 @@ export default function SearchMode() {
         </div>
       )}
 
-      <p style={{ textAlign: "center", fontSize: 10, color: "#2d3348", marginTop: 20 }}>
+      <p className="text-center text-[10px] text-border mt-5">
         Powered by Claude · Web search via Anthropic · Sources: World Bank · IMF · Reuters · Bloomberg
       </p>
     </div>

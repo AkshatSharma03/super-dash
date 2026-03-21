@@ -8,6 +8,7 @@
 import { useState, useEffect, useCallback } from "react";
 import type { Mode, User, CountryDataset } from "./types";
 import { useMobile } from "./utils/useMobile";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { fetchMe, getCountryData, refreshCountryData } from "./utils/api";
 import { identifyUser, resetUser, track } from "./analytics";
@@ -130,47 +131,56 @@ export default function App() {
   const fetchingInBg = countryLoading && mode !== "dashboard";
 
   return (
-    <div style={{ fontFamily: "Inter,sans-serif", background: "#0f1117", height: "100vh", display: "flex", flexDirection: "column", color: "#e2e8f0" }}>
+    <div className="bg-background h-screen flex flex-col text-foreground" style={{ fontFamily: "Inter,sans-serif" }}>
 
       {/* ── Header ── */}
-      <div className="ec-header" style={{ padding: "8px 20px", borderBottom: "1px solid #1e2130", display: "flex", alignItems: "center", gap: 12, flexShrink: 0, flexWrap: "wrap", background: "#0a0d14" }}>
+      <header className="ec-header px-5 py-2 border-b border-muted flex items-center gap-3 shrink-0 flex-wrap bg-popover">
 
         {/* Brand */}
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, boxShadow: "0 0 12px #00AAFF44" }}>📊</div>
-          <span style={{ fontSize: 14, fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>EconChart</span>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-[15px] shadow-[0_0_12px_#00AAFF44]"
+            style={{ background: "linear-gradient(135deg,#00AAFF,#8B5CF6)" }}>
+            📊
+          </div>
+          <span className="text-sm font-extrabold text-white tracking-[-0.3px]">EconChart</span>
         </div>
 
         {/* Mode tabs */}
-        <div className="ec-tabs" style={{ marginLeft: 14, display: "flex", background: "#161929", borderRadius: 10, padding: 3, border: "1px solid #2d3348", gap: 1, flexWrap: "nowrap" }}>
+        <nav className="ec-tabs ml-3.5 flex bg-card rounded-xl p-[3px] border border-border gap-px flex-nowrap">
           {MODES.map(([m, lbl]) => {
             const isBgFetch = m === "dashboard" && fetchingInBg;
             const [emoji, ...words] = lbl.split(" ");
+            const isActive = mode === m;
             return (
-              <button key={m} onClick={() => { setMode(m); track("mode_viewed", { mode: m }); }} style={{
-                background: mode === m ? MODE_META[m].color : "transparent",
-                color: mode === m ? "#fff" : "#64748b",
-                border: "none", borderRadius: 7, padding: "5px 12px",
-                fontSize: 11.5, fontWeight: mode === m ? 700 : 500,
-                cursor: "pointer", transition: "all .18s", whiteSpace: "nowrap",
-                boxShadow: mode === m ? `0 2px 8px ${MODE_META[m].color}55` : "none",
-                display: "flex", alignItems: "center", gap: isMobile ? 0 : 5,
-              }}>
+              <button
+                key={m}
+                onClick={() => { setMode(m); track("mode_viewed", { mode: m }); }}
+                className={cn(
+                  "rounded-md px-3 py-1.5 text-[11.5px] font-medium transition-all duration-150 whitespace-nowrap flex items-center border-none cursor-pointer",
+                  isActive
+                    ? "text-white font-bold"
+                    : "bg-transparent text-muted-foreground hover:text-foreground"
+                )}
+                style={isActive ? {
+                  background: MODE_META[m].color,
+                  boxShadow: `0 2px 8px ${MODE_META[m].color}55`,
+                } : {}}
+              >
                 <span>{emoji}</span>
-                <span className="ec-tab-text"> {words.join(" ")}</span>
+                <span className={cn("ec-tab-text", isMobile ? "hidden" : "")}> {words.join(" ")}</span>
                 {isBgFetch && (
-                  <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00AAFF", display: "inline-block", animation: "ecPulse 1.2s ease-in-out infinite", marginLeft: 4 }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block ml-1" style={{ animation: "ecPulse 1.2s ease-in-out infinite" }} />
                 )}
               </button>
             );
           })}
-        </div>
+        </nav>
 
         {/* User chip */}
-        <div className="ec-user-chip" style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="ec-user-chip ml-auto flex items-center gap-2">
           {user.isGuest ? (
             <>
-              <span style={{ fontSize: 11, color: "#475569" }}>Guest mode</span>
+              <span className="text-[11px] text-muted-foreground">Guest mode</span>
               <Button size="sm" onClick={logout}
                 className="bg-gradient-to-r from-[#00AAFF] to-[#0088DD] shadow-[0_2px_8px_#00AAFF44] font-bold text-xs">
                 Sign up free
@@ -178,13 +188,13 @@ export default function App() {
             </>
           ) : (
             <>
-              <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)}
-                className="gap-2 pl-1.5">
-                <div style={{ width: 22, height: 22, borderRadius: "50%", background: "linear-gradient(135deg,#00AAFF,#8B5CF6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+              <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)} className="gap-2 pl-1.5">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                  style={{ background: "linear-gradient(135deg,#00AAFF,#8B5CF6)" }}>
                   {user.name.charAt(0).toUpperCase()}
                 </div>
-                <span className="ec-user-name" style={{ maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</span>
-                <span style={{ fontSize: 9, color: "#475569" }}>▼</span>
+                <span className="ec-user-name max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap">{user.name}</span>
+                <span className="text-[9px] text-muted-foreground">▼</span>
               </Button>
               <Button variant="outline" size="sm" onClick={logout}
                 className="text-muted-foreground hover:text-destructive hover:border-destructive/50">
@@ -193,27 +203,27 @@ export default function App() {
             </>
           )}
         </div>
-      </div>
+      </header>
 
       {/* ── Mode badge + description ── */}
-      <div style={{ padding: "5px 20px", borderBottom: "1px solid #1e2130", flexShrink: 0, display: "flex", alignItems: "center", gap: 10, background: "#0d1018" }}>
-        <div style={{ width: 3, height: 18, borderRadius: 2, background: color, flexShrink: 0 }} />
-        <span style={{ fontSize: 11, borderRadius: 4, padding: "1px 8px", fontWeight: 700, background: color + "18", color, letterSpacing: "0.3px" }}>
+      <div className="px-5 py-1.5 border-b border-muted shrink-0 flex items-center gap-2.5 bg-[#0d1018]">
+        <div className="w-[3px] h-[18px] rounded-sm shrink-0" style={{ background: color }} />
+        <span className="text-[11px] rounded px-2 py-px font-bold tracking-[0.3px]"
+          style={{ background: color + "18", color }}>
           {modeIcon} {label}
         </span>
-        <span className="ec-mode-desc" style={{ fontSize: 11, color: "#475569" }}>{desc}</span>
-        {/* In-progress fetch notice visible on all tabs */}
+        <span className="ec-mode-desc text-[11px] text-muted-foreground">{desc}</span>
         {fetchingInBg && (
-          <span style={{ marginLeft: "auto", fontSize: 11, color: "#00AAFF", display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00AAFF", display: "inline-block", animation: "ecPulse 1.2s ease-in-out infinite" }} />
+          <span className="ml-auto text-[11px] text-primary flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" style={{ animation: "ecPulse 1.2s ease-in-out infinite" }} />
             Fetching country data in background…
           </span>
         )}
       </div>
 
       {/* ── Main content ── */}
-      <div style={{ flex: 1, overflowY: mode === "chat" ? "hidden" : "auto", padding: mode === "chat" ? "16px 20px 0" : "20px 20px" }}>
-        {mode === "chat"      && <div style={{ maxWidth: 1060, margin: "0 auto", height: "100%", display: "flex", flexDirection: "column" }}><ChatMode token={token} isGuest={user.isGuest ?? false} /></div>}
+      <main className={cn("flex-1", mode === "chat" ? "overflow-hidden p-4 pb-0 px-5" : "overflow-y-auto p-5")}>
+        {mode === "chat"      && <div className="max-w-[1060px] mx-auto h-full flex flex-col"><ChatMode token={token} isGuest={user.isGuest ?? false} /></div>}
         {mode === "search"    && <SearchMode />}
         {mode === "data"      && <DataMode />}
         {mode === "analytics" && (
@@ -226,7 +236,7 @@ export default function App() {
           />
         )}
         {mode === "dashboard" && (
-          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div className="max-w-[1100px] mx-auto">
             <DashboardMode
               token={token}
               dataset={countryData}
@@ -238,11 +248,11 @@ export default function App() {
           </div>
         )}
         {mode === "export" && (
-          <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+          <div className="max-w-[1100px] mx-auto">
             <ExportMode dashDataset={countryData} analyticsDataset={analyticsData} />
           </div>
         )}
-      </div>
+      </main>
 
       {settingsOpen && !user.isGuest && (
         <SettingsPanel
