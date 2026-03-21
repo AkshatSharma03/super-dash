@@ -1226,28 +1226,44 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       ];
     }
 
-    // ── Parse the two-part response ──────────────────────────────────────────
+    // ── Parse the response ───────────────────────────────────────────────────
+    // Prefer the streaming format (plain-text insight + CHARTS_DATA: JSON).
+    // Fall back to the legacy format (full JSON blob) when Claude omits the marker,
+    // which can happen on complex queries where Claude outputs verbose markdown first.
     let parsed;
     try {
       const mi = finalText.indexOf(CHARTS_MARKER);
-      const insightText = (mi !== -1 ? finalText.slice(0, mi) : finalText).trim();
-      const chartsRaw   = mi !== -1 ? finalText.slice(mi + CHARTS_MARKER.length).trim() : '';
 
-      let chartsData = {};
-      if (chartsRaw) {
-        try {
-          const clean = chartsRaw.replace(/```json|```/g, '');
-          const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
-          chartsData = JSON.parse(s !== -1 && e > s ? clean.slice(s, e + 1) : clean);
-        } catch { /* leave chartsData empty */ }
+      if (mi !== -1) {
+        // New format
+        const insightText = finalText.slice(0, mi).trim();
+        const chartsRaw   = finalText.slice(mi + CHARTS_MARKER.length).trim();
+
+        let chartsData = {};
+        if (chartsRaw) {
+          try {
+            const clean = chartsRaw.replace(/```json|```/g, '');
+            const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
+            chartsData = JSON.parse(s !== -1 && e > s ? clean.slice(s, e + 1) : clean);
+          } catch { /* leave chartsData empty */ }
+        }
+
+        parsed = validateAIResponse({
+          insight:   insightText,
+          charts:    chartsData.charts    ?? [],
+          sources:   chartsData.sources   ?? [],
+          followUps: chartsData.followUps ?? [],
+        }) ?? { insight: insightText, charts: [], sources: [], followUps: [] };
+
+      } else {
+        // Legacy fallback: find the outermost JSON block in the full text
+        const stripped = finalText.replace(/```json|```/g, '');
+        const start = stripped.indexOf('{');
+        const end   = stripped.lastIndexOf('}');
+        const jsonStr = start !== -1 && end > start ? stripped.slice(start, end + 1) : stripped.trim();
+        const raw = JSON.parse(jsonStr);
+        parsed = validateAIResponse(raw) ?? { insight: finalText, charts: [], sources: [], followUps: [] };
       }
-
-      parsed = validateAIResponse({
-        insight:   insightText,
-        charts:    chartsData.charts    ?? [],
-        sources:   chartsData.sources   ?? [],
-        followUps: chartsData.followUps ?? [],
-      }) ?? { insight: insightText, charts: [], sources: [], followUps: [] };
     } catch {
       parsed = { insight: finalText, charts: [], sources: [], followUps: [] };
     }
