@@ -10,7 +10,7 @@ import type { Mode, User, CountryDataset } from "./types";
 import { useMobile } from "./utils/useMobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { fetchMe, getCountryData, refreshCountryData } from "./utils/api";
+import { fetchMe, getCountryData, refreshCountryData, logoutApi } from "./utils/api";
 import { identifyUser, resetUser, track } from "./analytics";
 import AuthPage      from "./components/auth/AuthPage";
 import SettingsPanel from "./components/auth/SettingsPanel";
@@ -114,6 +114,7 @@ export default function App() {
   };
 
   const logout = () => {
+    if (token) logoutApi(token).catch(() => {}); // fire-and-forget; revoke server-side
     localStorage.removeItem("ec_token");
     resetUser();
     setToken(null);

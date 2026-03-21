@@ -197,6 +197,11 @@ db.exec(`
     expires_at INTEGER NOT NULL,
     used       INTEGER NOT NULL DEFAULT 0
   );
+
+  CREATE TABLE IF NOT EXISTS revoked_tokens (
+    jti        TEXT PRIMARY KEY,
+    expires_at INTEGER NOT NULL
+  );
 `);
 
 // ── Prepared statements ──────────────────────────────────────────────────────
@@ -222,6 +227,9 @@ const stmt = {
   getResetToken:           db.prepare('SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0'),
   markResetTokenUsed:      db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE token = ?'),
   deleteExpiredResetTokens: db.prepare('DELETE FROM password_reset_tokens WHERE expires_at < ?'),
+  revokeToken:             db.prepare('INSERT OR IGNORE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)'),
+  isTokenRevoked:          db.prepare('SELECT 1 FROM revoked_tokens WHERE jti = ?'),
+  pruneRevokedTokens:      db.prepare('DELETE FROM revoked_tokens WHERE expires_at < ?'),
 };
 
 // ── Validation and utilities ─────────────────────────────────────────────────
@@ -251,8 +259,16 @@ function requireAuth(req, res, next) {
   const auth  = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!token) return res.status(401).json({ error: 'Authentication required' });
-  try { req.user = jwt.verify(token, JWT_SECRET); next(); }
-  catch { res.status(401).json({ error: 'Invalid or expired token' }); }
+  try {
+    const payload = jwt.verify(token, JWT_SECRET);
+    if (payload.jti && stmt.isTokenRevoked.get(payload.jti)) {
+      return res.status(401).json({ error: 'Token has been revoked' });
+    }
+    req.user = payload;
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
 }
 
 function iso2ToFlag(code) {
@@ -1301,11 +1317,24 @@ Rules:
 
 // ── Auth routes ───────────────────────────────────────────────────────────────
 
+/** Revoke the JWT carried by req.user (no-op if token has no jti or already expired). */
+function revokeCurrentToken(user) {
+  if (!user?.jti || !user?.exp) return;
+  stmt.pruneRevokedTokens.run(Date.now());
+  stmt.revokeToken.run(user.jti, user.exp * 1000); // exp is in seconds
+}
+
+app.post('/api/auth/logout', requireAuth, (req, res) => {
+  revokeCurrentToken(req.user);
+  track(req.user.id, 'user_logged_out');
+  res.json({ ok: true });
+});
+
 // Guest access — issues a short-lived JWT without creating a DB record.
 // Grants full read access to all AI/country endpoints; sessions are in-memory only.
 app.post('/api/auth/guest', authLimiter, (req, res) => {
   const token = jwt.sign(
-    { id: 'guest', name: 'Guest', email: '', isGuest: true },
+    { id: 'guest', name: 'Guest', email: '', isGuest: true, jti: randomBytes(16).toString('hex') },
     JWT_SECRET,
     { expiresIn: '24h' }
   );
@@ -1323,7 +1352,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
   const id   = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const uname = name.slice(0, 80).trim();
   stmt.insertUser.run(id, em, uname, hashedPassword, new Date().toISOString());
-  const token = jwt.sign({ id, email: em, name: uname }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ id, email: em, name: uname, jti: randomBytes(16).toString('hex') }, JWT_SECRET, { expiresIn: '7d' });
   if (ph) ph.identify({ distinctId: id, properties: { email: em, name: uname } });
   track(id, 'user_registered', { email: em, name: uname });
   res.json({ token, user: { id, email: em, name: uname } });
@@ -1338,7 +1367,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
   if (!user) return res.status(401).json({ error: 'Invalid email or password' });
   const match = await bcrypt.compare(password, user.hashed_password);
   if (!match) return res.status(401).json({ error: 'Invalid email or password' });
-  const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
+  const token = jwt.sign({ id: user.id, email: user.email, name: user.name, jti: randomBytes(16).toString('hex') }, JWT_SECRET, { expiresIn: '7d' });
   track(user.id, 'user_logged_in', { email: user.email });
   res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
 });
@@ -1371,6 +1400,7 @@ app.patch('/api/auth/password', requireAuth, authLimiter, async (req, res) => {
   if (!match) return res.status(401).json({ error: 'Current password is incorrect' });
   const hashed = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   stmt.updatePassword.run(hashed, req.user.id);
+  revokeCurrentToken(req.user);
   res.json({ ok: true });
 });
 
@@ -1382,6 +1412,7 @@ app.delete('/api/auth/account', requireAuth, authLimiter, async (req, res) => {
   if (!user) return res.status(401).json({ error: 'User not found' });
   const match = await bcrypt.compare(password, user.hashed_password);
   if (!match) return res.status(401).json({ error: 'Password is incorrect' });
+  revokeCurrentToken(req.user);
   stmt.deleteUser.run(req.user.id);
   res.json({ ok: true });
 });
