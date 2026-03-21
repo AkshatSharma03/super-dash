@@ -13,6 +13,14 @@ import countries from 'i18n-iso-countries';
 import { PostHog } from 'posthog-node';
 
 import enLocale from 'i18n-iso-countries/langs/en.json' with { type: 'json' };
+import {
+  validate,
+  ChatSchema, SearchSchema, AnalyzeCsvSchema, AnalyticsSchema,
+  RegisterSchema, LoginSchema, ChangePasswordSchema, DeleteAccountSchema,
+  ForgotPasswordSchema, ResetPasswordSchema,
+  CreateSessionSchema, UpdateSessionSchema,
+  CountrySearchQuerySchema,
+} from './schemas.js';
 
 countries.registerLocale(enLocale);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -981,14 +989,11 @@ const CSV_SYSTEM = `You are an expert data analyst and visualization specialist.
 // ── API Routes ───────────────────────────────────────────────────────────────
 
 app.post('/api/chat', apiLimiter, async (req, res) => {
-  let { messages } = req.body;
-  if (!Array.isArray(messages) || messages.length === 0)
-    return res.status(400).json({ error: 'messages array is required' });
+  const body = validate(ChatSchema, req.body, res);
+  if (!body) return;
+  let { messages } = body;
 
-  messages = messages.slice(-MAX_HISTORY).map(m => ({
-    role:    m.role === 'assistant' ? 'assistant' : 'user',
-    content: String(m.content || '').slice(0, MAX_MSG_CHARS),
-  }));
+  messages = messages.slice(-MAX_HISTORY);
 
   const isSingleTurn = messages.length === 1;
   const ck = isSingleTurn ? cacheKey('/chat', messages) : null;
@@ -1140,8 +1145,9 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
 });
 
 app.post('/api/search', apiLimiter, async (req, res) => {
-  const query = String(req.body.query || '').trim().slice(0, MAX_QUERY_CHARS);
-  if (!query) return res.status(400).json({ error: 'query is required' });
+  const body = validate(SearchSchema, req.body, res);
+  if (!body) return;
+  const { query } = body;
 
   const ck = cacheKey('/search', { query });
   const cached = apiCache.get(ck);
@@ -1223,13 +1229,10 @@ app.post('/api/search', apiLimiter, async (req, res) => {
 });
 
 app.post('/api/analyze-csv', apiLimiter, async (req, res) => {
-  let { headers, rows, context } = req.body;
-  if (!Array.isArray(headers) || !Array.isArray(rows))
-    return res.status(400).json({ error: 'headers and rows arrays are required' });
-
-  headers = headers.slice(0, MAX_CSV_COLS).map(h => String(h).slice(0, 100));
-  rows    = rows.slice(0, MAX_CSV_ROWS);
-  context = String(context || '').slice(0, MAX_CONTEXT_CHARS);
+  const body = validate(AnalyzeCsvSchema, req.body, res);
+  if (!body) return;
+  let { headers, rows, context } = body;
+  context = context ?? '';
 
   const sample  = rows.slice(0, CSV_SAMPLE_ROWS);
   const csvText = [headers.join(','), ...sample.map(r => headers.map(h => String(r[h] ?? '')).join(','))].join('\n');
@@ -1311,18 +1314,14 @@ app.post('/api/auth/guest', authLimiter, (req, res) => {
 });
 
 app.post('/api/auth/register', authLimiter, async (req, res) => {
-  const { email, password, name } = req.body;
-  if (!email || !password || !name)
-    return res.status(400).json({ error: 'email, password, and name are required' });
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email)))
-    return res.status(400).json({ error: 'Invalid email address' });
-  if (String(password).length < 8)
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
-  const em = String(email).toLowerCase().trim();
+  const body = validate(RegisterSchema, req.body, res);
+  if (!body) return;
+  const { email, password, name } = body;
+  const em = email.toLowerCase().trim();
   if (stmt.userByEmail.get(em)) return res.status(409).json({ error: 'Email already registered' });
-  const hashedPassword = await bcrypt.hash(String(password), BCRYPT_ROUNDS);
+  const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
   const id   = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const uname = String(name).slice(0, 80).trim();
+  const uname = name.slice(0, 80).trim();
   stmt.insertUser.run(id, em, uname, hashedPassword, new Date().toISOString());
   const token = jwt.sign({ id, email: em, name: uname }, JWT_SECRET, { expiresIn: '7d' });
   if (ph) ph.identify({ distinctId: id, properties: { email: em, name: uname } });
@@ -1331,12 +1330,13 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
 });
 
 app.post('/api/auth/login', authLimiter, async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'email and password are required' });
-  const em   = String(email).toLowerCase().trim();
+  const body = validate(LoginSchema, req.body, res);
+  if (!body) return;
+  const { email, password } = body;
+  const em   = email.toLowerCase().trim();
   const user = stmt.userByEmail.get(em);
   if (!user) return res.status(401).json({ error: 'Invalid email or password' });
-  const match = await bcrypt.compare(String(password), user.hashed_password);
+  const match = await bcrypt.compare(password, user.hashed_password);
   if (!match) return res.status(401).json({ error: 'Invalid email or password' });
   const token = jwt.sign({ id: user.id, email: user.email, name: user.name }, JWT_SECRET, { expiresIn: '7d' });
   track(user.id, 'user_logged_in', { email: user.email });
@@ -1362,26 +1362,25 @@ app.get('/api/auth/usage', requireAuth, (req, res) => {
 });
 
 app.patch('/api/auth/password', requireAuth, authLimiter, async (req, res) => {
-  const { currentPassword, newPassword } = req.body;
-  if (!currentPassword || !newPassword)
-    return res.status(400).json({ error: 'currentPassword and newPassword are required' });
-  if (String(newPassword).length < 8)
-    return res.status(400).json({ error: 'New password must be at least 8 characters' });
+  const body = validate(ChangePasswordSchema, req.body, res);
+  if (!body) return;
+  const { currentPassword, newPassword } = body;
   const user = stmt.userByIdFull.get(req.user.id);
   if (!user) return res.status(401).json({ error: 'User not found' });
-  const match = await bcrypt.compare(String(currentPassword), user.hashed_password);
+  const match = await bcrypt.compare(currentPassword, user.hashed_password);
   if (!match) return res.status(401).json({ error: 'Current password is incorrect' });
-  const hashed = await bcrypt.hash(String(newPassword), BCRYPT_ROUNDS);
+  const hashed = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   stmt.updatePassword.run(hashed, req.user.id);
   res.json({ ok: true });
 });
 
 app.delete('/api/auth/account', requireAuth, authLimiter, async (req, res) => {
-  const { password } = req.body;
-  if (!password) return res.status(400).json({ error: 'Password confirmation is required' });
+  const body = validate(DeleteAccountSchema, req.body, res);
+  if (!body) return;
+  const { password } = body;
   const user = stmt.userByIdFull.get(req.user.id);
   if (!user) return res.status(401).json({ error: 'User not found' });
-  const match = await bcrypt.compare(String(password), user.hashed_password);
+  const match = await bcrypt.compare(password, user.hashed_password);
   if (!match) return res.status(401).json({ error: 'Password is incorrect' });
   stmt.deleteUser.run(req.user.id);
   res.json({ ok: true });
@@ -1391,9 +1390,9 @@ app.delete('/api/auth/account', requireAuth, authLimiter, async (req, res) => {
 // If SMTP_HOST is configured the link is emailed; otherwise it is returned in
 // the response so the feature works in dev / simple deployments without a mail server.
 app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
-  const { email } = req.body;
-  if (!email) return res.status(400).json({ error: 'email is required' });
-  const em = String(email).toLowerCase().trim();
+  const body = validate(ForgotPasswordSchema, req.body, res);
+  if (!body) return;
+  const em = body.email.toLowerCase().trim();
 
   // Purge stale tokens first
   stmt.deleteExpiredResetTokens.run(Date.now());
@@ -1440,19 +1439,17 @@ app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
 
 // Reset password — validates the token and sets the new password.
 app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
-  const { token, newPassword } = req.body;
-  if (!token || !newPassword)
-    return res.status(400).json({ error: 'token and newPassword are required' });
-  if (String(newPassword).length < 8)
-    return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  const body = validate(ResetPasswordSchema, req.body, res);
+  if (!body) return;
+  const { token, newPassword } = body;
 
-  const row = stmt.getResetToken.get(String(token));
+  const row = stmt.getResetToken.get(token);
   if (!row)           return res.status(400).json({ error: 'Invalid or already-used reset link' });
   if (row.expires_at < Date.now()) return res.status(400).json({ error: 'Reset link has expired. Please request a new one.' });
 
-  const hashed = await bcrypt.hash(String(newPassword), BCRYPT_ROUNDS);
+  const hashed = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
   stmt.updatePassword.run(hashed, row.user_id);
-  stmt.markResetTokenUsed.run(String(token));
+  stmt.markResetTokenUsed.run(token);
   res.json({ ok: true });
 });
 
@@ -1464,7 +1461,9 @@ app.get('/api/sessions', requireAuth, (req, res) => {
 });
 
 app.post('/api/sessions', requireAuth, (req, res) => {
-  const title = String(req.body.title || 'New Chat').slice(0, 100);
+  const body = validate(CreateSessionSchema, req.body, res);
+  if (!body) return;
+  const title = body.title ?? 'New Chat';
   const id    = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const now   = new Date().toISOString();
   // Guests have no DB record — return a fake session without inserting
@@ -1481,10 +1480,12 @@ app.get('/api/sessions/:id', requireAuth, (req, res) => {
 app.patch('/api/sessions/:id', requireAuth, (req, res) => {
   // Guest sessions are in-memory only — silently acknowledge the update
   if (req.user.isGuest) return res.json({ id: req.params.id, title: '', updatedAt: new Date().toISOString() });
+  const body = validate(UpdateSessionSchema, req.body, res);
+  if (!body) return;
   const row = stmt.sessionById.get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Session not found' });
-  const newMessages = Array.isArray(req.body.messages) ? JSON.stringify(req.body.messages) : row.messages;
-  const newTitle    = typeof req.body.title === 'string' ? req.body.title.slice(0, 100) : row.title;
+  const newMessages = body.messages !== undefined ? JSON.stringify(body.messages) : row.messages;
+  const newTitle    = body.title    !== undefined ? body.title                    : row.title;
   const now         = new Date().toISOString();
   stmt.updateSession.run(newMessages, newTitle, now, req.params.id, req.user.id);
   res.json({ id: row.id, title: newTitle, updatedAt: now });
@@ -1511,8 +1512,9 @@ app.get('/api/country/history', requireAuth, (req, res) => {
 });
 
 app.get('/api/country/search', requireAuth, apiLimiter, async (req, res) => {
-  const q = String(req.query.q || '').trim().slice(0, 100);
-  if (q.length < 2) return res.json([]);
+  const query = validate(CountrySearchQuerySchema, req.query, res);
+  if (!query) return;
+  const q = query.q.trim();
 
   // Common alternative names → World Bank canonical names
   const ALIASES = {
@@ -1607,13 +1609,9 @@ app.post('/api/country/:code/refresh', requireAuth, apiLimiter, async (req, res)
 });
 
 app.post('/api/analytics', requireAuth, apiLimiter, async (req, res) => {
-  const query = String(req.body.query || '')
-    .trim()
-    .slice(0, MAX_MSG_CHARS);
-  const context = String(req.body.context || '')
-    .trim()
-    .slice(0, 8_000);
-  if (!query) return res.status(400).json({ error: 'query is required' });
+  const body = validate(AnalyticsSchema, req.body, res);
+  if (!body) return;
+  const { query, context = '' } = body;
 
   const ck = cacheKey('/analytics', { query, context: context.slice(0, 500) });
   const cached = apiCache.get(ck);
