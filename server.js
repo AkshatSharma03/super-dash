@@ -52,7 +52,8 @@ const MAX_CSV_ROWS      = 500;
 const MAX_CONTEXT_CHARS = 2_000;
 const CSV_SAMPLE_ROWS   = 30;
 const MAX_SEARCH_TURNS  = 8;
-const ANTHROPIC_TIMEOUT_MS = 55_000;
+const ANTHROPIC_TIMEOUT_MS        = 55_000;  // non-streaming calls
+const ANTHROPIC_STREAM_TIMEOUT_MS = 180_000; // streaming: allow up to 3 min for large responses
 
 // Auth
 const JWT_SECRET     = process.env.JWT_SECRET || 'dev-secret-change-in-production';
@@ -782,7 +783,7 @@ async function callAnthropicStream(body) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({ ...body, stream: true }),
-    signal: AbortSignal.timeout(ANTHROPIC_TIMEOUT_MS),
+    signal: AbortSignal.timeout(ANTHROPIC_STREAM_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`Anthropic ${res.status}: ${await res.text()}`);
   return res;
