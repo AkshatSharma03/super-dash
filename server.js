@@ -1183,7 +1183,7 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       };
 
       const { toolUses, content, stopReason } = await streamAnthropicTurn(
-        { model: MODEL, max_tokens: 16000, system: buildVerifiedChatSystem(), tools: availableTools, messages: loopMessages },
+        { model: MODEL, max_tokens: 64000, system: buildVerifiedChatSystem(), tools: availableTools, messages: loopMessages },
         onDelta,
       );
 
