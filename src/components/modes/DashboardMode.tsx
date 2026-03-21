@@ -95,7 +95,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
           <CountrySearchInput token={token} onSelect={onSelectCountry}
             placeholder="Search any country by name…"
-            style={{ flex: "1 1 260px", maxWidth: 360 }} />
+            className="flex-[1_1_260px] max-w-[360px]" />
 
           {/* Year range slider — only shown after data loads */}
           {dataset && (

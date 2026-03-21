@@ -201,10 +201,10 @@ export function ChartCard({ chart }: { chart: ChartConfig }) {
 // ── Source list ───────────────────────────────────────────────────────────────
 
 /** Inline source badge links — used by ChatMode and AnalyticsMode. */
-export function SourceList({ sources, style }: { sources: AISource[]; style?: React.CSSProperties }) {
+export function SourceList({ sources, className }: { sources: AISource[]; className?: string }) {
   if (!sources.length) return null;
   return (
-    <div className="flex gap-1.5 flex-wrap items-center" style={style}>
+    <div className={`flex gap-1.5 flex-wrap items-center ${className ?? ""}`}>
       <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-[0.5px]">Sources:</span>
       {sources.map((s, i) =>
         s.url ? (

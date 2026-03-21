@@ -58,13 +58,13 @@ interface TTEntry { dataKey: string; name: string; value: number | null; color?:
 function ChartTip({ active, payload, label }: { active?: boolean; payload?: TTEntry[]; label?: string | number }) {
   if (!active || !payload?.length) return null;
   return (
-    <div style={{ background: "#0f1117", border: "1px solid #2d3348", borderRadius: 8, padding: "10px 14px", fontSize: 12 }}>
-      <p style={{ color: "#94a3b8", fontWeight: 600, margin: "0 0 6px" }}>{label}</p>
+    <div className="bg-[#0f1117] border border-[#2d3348] rounded-lg px-3.5 py-2.5 text-xs">
+      <p className="text-slate-400 font-semibold mb-1.5">{label}</p>
       {payload.filter(p => p.dataKey !== "ciLow").map((p, i) => (
-        <p key={i} style={{ color: "#e2e8f0", margin: "3px 0", display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ width: 8, height: 8, borderRadius: "50%", background: p.color ?? "#e2e8f0", flexShrink: 0, display: "inline-block" }} />
-          <span style={{ color: "#94a3b8" }}>{p.name}:</span>
-          <span style={{ fontWeight: 600 }}>{p.value === null ? "—" : p.value}</span>
+        <p key={i} className="text-slate-100 my-0.5 flex gap-2 items-center">
+          <span className="w-2 h-2 rounded-full shrink-0 inline-block" style={{ background: p.color ?? "#e2e8f0" }} />
+          <span className="text-slate-400">{p.name}:</span>
+          <span className="font-semibold">{p.value === null ? "—" : p.value}</span>
         </p>
       ))}
     </div>
@@ -87,7 +87,7 @@ function RegressionPanel({ dataset }: { dataset: CountryDataset }) {
     <AnalyticsCard title={`${dataset.name} GDP Forecast — OLS Regression`}
       subtitle="β = (XᵀX)⁻¹Xᵀy · dashed region = 95% prediction interval"
       badge="Linear Regression" badgeColor="#00AAFF">
-      <div style={{ display: "flex", gap: 24, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="flex gap-6 mb-3.5 flex-wrap">
         <Stat label="Slope"  value={`+$${model.slope.toFixed(1)}B/yr`} color="#00AAFF" />
         <Stat label="R²"     value={`${(model.r2 * 100).toFixed(1)}%`} color="#10B981" />
         <Stat label="+1 yr"  value={`$${model.predict(points[points.length - 2]?.year ?? 2025).toFixed(0)}B`} color="#F59E0B" />
@@ -106,7 +106,7 @@ function RegressionPanel({ dataset }: { dataset: CountryDataset }) {
           <Line dataKey="trend"  name="OLS Trend" stroke="#F59E0B" strokeWidth={2} dot={{ r: 3 }} connectNulls strokeDasharray="5 3" />
         </ComposedChart>
       </ResponsiveContainer>
-      <p style={{ margin: "10px 0 0", fontSize: 11, color: "#64748b" }}>RSE = ${model.rse.toFixed(1)}B. Forecast bars are blank — only the trend line extends forward.</p>
+      <p className="mt-2.5 text-[11px] text-slate-500">RSE = ${model.rse.toFixed(1)}B. Forecast bars are blank — only the trend line extends forward.</p>
     </AnalyticsCard>
   );
 }
@@ -118,7 +118,7 @@ function HHIPanel({ dataset }: { dataset: CountryDataset }) {
   const latest = series[series.length - 1];
   if (!latest) return (
     <AnalyticsCard title="HHI" badge="HHI" badgeColor="#8B5CF6">
-      <p style={{ color: "#64748b", fontSize: 13 }}>Not enough trade data.</p>
+      <p className="text-slate-500 text-[13px]">Not enough trade data.</p>
     </AnalyticsCard>
   );
 
@@ -126,7 +126,7 @@ function HHIPanel({ dataset }: { dataset: CountryDataset }) {
     <AnalyticsCard title={`${dataset.name} Trade Concentration — HHI`}
       subtitle="HHI = Σ(sᵢ%)². <1500 competitive · 1500–2500 moderate · >2500 concentrated"
       badge="HHI Algorithm" badgeColor="#8B5CF6">
-      <div style={{ display: "flex", gap: 24, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="flex gap-6 mb-3.5 flex-wrap">
         <Stat label="Import HHI" value={String(latest.importHHI)} color={latest.importHHI < 1500 ? "#10B981" : latest.importHHI < 2500 ? "#F59E0B" : "#EF4444"} />
         <Stat label="Level"      value={latest.importLevel}       color="#94a3b8" />
         <Stat label="Export HHI" value={String(latest.exportHHI)} color={latest.exportHHI < 2500 ? "#F59E0B" : "#EF4444"} />
@@ -178,12 +178,12 @@ function KMeansPanel({ dataset }: { dataset: CountryDataset }) {
     <AnalyticsCard title={`${dataset.name} Economic Eras — K-Means (k=3)`}
       subtitle="Features: GDP growth, GDP/capita, digital %. K-Means++ init, z-score normalised."
       badge="K-Means" badgeColor="#10B981">
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="flex gap-2.5 mb-3.5 flex-wrap">
         {clusters.map(cl => (
-          <div key={cl.id} style={{ display: "flex", alignItems: "center", gap: 8, background: cl.color + "18", borderRadius: 8, padding: "5px 10px", border: `1px solid ${cl.color}44` }}>
-            <div style={{ width: 9, height: 9, borderRadius: "50%", background: cl.color }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: cl.color }}>{cl.label}</span>
-            <span style={{ fontSize: 10, color: "#64748b" }}>{cl.years.join(", ")} · avg {cl.avgGrowth > 0 ? "+" : ""}{cl.avgGrowth}%</span>
+          <div key={cl.id} className="flex items-center gap-2 rounded-lg px-2.5 py-1" style={{ background: cl.color + "18", border: `1px solid ${cl.color}44` }}>
+            <div className="w-2 h-2 rounded-full" style={{ background: cl.color }} />
+            <span className="text-[11px] font-bold" style={{ color: cl.color }}>{cl.label}</span>
+            <span className="text-[10px] text-slate-500">{cl.years.join(", ")} · avg {cl.avgGrowth > 0 ? "+" : ""}{cl.avgGrowth}%</span>
           </div>
         ))}
       </div>
@@ -232,21 +232,21 @@ function AnomalyPanel({ dataset }: { dataset: CountryDataset }) {
           </Bar>
         </BarChart>
       </ResponsiveContainer>
-      <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 5, maxHeight: 220, overflowY: "auto" }}>
+      <div className="mt-2.5 flex flex-col gap-1.5 max-h-[220px] overflow-y-auto">
         {anomalies.slice(0, 12).map((a, i) => {
           const col = SEV_COLOR[a.severity];
           return (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", background: col + "11", border: `1px solid ${col}33`, borderRadius: 7 }}>
-              <span style={{ color: col, fontWeight: 700, minWidth: 16, fontSize: 11 }}>{DIR_ICON[a.direction]}</span>
-              <span style={{ color: "#00AAFF", fontWeight: 700, minWidth: 32, fontSize: 11 }}>{a.year}</span>
-              <span style={{ color: "#94a3b8", flex: 1, fontSize: 11 }}>{a.metric}</span>
-              <span style={{ color: col, fontWeight: 700, fontSize: 10 }}>z={a.zScore > 0 ? "+" : ""}{a.zScore}σ</span>
-              <span style={{ color: "#64748b", fontSize: 10 }}>{a.annotation}</span>
+            <div key={i} className="flex items-center gap-2 px-2 py-1 rounded-[7px]" style={{ background: col + "11", border: `1px solid ${col}33` }}>
+              <span className="font-bold w-4 text-[11px]" style={{ color: col }}>{DIR_ICON[a.direction]}</span>
+              <span className="font-bold w-8 text-[11px] text-[#00AAFF]">{a.year}</span>
+              <span className="text-slate-400 flex-1 text-[11px]">{a.metric}</span>
+              <span className="font-bold text-[10px]" style={{ color: col }}>z={a.zScore > 0 ? "+" : ""}{a.zScore}σ</span>
+              <span className="text-slate-500 text-[10px]">{a.annotation}</span>
             </div>
           );
         })}
       </div>
-      <p style={{ margin: "8px 0 0", fontSize: 11, color: "#64748b" }}>
+      <p className="mt-2 text-[11px] text-slate-500">
         {anomalies.length} anomalous data points across {Object.keys(yearCounts).length} years.
       </p>
     </AnalyticsCard>
@@ -263,7 +263,7 @@ function HPPanel({ dataset }: { dataset: CountryDataset }) {
     <AnalyticsCard title={`${dataset.name} Business Cycle — HP Filter`}
       subtitle="Decomposes GDP into trend τ and cycle c = y − τ  (λ = 100 for annual data)"
       badge="HP Filter" badgeColor="#F97316">
-      <div style={{ display: "flex", gap: 16, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="flex gap-4 mb-3.5 flex-wrap">
         <Stat label="λ"           value="100"                              color="#F97316" />
         <Stat label="Avg |cycle|" value={`$${result.avgCycleAmplitude}B`}  color="#EF4444" />
         <Stat label="Points"      value={String(result.points.length)}      color="#94a3b8" />
@@ -282,7 +282,7 @@ function HPPanel({ dataset }: { dataset: CountryDataset }) {
           <Line yAxisId="right" dataKey="cycle"  name="Cycle (right axis)"   stroke="#EF4444" strokeWidth={1.5} dot={{ r: 2 }} strokeDasharray="4 2" />
         </ComposedChart>
       </ResponsiveContainer>
-      <p style={{ margin: "8px 0 0", fontSize: 11, color: "#64748b" }}>Positive cycle = above-trend expansion; negative = below-trend contraction.</p>
+      <p className="mt-2 text-[11px] text-slate-500">Positive cycle = above-trend expansion; negative = below-trend contraction.</p>
     </AnalyticsCard>
   );
 }
@@ -304,7 +304,7 @@ function CAGRPanel({ dataset }: { dataset: CountryDataset }) {
     <AnalyticsCard title={`${dataset.name} CAGR Analysis`}
       subtitle="CAGR = (end/start)^(1/years) − 1  ·  all figures in % per year"
       badge="CAGR" badgeColor="#F59E0B">
-      <div style={{ display: "flex", gap: 24, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="flex gap-6 mb-3.5 flex-wrap">
         <Stat label="Full period GDP CAGR" value={result.fullPeriod.gdp != null ? `${result.fullPeriod.gdp > 0 ? "+" : ""}${result.fullPeriod.gdp}%` : "—"} color="#F59E0B" />
         <Stat label="Fastest period"       value={result.fastestGDPPeriod} color="#10B981" />
         <Stat label="Slowest period"       value={result.slowestGDPPeriod} color="#EF4444" />
@@ -344,18 +344,18 @@ function CorrelationPanel({ dataset }: { dataset: CountryDataset }) {
       subtitle="r(X,Y) = Σ[(xᵢ−x̄)(yᵢ−ȳ)] / √[Σ(xᵢ−x̄)²·Σ(yᵢ−ȳ)²]  ·  green = positive, red = negative"
       badge="Correlation" badgeColor="#06B6D4">
       {result.strongestPair && (
-        <p style={{ margin: "0 0 12px", fontSize: 12, color: "#94a3b8" }}>
-          Strongest pair: <span style={{ color: "#06B6D4", fontWeight: 700 }}>{result.strongestPair.row} ↔ {result.strongestPair.col}</span>
+        <p className="mb-3 text-xs text-slate-400">
+          Strongest pair: <span className="text-[#06B6D4] font-bold">{result.strongestPair.row} ↔ {result.strongestPair.col}</span>
           {" "}(r = {result.strongestPair.r > 0 ? "+" : ""}{result.strongestPair.r})
         </p>
       )}
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "collapse", fontSize: 11, width: "100%", borderSpacing: 2 }}>
+      <div className="overflow-x-auto">
+        <table className="border-collapse text-[11px] w-full">
           <thead>
             <tr>
-              <th style={{ padding: "4px 8px", color: "#475569", textAlign: "left" }} />
+              <th className="px-2 py-1 text-slate-600 text-left" />
               {result.variables.map(v => (
-                <th key={v} title={v} style={{ padding: "4px 6px", color: "#475569", fontWeight: 600, textAlign: "center", maxWidth: 70, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <th key={v} title={v} className="px-1.5 py-1 text-slate-600 font-semibold text-center max-w-[70px] overflow-hidden text-ellipsis whitespace-nowrap">
                   {v.replace(" ($B)", "").replace(" (%)", "")}
                 </th>
               ))}
@@ -364,7 +364,7 @@ function CorrelationPanel({ dataset }: { dataset: CountryDataset }) {
           <tbody>
             {result.variables.map(row => (
               <tr key={row}>
-                <td style={{ padding: "4px 8px", color: "#94a3b8", fontWeight: 600, whiteSpace: "nowrap" }}>
+                <td className="px-2 py-1 text-slate-400 font-semibold whitespace-nowrap">
                   {row.replace(" ($B)", "").replace(" (%)", "")}
                 </td>
                 {result.variables.map(col => {
@@ -372,11 +372,10 @@ function CorrelationPanel({ dataset }: { dataset: CountryDataset }) {
                   const r = cell?.r ?? 0;
                   const isDiag = row === col;
                   return (
-                    <td key={col} title={`${row} ↔ ${col}: r = ${r}`} style={{
-                      padding: "5px 6px", textAlign: "center",
+                    <td key={col} title={`${row} ↔ ${col}: r = ${r}`} className="px-1.5 py-1 text-center rounded" style={{
                       background: isDiag ? "#1e2130" : rToColor(r),
                       color: isDiag ? "#64748b" : Math.abs(r) > 0.3 ? "#e2e8f0" : "#94a3b8",
-                      fontWeight: Math.abs(r) > 0.6 ? 700 : 500, borderRadius: 4,
+                      fontWeight: Math.abs(r) > 0.6 ? 700 : 500,
                     }}>
                       {isDiag ? "—" : (r > 0 ? "+" : "") + r.toFixed(2)}
                     </td>
@@ -413,7 +412,7 @@ function OpennessPanel({ dataset }: { dataset: CountryDataset }) {
     <AnalyticsCard title={`${dataset.name} Trade Openness`}
       subtitle="Openness = (Exports + Imports) / GDP × 100  ·  > 100% = highly globalised economy"
       badge="Openness" badgeColor="#A78BFA">
-      <div style={{ display: "flex", gap: 16, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="flex gap-4 mb-3.5 flex-wrap">
         <Stat label="Latest"  value={latest ? `${latest.openness}%` : "—"} color="#A78BFA" />
         <Stat label="Average" value={`${avg}%`}                             color="#94a3b8" />
       </div>
@@ -435,29 +434,29 @@ function OpennessPanel({ dataset }: { dataset: CountryDataset }) {
 // ── AI Query result panel ─────────────────────────────────────────────────────
 function AIResultPanel({ result }: { result: AIResponse }) {
   return (
-    <div style={{ background: "#161929", borderRadius: 12, padding: 20, border: "1px solid #2d3348", borderTop: "2px solid #8B5CF644" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 8px", borderRadius: 4, background: "#8B5CF622", color: "#8B5CF6", border: "1px solid #8B5CF644", textTransform: "uppercase", letterSpacing: "0.5px" }}>AI Analysis</span>
+    <div className="bg-[#161929] rounded-xl p-5 border border-[#2d3348]" style={{ borderTop: "2px solid #8B5CF644" }}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-[#8B5CF622] text-[#8B5CF6] border border-[#8B5CF644] uppercase tracking-[0.5px]">AI Analysis</span>
       </div>
       {result.insight && (
-        <p style={{ margin: "0 0 16px", fontSize: 14, color: "#cbd5e1", lineHeight: 1.75 }}>{result.insight}</p>
+        <p className="mb-4 text-sm text-slate-300 leading-relaxed">{result.insight}</p>
       )}
       {result.charts?.map(c => (
-        <div key={c.id} style={{ marginBottom: 16 }}>
-          <p style={{ margin: "0 0 6px", fontSize: 13, fontWeight: 700, color: "#e2e8f0" }}>{c.title}</p>
-          {c.description && <p style={{ margin: "0 0 8px", fontSize: 11, color: "#64748b" }}>{c.description}</p>}
+        <div key={c.id} className="mb-4">
+          <p className="mb-1.5 text-[13px] font-bold text-slate-100">{c.title}</p>
+          {c.description && <p className="mb-2 text-[11px] text-slate-500">{c.description}</p>}
           <DynChart chart={c} />
         </div>
       ))}
       {result.sources && result.sources.length > 0 && (
-        <SourceList sources={result.sources} style={{ marginTop: 12 }} />
+        <SourceList sources={result.sources} className="mt-3" />
       )}
       {result.followUps && result.followUps.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          <p style={{ margin: "0 0 6px", fontSize: 10, color: "#475569", textTransform: "uppercase", letterSpacing: "0.5px" }}>Follow-ups</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        <div className="mt-2.5">
+          <p className="mb-1.5 text-[10px] text-slate-600 uppercase tracking-[0.5px]">Follow-ups</p>
+          <div className="flex flex-wrap gap-1.5">
             {result.followUps.map((q, i) => (
-              <span key={i} style={{ fontSize: 11, color: "#64748b", background: "#1e2130", borderRadius: 6, padding: "4px 10px", border: "1px solid #2d3348" }}>{q}</span>
+              <span key={i} className="text-[11px] text-slate-500 bg-[#1e2130] rounded-md px-2.5 py-1 border border-[#2d3348]">{q}</span>
             ))}
           </div>
         </div>
@@ -487,48 +486,45 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
   const extraHistory = history.filter(h => !POPULAR_COUNTRIES.some(p => p.code === h.code));
 
   return (
-    <div style={{ background: "#161929", borderRadius: 12, padding: 16, border: "1px solid #2d3348", marginBottom: 18 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>Data Source</span>
+    <div className="bg-[#161929] rounded-xl p-4 border border-[#2d3348] mb-4">
+      <div className="flex items-center gap-2.5 mb-3 flex-wrap">
+        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.5px]">Data Source</span>
         {dataset && !loading && (
-          <span style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 5 }}>
-            <span style={{ fontSize: 16 }}>{dataset.flag}</span>
-            <span style={{ fontWeight: 700, color: "#e2e8f0" }}>{dataset.name}</span>
-            <span style={{ color: "#64748b" }}>· {dataset.region}</span>
+          <span className="text-xs flex items-center gap-1.5">
+            <span className="text-base">{dataset.flag}</span>
+            <span className="font-bold text-slate-100">{dataset.name}</span>
+            <span className="text-slate-500">· {dataset.region}</span>
           </span>
         )}
         {loading && (
-          <span style={{ fontSize: 12, color: "#00AAFF", display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00AAFF", display: "inline-block", animation: "ecPulse 1.2s ease-in-out infinite" }} />
+          <span className="text-xs text-[#00AAFF] flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00AAFF] inline-block" style={{ animation: "ecPulse 1.2s ease-in-out infinite" }} />
             Loading…
           </span>
         )}
-        {error && <span style={{ fontSize: 12, color: "#EF4444" }}>{error}</span>}
+        {error && <span className="text-xs text-red-500">{error}</span>}
       </div>
 
-      <CountrySearchInput token={token} onSelect={onSelect} style={{ marginBottom: 12 }} />
+      <CountrySearchInput token={token} onSelect={onSelect} className="mb-3" />
 
       {/* Quick picks */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      <div className="flex flex-wrap gap-1.5">
         {POPULAR_COUNTRIES.map(c => (
-          <button key={c.code} onClick={() => onSelect(c.code)} style={{
-            background: dataset?.code === c.code ? "#00AAFF18" : "#1e2130",
-            border: `1px solid ${dataset?.code === c.code ? "#00AAFF66" : "#2d3348"}`,
-            color:  dataset?.code === c.code ? "#00AAFF" : "#94a3b8",
-            borderRadius: 7, padding: "4px 10px", fontSize: 12, cursor: "pointer",
-            display: "flex", alignItems: "center", gap: 5, transition: "all .15s",
-            fontWeight: dataset?.code === c.code ? 700 : 500,
-          }}>
-            <span style={{ fontSize: 14 }}>{c.flag}</span>{c.name}
+          <button key={c.code} onClick={() => onSelect(c.code)}
+            className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1 text-xs cursor-pointer transition-all"
+            style={{
+              background:  dataset?.code === c.code ? "#00AAFF18" : "#1e2130",
+              border:      `1px solid ${dataset?.code === c.code ? "#00AAFF66" : "#2d3348"}`,
+              color:       dataset?.code === c.code ? "#00AAFF" : "#94a3b8",
+              fontWeight:  dataset?.code === c.code ? 700 : 500,
+            }}>
+            <span className="text-sm">{c.flag}</span>{c.name}
           </button>
         ))}
         {extraHistory.map(h => (
-          <button key={h.code} onClick={() => onSelect(h.code)} style={{
-            background: "#1e2130", border: "1px dashed #2d3348",
-            color: "#475569", borderRadius: 7, padding: "4px 10px", fontSize: 11,
-            cursor: "pointer", display: "flex", alignItems: "center", gap: 5,
-          }}>
-            <span style={{ fontSize: 13 }}>{h.flag}</span>{h.name}
+          <button key={h.code} onClick={() => onSelect(h.code)}
+            className="flex items-center gap-1.5 bg-[#1e2130] border border-dashed border-[#2d3348] text-slate-600 rounded-[7px] px-2.5 py-1 text-[11px] cursor-pointer">
+            <span className="text-[13px]">{h.flag}</span>{h.name}
           </button>
         ))}
       </div>
@@ -600,32 +596,31 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
   const enabledAlgos = ALGOS.filter(a => activeAlgos.has(a.id));
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+    <div className="max-w-[1100px] mx-auto">
 
       {/* ── Country selector ── */}
       <CountrySelector token={token} dataset={dataset} loading={loading} error={error} onSelect={onSelectCountry} />
 
       {/* ── Algorithm picker ── */}
-      <div style={{ background: "#161929", borderRadius: 12, padding: 16, border: "1px solid #2d3348", marginBottom: 18 }}>
-        <p style={{ margin: "0 0 12px", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+      <div className="bg-[#161929] rounded-xl p-4 border border-[#2d3348] mb-4">
+        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.5px] mb-3">
           Algorithms · {activeAlgos.size}/{ALGOS.length} active
         </p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 8 }}>
+        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
           {ALGOS.map(a => {
             const on = activeAlgos.has(a.id);
             return (
-              <button key={a.id} onClick={() => toggleAlgo(a.id)} style={{
-                background: on ? a.color + "18" : "#1e2130",
-                border: `1px solid ${on ? a.color + "55" : "#2d3348"}`,
-                borderRadius: 9, padding: "10px 12px", cursor: "pointer", textAlign: "left", transition: "all .15s",
-              }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: on ? a.color : "#94a3b8" }}>{a.name}</span>
-                  <span style={{ width: 14, height: 14, borderRadius: "50%", background: on ? a.color : "#2d3348", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#fff", fontWeight: 700, flexShrink: 0 }}>
+              <button key={a.id} onClick={() => toggleAlgo(a.id)}
+                className="rounded-[9px] px-3 py-2.5 cursor-pointer text-left transition-all"
+                style={{ background: on ? a.color + "18" : "#1e2130", border: `1px solid ${on ? a.color + "55" : "#2d3348"}` }}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-bold" style={{ color: on ? a.color : "#94a3b8" }}>{a.name}</span>
+                  <span className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] text-white font-bold shrink-0"
+                    style={{ background: on ? a.color : "#2d3348" }}>
                     {on ? "✓" : ""}
                   </span>
                 </div>
-                <p style={{ margin: 0, fontSize: 10, color: on ? "#64748b" : "#475569", lineHeight: 1.4 }}>{a.desc}</p>
+                <p className="text-[10px] leading-snug" style={{ color: on ? "#64748b" : "#475569" }}>{a.desc}</p>
               </button>
             );
           })}
@@ -633,8 +628,8 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       </div>
 
       {/* ── AI query ── */}
-      <div style={{ background: "#161929", borderRadius: 12, padding: 16, border: "1px solid #2d3348", marginBottom: 18 }}>
-        <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.5px" }}>AI Economic Query</p>
+      <div className="bg-[#161929] rounded-xl p-4 border border-[#2d3348] mb-4">
+        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.5px] mb-2.5">AI Economic Query</p>
         <div className={`flex gap-2 ${isMobile ? "flex-col" : ""}`}>
           <Input value={query} onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runQuery(); } }}
@@ -656,26 +651,26 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       </div>
 
       {/* ── AI result ── */}
-      {aiResult && <div style={{ marginBottom: 18 }}><AIResultPanel result={aiResult} /></div>}
+      {aiResult && <div className="mb-4"><AIResultPanel result={aiResult} /></div>}
 
       {/* ── Algorithm results ── */}
       {!dataset && !loading ? (
-        <div style={{ textAlign: "center", padding: "48px 20px", color: "#475569" }}>
-          <div style={{ fontSize: 36, marginBottom: 12 }}>🌍</div>
-          <p style={{ fontSize: 14, fontWeight: 600, color: "#64748b", margin: "0 0 6px" }}>Select a country to run the algorithms</p>
-          <p style={{ fontSize: 12, color: "#374151" }}>Pick from the quick-selects above or search for any country</p>
+        <div className="text-center py-12 px-5 text-slate-600">
+          <div className="text-4xl mb-3">🌍</div>
+          <p className="text-sm font-semibold text-slate-500 mb-1.5">Select a country to run the algorithms</p>
+          <p className="text-xs text-gray-700">Pick from the quick-selects above or search for any country</p>
         </div>
       ) : loading ? (
-        <div style={{ textAlign: "center", padding: "48px 20px" }}>
-          <span style={{ fontSize: 14, color: "#00AAFF", display: "inline-flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#00AAFF", display: "inline-block", animation: "ecPulse 1.2s ease-in-out infinite" }} />
+        <div className="text-center py-12">
+          <span className="text-sm text-[#00AAFF] inline-flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-[#00AAFF] inline-block" style={{ animation: "ecPulse 1.2s ease-in-out infinite" }} />
             Fetching country data…
           </span>
         </div>
       ) : dataset && enabledAlgos.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "32px", color: "#475569", fontSize: 13 }}>No algorithms selected. Toggle some above.</div>
+        <div className="text-center py-8 text-slate-600 text-[13px]">No algorithms selected. Toggle some above.</div>
       ) : dataset ? (
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 18 }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr" }}>
           {activeAlgos.has("regression")  && <RegressionPanel  dataset={dataset} />}
           {activeAlgos.has("hhi")         && <HHIPanel         dataset={dataset} />}
           {activeAlgos.has("kmeans")      && <KMeansPanel      dataset={dataset} />}
@@ -687,7 +682,7 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
         </div>
       ) : null}
 
-      <p style={{ textAlign: "center", fontSize: 11, color: "#334155", marginTop: 18 }}>
+      <p className="text-center text-[11px] text-slate-700 mt-4">
         Algorithms from scratch · OLS Regression · HHI · K-Means++ · Z-Score Anomaly · HP Filter · CAGR · Pearson r · Trade Openness
       </p>
     </div>

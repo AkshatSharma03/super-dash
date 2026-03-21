@@ -47,7 +47,7 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
         </Alert>
       )}
       {charts.map(chart => <ChartCard key={chart.id} chart={chart} />)}
-      <SourceList sources={sources} style={{ marginBottom: 10 }} />
+      <SourceList sources={sources} className="mb-2.5" />
       {followUps.length > 0 && (
         <div className="flex gap-1.5 flex-wrap">
           {followUps.map((q, i) => (
