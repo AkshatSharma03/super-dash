@@ -167,7 +167,7 @@ All layout and structural styling uses **Tailwind utility classes**. shadcn/ui p
 
 **Why**: Tailwind collocates styles with markup for fast iteration; shadcn components are copy-owned (no version lock-in) and fully type-safe; dynamic colours from data remain readable as inline objects without cluttering the Tailwind config with hundreds of arbitrary values.
 
-### 3. All Algorithms Built from Scratch
+### 2. All Algorithms Built from Scratch
 No ML libraries (no scikit-learn equivalent for JS). Every algorithm is a pure TypeScript function with deterministic, auditable math:
 
 - **Regression**: Normal equation `(XᵀX)⁻¹Xᵀy` with 95% confidence interval bands
@@ -177,14 +177,14 @@ No ML libraries (no scikit-learn equivalent for JS). Every algorithm is a pure T
 
 **Why**: Full transparency for users who want to understand the math; no dependency risk; easier to unit test.
 
-### 4. In-Memory LRU Cache + SQLite Persistent Cache
+### 3. In-Memory LRU Cache + SQLite Persistent Cache
 Two-layer caching:
 - **LRU cache** (custom doubly-linked list + Map, O(1) get/put, 200 entries): short-lived responses for chat (1h TTL) and search (30m TTL)
 - **SQLite `country_cache`**: survives server restarts; 7-day TTL for expensive World Bank/IMF API calls
 
 **Why**: World Bank API responses are slow (~800ms). Caching them avoids re-fetching data that rarely changes.
 
-### 5. Data Source Fallback Chain
+### 4. Data Source Fallback Chain
 ```
 World Bank (primary) → IMF → OECD (OECD members only)
 ```
@@ -192,27 +192,27 @@ Claude auto-generates missing sector/partner breakdowns when the APIs don't retu
 
 **Why**: No single API covers all 200+ countries completely. Graceful degradation beats an error page.
 
-### 6. Agentic Web Search Loop
+### 5. Agentic Web Search Loop
 The `/api/search` endpoint runs Claude in a tool-use loop. Claude decides when to call `web_search_20250305`, inspects results, and may search again (up to 8 turns) before composing a final answer.
 
 **Why**: A single search query often yields insufficient depth. The agentic loop lets Claude iteratively refine its research — closer to how a human analyst would work.
 
-### 7. Guest-First UX, Zero Friction
+### 6. Guest-First UX, Zero Friction
 `POST /api/auth/guest` issues a 24-hour JWT in one request with no DB write. Guest sessions live in memory only. On registration, the user seamlessly upgrades to persistent storage.
 
 **Why**: Requiring sign-up before showing value is a conversion killer for a data tool. Let users experience the product first.
 
-### 8. RFC 4180 CSV Parser (No Library)
+### 7. RFC 4180 CSV Parser (No Library)
 The CSV parser in `src/utils/csv.ts` is a hand-written state machine that handles quoted fields, embedded commas, and embedded newlines.
 
 **Why**: Most JS CSV libraries add unnecessary weight; this is ~100 lines, fully tested, and precisely scoped to what the app needs.
 
-### 9. Mode-Based State Architecture
+### 8. Mode-Based State Architecture
 `App.tsx` holds the selected country dataset in top-level state. All six modes read from this shared state. When you fetch a country in Dashboard mode and switch to Analytics mode, the data is already there.
 
 **Why**: Avoids redundant API calls. Country data is expensive to fetch; fetching it once and sharing it is the right tradeoff.
 
-### 10. Server-Side API Key Isolation
+### 9. Server-Side API Key Isolation
 The Anthropic API key, NewsAPI key, and external data source calls all live in `server.js`. The Vite client bundle never sees these secrets.
 
 **Why**: Basic security hygiene — API keys in client bundles get scraped.
