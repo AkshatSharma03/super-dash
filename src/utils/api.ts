@@ -122,6 +122,74 @@ export function askClaude(
   return post<AIResponse>("/api/chat", { messages });
 }
 
+export interface ChatStreamCallbacks {
+  /** Fired when Claude is fetching a data source (e.g. "Fetching World Bank data…"). */
+  onStatus: (text: string) => void;
+  /** Fired for each insight text token as it streams in. */
+  onText: (delta: string) => void;
+  /** Fired once when the full response (including charts) is ready. */
+  onDone: (result: AIResponse) => void;
+  /** Fired if the server returns an error. */
+  onError: (message: string) => void;
+}
+
+/**
+ * Streaming version of askClaude. Connects to /api/chat via SSE and fires
+ * callbacks as events arrive so the UI can update progressively.
+ */
+export async function askClaudeStream(
+  messages: Array<{ role: string; content: string }>,
+  callbacks: ChatStreamCallbacks,
+  token?: string,
+): Promise<void> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ messages }),
+  });
+
+  if (!res.ok || !res.body) {
+    callbacks.onError(await res.text().catch(() => "Network error"));
+    return;
+  }
+
+  const reader  = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop() ?? "";
+
+      let eventName = "";
+      for (const line of lines) {
+        if (line.startsWith("event: ")) {
+          eventName = line.slice(7).trim();
+        } else if (line.startsWith("data: ")) {
+          const raw = line.slice(6);
+          try {
+            const payload = JSON.parse(raw);
+            if (eventName === "status") callbacks.onStatus(payload.text ?? "");
+            else if (eventName === "text")  callbacks.onText(payload.delta ?? "");
+            else if (eventName === "done")  callbacks.onDone(payload.result as AIResponse);
+            else if (eventName === "error") callbacks.onError(payload.message ?? "Unknown error");
+          } catch { /* malformed event — skip */ }
+          eventName = "";
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
 /**
  * Perform a live web search (via Anthropic web_search beta tool).
  * Falls back to model knowledge if the tool is unavailable.
