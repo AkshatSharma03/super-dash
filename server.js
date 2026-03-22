@@ -260,8 +260,64 @@ function validateAIResponse(parsed) {
   };
 }
 
-function cacheKey(endpoint, body) {
-  return createHash('sha256').update(endpoint + JSON.stringify(body)).digest('hex');
+/**
+ * Normalize a user query string for cache-key purposes only.
+ * The goal is to make minor phrasing variants ("How has the EU..." vs
+ * "How has EU...") resolve to the same cache key so they return the
+ * same cached answer.
+ *
+ * Rules applied (order matters):
+ *  1. Lowercase
+ *  2. Remove leading articles at the start of the string ("the ", "a ", "an ")
+ *  3. Collapse all whitespace runs to a single space
+ *  4. Strip leading/trailing whitespace and punctuation
+ *  5. Expand common contractions (it's→its, what's→whats, etc.)
+ *     so "what's" and "what is" share a key.
+ *  6. Strip filler openers ("can you", "please", "tell me", etc.)
+ *
+ * We do NOT normalize the actual text sent to Claude — only the key used
+ * to look up / store the cached response.
+ */
+function normalizeQuery(text) {
+  if (typeof text !== 'string') return text;
+  return text
+    .toLowerCase()
+    // expand common contractions
+    .replace(/\bwhat's\b/g, 'what is')
+    .replace(/\bhow's\b/g,  'how is')
+    .replace(/\bit's\b/g,   'it is')
+    .replace(/\bdon't\b/g,  'do not')
+    .replace(/\bdoesn't\b/g,'does not')
+    // strip filler openers
+    .replace(/^(can you |please |tell me |show me |give me )+/g, '')
+    // strip leading article at very start
+    .replace(/^(the |a |an )/g, '')
+    // strip possessives (EU's → EU, Germany's → Germany)
+    .replace(/'s\b/g, '')
+    // strip all remaining apostrophes
+    .replace(/'/g, '')
+    // strip internal definite article " the " (EU's → EU normalises, "the" before names)
+    .replace(/ the /g, ' ')
+    // collapse whitespace
+    .replace(/\s+/g, ' ')
+    // strip surrounding punctuation
+    .replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, '')
+    .trim();
+}
+
+/**
+ * Build a stable cache key for a /chat request.
+ * User message content is normalized so minor phrasing variants share a key.
+ * System/assistant turns are kept verbatim (they're controlled by us, not users).
+ */
+function cacheKey(endpoint, messages) {
+  const normalizedMessages = Array.isArray(messages)
+    ? messages.map(m => {
+        if (m.role !== 'user' || typeof m.content !== 'string') return m;
+        return { ...m, content: normalizeQuery(m.content) };
+      })
+    : messages;
+  return createHash('sha256').update(endpoint + JSON.stringify(normalizedMessages)).digest('hex');
 }
 
 function requireAuth(req, res, next) {
