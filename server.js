@@ -295,7 +295,7 @@ const QUERY_PHRASES = [
   // ── Country / region names (multi-word → single token) ───────────────────
   [/united states(?: of america)?/g,        'us'],
   [/united kingdom/g,                       'uk'],
-  [/european union/g,                       'eu'],
+  [/european unions?/g,                      'eu'],
   [/great britain/g,                        'uk'],
   [/euro ?zone|euro ?area/g,                'eu'],
   [/south korea/g,                          'southkorea'],
