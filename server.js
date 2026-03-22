@@ -31,8 +31,13 @@ const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const IS_DEV            = process.env.NODE_ENV !== 'production';
-const NEWS_API_KEY      = process.env.NEWS_API_KEY; 
+const NEWS_API_KEY      = process.env.NEWS_API_KEY;
 const TRUSTED_NEWS_DOMAINS = 'reuters.com,bloomberg.com,ft.com,wsj.com,economist.com,apnews.com';
+
+// ── Kimi 2.5 canonicalization ─────────────────────────────────────────────────
+const KIMI_API_KEY = process.env.KIMI_API_KEY;
+const KIMI_BASE    = 'https://api.moonshot.cn/v1/chat/completions';
+const KIMI_MODEL   = process.env.KIMI_MODEL || 'moonshot-v1-8k';
 
 // LRU cache
 const CACHE_CAP         = 200;
@@ -165,7 +170,8 @@ class LRUCache {
   get size() { return this.map.size; }
 }
 
-const apiCache = new LRUCache(CACHE_CAP);
+const apiCache   = new LRUCache(CACHE_CAP);
+const canonCache = new LRUCache(2000); // stores Kimi canonical strings, 7-day TTL
 
 // ── SQLite database ────────────────────────────────────────────────────────────
 mkdirSync(join(__dirname, 'data'), { recursive: true });
@@ -419,19 +425,89 @@ function semanticKey(text) {
   return keywords.join(' ');
 }
 
+const KIMI_CANON_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+const KIMI_SYSTEM_PROMPT = `You are a query canonicalization engine for an economics dashboard.
+Extract the canonical meaning of a user query as compact JSON.
+Output ONLY valid JSON — no explanation, no markdown, no extra text.
+
+Schema:
+{
+  "countries":      string[],  // lowercase canonical names: "us","uk","germany","china", etc. Empty array if none.
+  "indicators":     string[],  // 1–3 items from: gdp, inflation, unemployment, trade, debt, fdi, exchangerate, interestrate, ppp, marketcap, other
+  "timeframe":      string|null, // "YYYY", "YYYY-YYYY", or null if not specified
+  "question_type":  string     // one of: level, change, growth, decline, comparison, composition, forecast, other
+}`;
+
 /**
- * Build a stable cache key for a /chat request.
- * User message content is reduced to its semantic keyword set so phrasing
- * variants resolve to the same key and return the same cached response.
+ * Use Kimi 2.5 to extract a canonical JSON representation of a user query.
+ * Falls back to semanticKey() if KIMI_API_KEY is not set or the call fails.
+ * Results are cached locally for 7 days to avoid repeated API calls.
  */
-function cacheKey(endpoint, messages) {
-  const normalizedMessages = Array.isArray(messages)
-    ? messages.map(m => {
+async function canonicalizeQuery(text) {
+  if (typeof text !== 'string') return text;
+
+  if (!KIMI_API_KEY) return semanticKey(text);
+
+  const hit = canonCache.get(text);
+  if (hit) return hit;
+
+  try {
+    const res = await fetch(KIMI_BASE, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${KIMI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model:       KIMI_MODEL,
+        messages: [
+          { role: 'system', content: KIMI_SYSTEM_PROMPT },
+          { role: 'user',   content: text },
+        ],
+        max_tokens:  150,
+        temperature: 0,
+      }),
+      signal: AbortSignal.timeout(5_000),
+    });
+
+    if (!res.ok) throw new Error(`Kimi API ${res.status}`);
+
+    const data     = await res.json();
+    const raw      = data.choices?.[0]?.message?.content?.trim() ?? '';
+    JSON.parse(raw); // validate — throws if Kimi returned non-JSON
+    canonCache.put(text, raw, KIMI_CANON_TTL_MS);
+    if (IS_DEV) console.log('[canonicalize] Kimi →', raw);
+    return raw;
+  } catch (err) {
+    if (IS_DEV) console.warn('[canonicalize] Kimi fallback:', err.message);
+    return semanticKey(text); // graceful degradation
+  }
+}
+
+/**
+ * Build a stable cache key for a /chat, /search, or /analytics request.
+ * User message text is first canonicalized via Kimi 2.5 (or semanticKey as
+ * fallback) so phrasing variants resolve to the same key.
+ */
+async function cacheKey(endpoint, messages) {
+  let normalized;
+  if (Array.isArray(messages)) {
+    normalized = await Promise.all(
+      messages.map(async m => {
         if (m.role !== 'user' || typeof m.content !== 'string') return m;
-        return { ...m, content: semanticKey(m.content) };
+        return { ...m, content: await canonicalizeQuery(m.content) };
       })
-    : messages;
-  return createHash('sha256').update(endpoint + JSON.stringify(normalizedMessages)).digest('hex');
+    );
+  } else if (messages && typeof messages === 'object') {
+    normalized = { ...messages };
+    if (typeof normalized.query === 'string') {
+      normalized.query = await canonicalizeQuery(normalized.query);
+    }
+  } else {
+    normalized = messages;
+  }
+  return createHash('sha256').update(endpoint + JSON.stringify(normalized)).digest('hex');
 }
 
 function requireAuth(req, res, next) {
@@ -1332,7 +1408,7 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
   // Cache check — keyed on the full conversation so the same sequence of
   // messages always returns the same response (within the same calendar year).
   const isSingleTurn = messages.length === 1;
-  const ck = cacheKey('/chat', messages);
+  const ck = await cacheKey('/chat', messages);
   if (ck) {
     const cached = apiCache.get(ck);
     if (cached) {
@@ -1533,7 +1609,7 @@ app.post('/api/search', apiLimiter, async (req, res) => {
   if (!body) return;
   const { query } = body;
 
-  const ck = cacheKey('/search', { query });
+  const ck = await cacheKey('/search', { query });
   const cached = apiCache.get(ck);
   if (cached) { if (IS_DEV) console.log('[cache hit] /api/search:', query.slice(0, 40)); return res.json(cached); }
 
@@ -2012,7 +2088,7 @@ app.post('/api/analytics', requireAuth, apiLimiter, async (req, res) => {
   if (!body) return;
   const { query, context = '' } = body;
 
-  const ck = cacheKey('/analytics', { query, context: context.slice(0, 500) });
+  const ck = await cacheKey('/analytics', { query, context: context.slice(0, 500) });
   const cached = apiCache.get(ck);
   if (cached) {
     if (IS_DEV) console.log('[cache hit] /api/analytics');
