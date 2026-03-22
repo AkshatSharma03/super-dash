@@ -362,12 +362,15 @@ const DATA_SOURCES = {
   },
 };
 
-async function fetchWithRetry(url, options, retries = 2, baseDelay = 1000) {
+async function fetchWithRetry(url, options, retries = 2, baseDelay = 1000, retryStatuses = [429, 503], timeoutMs = null) {
   for (let i = 0; i <= retries; i++) {
     try {
-      const res = await fetch(url, options);
+      // Create a fresh AbortSignal for every attempt so a timed-out signal
+      // from attempt N doesn't poison attempt N+1.
+      const signal = timeoutMs ? AbortSignal.timeout(timeoutMs) : options.signal;
+      const res = await fetch(url, { ...options, signal });
       if (res.ok) return res;
-      if ((res.status === 503 || res.status === 429) && i < retries) {
+      if (retryStatuses.includes(res.status) && i < retries) {
         const delay = baseDelay * Math.pow(2, i);
         await new Promise(r => setTimeout(r, delay));
         continue;
@@ -391,9 +394,7 @@ async function fetchIndicatorWithFallback(isoCode, indicatorType) {
     const indicator = cfg.indicators[indicatorType];
     const url = `${cfg.baseUrl}/country/${code}/indicator/${indicator}?date=2010:2024&format=json&per_page=30`;
     
-    const res = await fetchWithRetry(url, { 
-      signal: AbortSignal.timeout(cfg.timeout) 
-    }, cfg.retries);
+    const res = await fetchWithRetry(url, {}, cfg.retries, 1000, [429, 503], cfg.timeout);
     
     const data = await res.json();
     if (!Array.isArray(data) || !Array.isArray(data[1])) {
@@ -418,9 +419,8 @@ async function fetchIndicatorWithFallback(isoCode, indicatorType) {
     const url = `${cfg.baseUrl}/${indicator}/${iso3}?periods=2010:2024`;
     
     const res = await fetchWithRetry(url, {
-      signal: AbortSignal.timeout(cfg.timeout),
       headers: { 'Accept': 'application/json' },
-    }, cfg.retries);
+    }, cfg.retries, 2000, [403, 429, 503], cfg.timeout);
     
     const json = await res.json();
     const values = json.values?.[iso3];
@@ -454,9 +454,8 @@ async function fetchIndicatorWithFallback(isoCode, indicatorType) {
       const url = `${cfg.baseUrl}/QNA/${code}.B1_GE.HVPVOBARSA.Q/all?startTime=2010&endTime=2024&dimensionAtObservation=AllDimensions`;
       
       const res = await fetchWithRetry(url, {
-        signal: AbortSignal.timeout(cfg.timeout),
         headers: { 'Accept': 'application/json' },
-      }, cfg.retries);
+      }, cfg.retries, 1000, [429, 503], cfg.timeout);
       
       const json = await res.json();
       // Parse SDMX-JSON structure (simplified)
@@ -885,8 +884,7 @@ function toolStatusText(name, input) {
 async function fetchWorldBankIndicator(countryCodes, indicator, startYear, endYear) {
   const codes = Array.isArray(countryCodes) ? countryCodes.join(';') : countryCodes;
   const url = `https://api.worldbank.org/v2/country/${codes}/indicator/${indicator}?format=json&date=${startYear}:${endYear}&per_page=500`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-  if (!res.ok) throw new Error(`World Bank API ${res.status}`);
+  const res = await fetchWithRetry(url, { headers: { Accept: 'application/json' } }, 2, 1500, [429, 503], 20000);
   const json = await res.json();
   if (!Array.isArray(json) || !json[1]) return [];
   return json[1]
@@ -910,8 +908,8 @@ async function fetchWorldBankIndicator(countryCodes, indicator, startYear, endYe
 async function fetchIMFIndicator(indicator, countryCodes) {
   const codes = Array.isArray(countryCodes) ? countryCodes.join('/') : countryCodes;
   const url = `https://www.imf.org/external/datamapper/api/v1/${indicator}/${codes}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-  if (!res.ok) throw new Error(`IMF API ${res.status}`);
+  // IMF DataMapper sometimes returns 403 as a transient anti-scrape measure — retry it.
+  const res = await fetchWithRetry(url, { headers: { Accept: 'application/json' } }, 3, 2000, [403, 429, 503], 20000);
   const json = await res.json();
   const values = json?.values?.[indicator];
   if (!values) return [];
@@ -943,19 +941,66 @@ async function fetchFREDSeries(seriesId, startYear, endYear) {
     .sort((a, b) => a.year - b.year);
 }
 
+// ── Cross-source indicator mapping (World Bank ↔ IMF DataMapper) ──────────────
+// When one source is unavailable the other is tried automatically.
+const WB_TO_IMF_INDICATOR = {
+  'NY.GDP.MKTP.KD.ZG': 'NGDP_RPCH',  // GDP growth %
+  'NY.GDP.MKTP.CD':    'NGDPD',       // GDP current USD
+  'NY.GDP.PCAP.CD':    'NGDPDPC',     // GDP per capita
+  'FP.CPI.TOTL.ZG':   'PCPIPCH',     // Inflation
+  'SL.UEM.TOTL.ZS':   'LUR',         // Unemployment rate
+  'NE.GDI.TOTL.ZS':   'NID_NGDP',   // Investment % GDP
+  'NE.EXP.GNFS.CD':   'TXG_RPCH',   // Exports (WB=USD, IMF=growth%)
+  'NE.IMP.GNFS.CD':   'TMG_RPCH',   // Imports (WB=USD, IMF=growth%)
+  'BX.KLT.DINV.CD.WD':'BX_FDI_DINV_CD_WD', // FDI inflows
+  'GC.DOD.TOTL.GD.ZS':'GGXWDG_NGDP', // Government debt % GDP
+};
+const IMF_TO_WB_INDICATOR = Object.fromEntries(
+  Object.entries(WB_TO_IMF_INDICATOR).map(([wb, imf]) => [imf, wb])
+);
+
 /** Execute a data tool call and return the result as a string. */
 async function executeDataTool(name, input) {
   if (name === 'fetch_world_bank') {
     const { country_codes, indicator, start_year = 2000, end_year = 2024 } = input;
-    const rows = await fetchWorldBankIndicator(country_codes, indicator, start_year, end_year);
-    const sourceUrl = `https://data.worldbank.org/indicator/${indicator}?locations=${Array.isArray(country_codes) ? country_codes.join('-') : country_codes}`;
-    return JSON.stringify({ rows, source: 'World Bank Open Data', indicator, sourceUrl });
+    try {
+      const rows = await fetchWorldBankIndicator(country_codes, indicator, start_year, end_year);
+      if (rows.length === 0) throw new Error('World Bank returned no data for this query');
+      const sourceUrl = `https://data.worldbank.org/indicator/${indicator}?locations=${Array.isArray(country_codes) ? country_codes.join('-') : country_codes}`;
+      return JSON.stringify({ rows, source: 'World Bank Open Data', indicator, sourceUrl });
+    } catch (wbErr) {
+      // Auto-fallback: try IMF DataMapper if a matching indicator exists
+      const imfIndicator = WB_TO_IMF_INDICATOR[indicator];
+      if (!imfIndicator) throw wbErr;
+      const codeList = Array.isArray(country_codes) ? country_codes : [country_codes];
+      const iso3Codes = codeList.map(c => countries.alpha2ToAlpha3(c.toUpperCase())).filter(Boolean);
+      if (!iso3Codes.length) throw wbErr;
+      if (IS_DEV) console.log(`[fallback] WB→IMF: ${indicator} → ${imfIndicator}`);
+      const rows = await fetchIMFIndicator(imfIndicator, iso3Codes);
+      const sourceUrl = `https://www.imf.org/external/datamapper/${imfIndicator}`;
+      return JSON.stringify({ rows, source: 'IMF DataMapper', indicator: imfIndicator, sourceUrl, note: `World Bank unavailable (${wbErr.message}) — using IMF DataMapper equivalent` });
+    }
   }
   if (name === 'fetch_imf') {
     const { indicator, country_codes } = input;
-    const rows = await fetchIMFIndicator(indicator, country_codes);
-    const sourceUrl = `https://www.imf.org/external/datamapper/${indicator}`;
-    return JSON.stringify({ rows, source: 'IMF DataMapper', indicator, sourceUrl });
+    try {
+      const rows = await fetchIMFIndicator(indicator, country_codes);
+      if (rows.length === 0) throw new Error('IMF returned no data for this query');
+      const sourceUrl = `https://www.imf.org/external/datamapper/${indicator}`;
+      return JSON.stringify({ rows, source: 'IMF DataMapper', indicator, sourceUrl });
+    } catch (imfErr) {
+      // Auto-fallback: try World Bank if a matching indicator exists
+      const wbIndicator = IMF_TO_WB_INDICATOR[indicator];
+      if (!wbIndicator) throw imfErr;
+      const codeList = Array.isArray(country_codes) ? country_codes : [country_codes];
+      // IMF uses ISO3 codes; World Bank needs ISO2 — convert
+      const iso2Codes = codeList.map(c => countries.alpha3ToAlpha2(c.toUpperCase())).filter(Boolean);
+      if (!iso2Codes.length) throw imfErr;
+      if (IS_DEV) console.log(`[fallback] IMF→WB: ${indicator} → ${wbIndicator}`);
+      const rows = await fetchWorldBankIndicator(iso2Codes, wbIndicator, 2000, 2024);
+      const sourceUrl = `https://data.worldbank.org/indicator/${wbIndicator}`;
+      return JSON.stringify({ rows, source: 'World Bank Open Data', indicator: wbIndicator, sourceUrl, note: `IMF DataMapper unavailable (${imfErr.message}) — using World Bank equivalent` });
+    }
   }
   if (name === 'fetch_fred') {
     const { series_id, start_year = 2000, end_year = 2024 } = input;
