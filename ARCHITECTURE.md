@@ -217,6 +217,53 @@ The Anthropic API key, NewsAPI key, and external data source calls all live in `
 
 **Why**: Basic security hygiene — API keys in client bundles get scraped.
 
+### 10. LLM-Based Query Canonicalization (Kimi 2.5)
+
+Cache hit rates depend entirely on how well two differently-worded queries map to the same key. The original approach used a hand-crafted two-phase normaliser:
+
+- **Phase 1** — regex phrase replacements (`"gross domestic product"` → `"gdp"`, `"United States"` → `"us"`, etc.)
+- **Phase 2** — word-level synonym map + economics-domain stopword list + alphabetical sort
+
+This worked for simple cases but had three fundamental failure modes:
+
+1. **Maintenance burden** — every new synonym or country alias required a manual code change. The synonym map grew to ~80 entries and still had gaps (e.g. "jobless rate", "price pressures", "overheating").
+2. **Cross-concept equivalences** — `cpi = inflation`, `britain = uk`, `economic growth = gdp growth` cannot be expressed as simple token substitutions without domain knowledge. The old approach handled these inconsistently.
+3. **Morphological coverage** — verb forms had to be enumerated one by one (`shifted`, `shift`, `shifting`, `shifts` → `change`). Missing a form meant a cache miss.
+
+**The solution**: `canonicalizeQuery(text)` calls the Kimi 2.5 API (`moonshot-v1-8k`) with temperature 0 and a strict system prompt to extract a structured JSON canonical form:
+
+```json
+{
+  "countries":     ["germany"],
+  "indicators":    ["gdp"],
+  "timeframe":     "2015-2024",
+  "question_type": "growth"
+}
+```
+
+This JSON string becomes the cache key input instead of the old keyword set. Semantically identical queries — regardless of phrasing, word order, or verb form — produce the same JSON, and therefore the same SHA-256 hash.
+
+**Why Kimi 2.5 specifically**:
+- OpenAI-compatible API (`https://api.moonshot.cn/v1/chat/completions`) — minimal integration surface
+- `temperature: 0` gives deterministic outputs for the same query, which is critical for a cache key function
+- `moonshot-v1-8k` is the fastest/cheapest tier; canonicalization prompts are short and responses are tiny (<150 tokens)
+- 5-second `AbortSignal.timeout` caps the worst-case latency impact
+
+**Why not embeddings (Level 2)**:
+Embeddings represent semantic similarity as a continuous distance, which is excellent for fuzzy search but the wrong tool for cache key generation. Cache lookup requires exact equality — you need to know that two queries *are* the same thing, not just *similar*. Embeddings would require a vector store, approximate nearest neighbor search, and a similarity threshold to tune. That infrastructure overhead is not justified when an LLM can directly output a canonical discrete form.
+
+**Why not a stemmer (Level 1)**:
+A Porter stemmer automatically handles morphological variants (`shifted → shift`, `exports → export`) but cannot handle cross-concept synonyms (`cpi → inflation`, `britain → uk`) or structural meaning (`"how has X changed" = question_type: change`). It still requires maintaining the domain phrase dictionary for any multi-word term.
+
+**Graceful fallback design**:
+If `KIMI_API_KEY` is not set, or if the Kimi call fails (network error, timeout, non-JSON response), `canonicalizeQuery` silently falls back to the original `semanticKey()` algorithm. This means:
+- The feature is opt-in — existing deployments without the key behave identically to before
+- A Kimi outage cannot take down the cache system or any API endpoint
+- In development, the fallback is logged so it's visible without being noisy in production
+
+**Local caching of canonical results**:
+`canonCache` is a dedicated LRU (2,000 entries, 7-day TTL) that stores the raw query string → Kimi JSON output. Each unique query text only ever triggers one Kimi API call; subsequent requests for the same text hit the local cache. At typical usage volumes this means Kimi is called infrequently and the marginal cost per request is near zero after warm-up.
+
 ---
 
 ## Security Model
@@ -325,5 +372,7 @@ npm run test:coverage
 | `PORT` | No | Server port (default 3000) |
 | `DB_PATH` | No | SQLite file path (default `data/econChart.db`) |
 | `NEWS_API_KEY` | No | NewsAPI.org for live news context |
+| `KIMI_API_KEY` | No | Kimi 2.5 API key for LLM query canonicalization; falls back to built-in normaliser if absent |
+| `KIMI_MODEL` | No | Kimi model override (default `moonshot-v1-8k`; set to `kimi-k2` if available) |
 | `VITE_POSTHOG_KEY` | No | PostHog client analytics |
 | `POSTHOG_API_KEY` | No | PostHog server analytics |

@@ -31,8 +31,13 @@ const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const IS_DEV            = process.env.NODE_ENV !== 'production';
-const NEWS_API_KEY      = process.env.NEWS_API_KEY; 
+const NEWS_API_KEY      = process.env.NEWS_API_KEY;
 const TRUSTED_NEWS_DOMAINS = 'reuters.com,bloomberg.com,ft.com,wsj.com,economist.com,apnews.com';
+
+// ── Kimi 2.5 canonicalization ─────────────────────────────────────────────────
+const KIMI_API_KEY = process.env.KIMI_API_KEY;
+const KIMI_BASE    = 'https://api.moonshot.cn/v1/chat/completions';
+const KIMI_MODEL   = process.env.KIMI_MODEL || 'moonshot-v1-8k';
 
 // LRU cache
 const CACHE_CAP         = 200;
@@ -165,7 +170,8 @@ class LRUCache {
   get size() { return this.map.size; }
 }
 
-const apiCache = new LRUCache(CACHE_CAP);
+const apiCache   = new LRUCache(CACHE_CAP);
+const canonCache = new LRUCache(2000); // stores Kimi canonical strings, 7-day TTL
 
 // ── SQLite database ────────────────────────────────────────────────────────────
 mkdirSync(join(__dirname, 'data'), { recursive: true });
@@ -260,8 +266,248 @@ function validateAIResponse(parsed) {
   };
 }
 
-function cacheKey(endpoint, body) {
-  return createHash('sha256').update(endpoint + JSON.stringify(body)).digest('hex');
+// ── Semantic query normalisation for cache keys ───────────────────────────────
+//
+// Two-phase approach so phrasing variants always resolve to the same key:
+//   Phase 1 – multi-word phrase replacement (before tokenising)
+//   Phase 2 – word-level synonym mapping + stopword removal + sort
+//
+// The ORIGINAL text is always sent to Claude unchanged.
+
+// Phase 1: ordered list of [regex, replacement] applied before splitting.
+// Longer / more specific phrases must come before shorter ones.
+const QUERY_PHRASES = [
+  // ── Economic indicators (multi-word → single token) ──────────────────────
+  [/gross domestic product/g,               'gdp'],
+  [/consumer price index/g,                 'inflation'],
+  [/foreign direct investment/g,            'fdi'],
+  [/current account/g,                      'currentaccount'],
+  [/trade (?:deficit|surplus|balance)/g,    'tradebalance'],
+  [/balance of (?:trade|payments)/g,        'tradebalance'],
+  [/purchasing power parity/g,              'ppp'],
+  [/(?:government|public|national) debt/g,  'debt'],
+  [/debt.to.gdp/g,                          'debt gdp'],
+  [/debt (?:percentage|percent|pct|ratio|share)/g, 'debt gdp'], // "debt percentage" ≡ "debt-to-GDP"
+  [/interest rate/g,                        'interestrate'],
+  [/exchange rate/g,                        'exchangerate'],
+  [/labour|labor market/g,                  'unemployment'],
+  [/market capitalisation|market cap/g,     'marketcap'],
+  // ── Country / region names (multi-word → single token) ───────────────────
+  [/united states(?: of america)?/g,        'us'],
+  [/united kingdom/g,                       'uk'],
+  [/european union/g,                       'eu'],
+  [/great britain/g,                        'uk'],
+  [/euro ?zone|euro ?area/g,                'eu'],
+  [/south korea/g,                          'southkorea'],
+  [/north korea/g,                          'northkorea'],
+  [/saudi arabia/g,                         'saudiarabia'],
+  [/south africa/g,                         'southafrica'],
+  [/new zealand/g,                          'newzealand'],
+  [/czech republic/g,                       'czechia'],
+  // ── Time-period shorthands ────────────────────────────────────────────────
+  [/last two decades?|past two decades?/g,  '20year'],
+  [/last decade|past decade/g,              '10year'],
+  [/last (\d+) years?/g,                    (_, n) => `${n}year`],
+  [/past (\d+) years?/g,                    (_, n) => `${n}year`],
+  [/over (?:the )?(?:last|past) (\d+) years?/g, (_, n) => `${n}year`],
+];
+
+// Phase 2: words that carry no semantic content in an economics context.
+const QUERY_STOPWORDS = new Set([
+  // articles / prepositions / conjunctions
+  'a','an','the','and','or','but','in','of','to','for','on','at','by','as',
+  'with','from','after','since','until','before','between','about','into',
+  'through','during','per',
+  // standalone financial terms that are noise without context
+  // ("trade deficit/surplus/balance" is handled by the phrase step above)
+  'balance','surplus','deficit',
+  // question words / discourse markers
+  'how','what','when','where','which','who','why','whose',
+  'has','have','had','is','are','was','were','been','be','will','would',
+  'could','should','do','does','did','can','may','might','shall','need',
+  'tell','me','show','give','please','explain','describe','analyze','analyse',
+  'compare','look','get','find','check','let','know','think','consider',
+  'you','i','we','they','it','its','my','your','our','their',
+  'this','that','these','those','here','there',
+  'much','many','more','most','less','least','some','any','all','each',
+  'also','just','very','really','quite','rather','even','still','already',
+  'now','then','ago','onwards','onward','overall','general','generally',
+  'become','became','went','go','came','come','got',
+  // measurement words that don't distinguish queries on an economics platform
+  'rate','rates','ratio','ratios','percentage','pct','level','levels',
+  'figure','figures','number','numbers','data','statistics','stat','stats',
+  'value','values','amount','amounts','index','indices','indicator','metric',
+  'inflow','inflows','outflow','outflows','volume','volumes',
+  // generic economic adjectives (everything on this platform is economic)
+  'economic','fiscal','monetary','financial','macro','macroeconomic',
+  // hedge/filler words
+  'recent','latest','current','annual','yearly','monthly','total',
+  'overall','aggregate','average','key','main','major','top',
+]);
+
+// Phase 2: word-level synonym map (applied after phrase replacement + tokenising).
+const QUERY_SYNONYMS = {
+  // ── Country adjectives / aliases → canonical lowercase name ──────────────
+  usa: 'us', america: 'us', american: 'us', americans: 'us',
+  british: 'uk', britain: 'uk', england: 'uk', english: 'uk',
+  german: 'germany', deutsch: 'germany', deutschland: 'germany',
+  french: 'france',
+  japanese: 'japan',
+  chinese: 'china', prc: 'china',
+  indian: 'india',
+  brazilian: 'brazil',
+  russian: 'russia',
+  korean: 'southkorea',
+  // ── Economic indicator aliases ────────────────────────────────────────────
+  cpi: 'inflation', inflationary: 'inflation', prices: 'inflation',
+  economic: 'gdp',  // "India economic growth" ≡ "India GDP growth"
+  unemployment: 'unemployment', jobless: 'unemployment', unemployed: 'unemployment',
+  jobs: 'employment', employed: 'employment', employment: 'employment',
+  // Note: deficit/surplus/balance are handled by phrase step ("trade deficit" → "tradebalance")
+  // Standalone uses are dropped via stopwords to avoid false matches.
+  // ── Change / movement verbs → 'change' ───────────────────────────────────
+  shifted: 'change', shift: 'change', shifts: 'change',
+  changed: 'change', changes: 'change', changing: 'change',
+  evolved:  'change', evolve: 'change', evolution: 'change',
+  moved:    'change', move: 'change', movement: 'change',
+  transformed: 'change', transformation: 'change',
+  transitioned: 'change', transition: 'change',
+  developed: 'change', development: 'change',
+  happened:  'change', happen: 'change', happens: 'change',
+  // ── Growth / increase → 'growth' ─────────────────────────────────────────
+  grown:    'growth', grew: 'growth', growing: 'growth',
+  increase: 'growth', increased: 'growth', increasing: 'growth',
+  rise:     'growth', rose: 'growth', risen: 'growth', rising: 'growth',
+  surge:    'growth', surged: 'growth', expand: 'growth', expanded: 'growth',
+  // ── Decline → 'decline' ───────────────────────────────────────────────────
+  declined: 'decline', decreasing: 'decline', decreased: 'decline',
+  fell:     'decline', fall: 'decline', fallen: 'decline', falling: 'decline',
+  dropped:  'decline', drop: 'decline', contraction: 'decline', contracted: 'decline',
+  // ── Comparison words — drop entirely (subjects already captured) ──────────
+  versus: null, vs: null, compared: null, against: null, comparison: null,
+  // ── Composition / structure ───────────────────────────────────────────────
+  composition: 'composition', structure: 'composition', makeup: 'composition',
+  breakdown: 'composition', mix: 'composition',
+  // ── Trade ────────────────────────────────────────────────────────────────
+  exports: 'export', exported: 'export', exporting: 'export',
+  imports: 'import', imported: 'import', importing: 'import',
+  // ── Measurement words not in stopwords ───────────────────────────────────
+  gross: null, domestic: null, product: null,   // residue after phrase step
+  government: null, public: null, national: null, // residue after phrase step
+};
+
+/**
+ * Extract a sorted canonical keyword set from a user query.
+ * Used only for the cache key — the original text still goes to Claude.
+ *
+ * Phase 1: replace known multi-word phrases with a single token.
+ * Phase 2: tokenise, apply word synonyms, drop stopwords, sort.
+ */
+function semanticKey(text) {
+  if (typeof text !== 'string') return text;
+
+  // Phase 1 — phrase replacement
+  let t = text.toLowerCase().replace(/'s\b/g, '').replace(/'/g, '');
+  for (const [re, rep] of QUERY_PHRASES) t = t.replace(re, rep);
+
+  // Phase 2 — tokenise, map synonyms, filter, sort
+  const keywords = [...new Set(
+    t.replace(/[^a-z0-9\s]/g, ' ')
+     .split(/\s+/)
+     .filter(Boolean)
+     .map(w => {
+       if (w in QUERY_SYNONYMS) return QUERY_SYNONYMS[w]; // null = drop
+       return w;
+     })
+     .filter(w => w !== null && !QUERY_STOPWORDS.has(w) && w.length > 1)
+  )].sort();
+
+  return keywords.join(' ');
+}
+
+const KIMI_CANON_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+const KIMI_SYSTEM_PROMPT = `You are a query canonicalization engine for an economics dashboard.
+Extract the canonical meaning of a user query as compact JSON.
+Output ONLY valid JSON — no explanation, no markdown, no extra text.
+
+Schema:
+{
+  "countries":      string[],  // lowercase canonical names: "us","uk","germany","china", etc. Empty array if none.
+  "indicators":     string[],  // 1–3 items from: gdp, inflation, unemployment, trade, debt, fdi, exchangerate, interestrate, ppp, marketcap, other
+  "timeframe":      string|null, // "YYYY", "YYYY-YYYY", or null if not specified
+  "question_type":  string     // one of: level, change, growth, decline, comparison, composition, forecast, other
+}`;
+
+/**
+ * Use Kimi 2.5 to extract a canonical JSON representation of a user query.
+ * Falls back to semanticKey() if KIMI_API_KEY is not set or the call fails.
+ * Results are cached locally for 7 days to avoid repeated API calls.
+ */
+async function canonicalizeQuery(text) {
+  if (typeof text !== 'string') return text;
+
+  if (!KIMI_API_KEY) return semanticKey(text);
+
+  const hit = canonCache.get(text);
+  if (hit) return hit;
+
+  try {
+    const res = await fetch(KIMI_BASE, {
+      method: 'POST',
+      headers: {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${KIMI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model:       KIMI_MODEL,
+        messages: [
+          { role: 'system', content: KIMI_SYSTEM_PROMPT },
+          { role: 'user',   content: text },
+        ],
+        max_tokens:  150,
+        temperature: 0,
+      }),
+      signal: AbortSignal.timeout(5_000),
+    });
+
+    if (!res.ok) throw new Error(`Kimi API ${res.status}`);
+
+    const data     = await res.json();
+    const raw      = data.choices?.[0]?.message?.content?.trim() ?? '';
+    JSON.parse(raw); // validate — throws if Kimi returned non-JSON
+    canonCache.put(text, raw, KIMI_CANON_TTL_MS);
+    if (IS_DEV) console.log('[canonicalize] Kimi →', raw);
+    return raw;
+  } catch (err) {
+    if (IS_DEV) console.warn('[canonicalize] Kimi fallback:', err.message);
+    return semanticKey(text); // graceful degradation
+  }
+}
+
+/**
+ * Build a stable cache key for a /chat, /search, or /analytics request.
+ * User message text is first canonicalized via Kimi 2.5 (or semanticKey as
+ * fallback) so phrasing variants resolve to the same key.
+ */
+async function cacheKey(endpoint, messages) {
+  let normalized;
+  if (Array.isArray(messages)) {
+    normalized = await Promise.all(
+      messages.map(async m => {
+        if (m.role !== 'user' || typeof m.content !== 'string') return m;
+        return { ...m, content: await canonicalizeQuery(m.content) };
+      })
+    );
+  } else if (messages && typeof messages === 'object') {
+    normalized = { ...messages };
+    if (typeof normalized.query === 'string') {
+      normalized.query = await canonicalizeQuery(normalized.query);
+    }
+  } else {
+    normalized = messages;
+  }
+  return createHash('sha256').update(endpoint + JSON.stringify(normalized)).digest('hex');
 }
 
 function requireAuth(req, res, next) {
@@ -362,12 +608,15 @@ const DATA_SOURCES = {
   },
 };
 
-async function fetchWithRetry(url, options, retries = 2, baseDelay = 1000) {
+async function fetchWithRetry(url, options, retries = 2, baseDelay = 1000, retryStatuses = [429, 503], timeoutMs = null) {
   for (let i = 0; i <= retries; i++) {
     try {
-      const res = await fetch(url, options);
+      // Create a fresh AbortSignal for every attempt so a timed-out signal
+      // from attempt N doesn't poison attempt N+1.
+      const signal = timeoutMs ? AbortSignal.timeout(timeoutMs) : options.signal;
+      const res = await fetch(url, { ...options, signal });
       if (res.ok) return res;
-      if ((res.status === 503 || res.status === 429) && i < retries) {
+      if (retryStatuses.includes(res.status) && i < retries) {
         const delay = baseDelay * Math.pow(2, i);
         await new Promise(r => setTimeout(r, delay));
         continue;
@@ -391,9 +640,7 @@ async function fetchIndicatorWithFallback(isoCode, indicatorType) {
     const indicator = cfg.indicators[indicatorType];
     const url = `${cfg.baseUrl}/country/${code}/indicator/${indicator}?date=2010:2024&format=json&per_page=30`;
     
-    const res = await fetchWithRetry(url, { 
-      signal: AbortSignal.timeout(cfg.timeout) 
-    }, cfg.retries);
+    const res = await fetchWithRetry(url, {}, cfg.retries, 1000, [429, 503], cfg.timeout);
     
     const data = await res.json();
     if (!Array.isArray(data) || !Array.isArray(data[1])) {
@@ -418,9 +665,8 @@ async function fetchIndicatorWithFallback(isoCode, indicatorType) {
     const url = `${cfg.baseUrl}/${indicator}/${iso3}?periods=2010:2024`;
     
     const res = await fetchWithRetry(url, {
-      signal: AbortSignal.timeout(cfg.timeout),
       headers: { 'Accept': 'application/json' },
-    }, cfg.retries);
+    }, cfg.retries, 2000, [403, 429, 503], cfg.timeout);
     
     const json = await res.json();
     const values = json.values?.[iso3];
@@ -454,9 +700,8 @@ async function fetchIndicatorWithFallback(isoCode, indicatorType) {
       const url = `${cfg.baseUrl}/QNA/${code}.B1_GE.HVPVOBARSA.Q/all?startTime=2010&endTime=2024&dimensionAtObservation=AllDimensions`;
       
       const res = await fetchWithRetry(url, {
-        signal: AbortSignal.timeout(cfg.timeout),
         headers: { 'Accept': 'application/json' },
-      }, cfg.retries);
+      }, cfg.retries, 1000, [429, 503], cfg.timeout);
       
       const json = await res.json();
       // Parse SDMX-JSON structure (simplified)
@@ -885,8 +1130,7 @@ function toolStatusText(name, input) {
 async function fetchWorldBankIndicator(countryCodes, indicator, startYear, endYear) {
   const codes = Array.isArray(countryCodes) ? countryCodes.join(';') : countryCodes;
   const url = `https://api.worldbank.org/v2/country/${codes}/indicator/${indicator}?format=json&date=${startYear}:${endYear}&per_page=500`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-  if (!res.ok) throw new Error(`World Bank API ${res.status}`);
+  const res = await fetchWithRetry(url, { headers: { Accept: 'application/json' } }, 2, 1500, [429, 503], 20000);
   const json = await res.json();
   if (!Array.isArray(json) || !json[1]) return [];
   return json[1]
@@ -910,8 +1154,8 @@ async function fetchWorldBankIndicator(countryCodes, indicator, startYear, endYe
 async function fetchIMFIndicator(indicator, countryCodes) {
   const codes = Array.isArray(countryCodes) ? countryCodes.join('/') : countryCodes;
   const url = `https://www.imf.org/external/datamapper/api/v1/${indicator}/${codes}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(12000) });
-  if (!res.ok) throw new Error(`IMF API ${res.status}`);
+  // IMF DataMapper sometimes returns 403 as a transient anti-scrape measure — retry it.
+  const res = await fetchWithRetry(url, { headers: { Accept: 'application/json' } }, 3, 2000, [403, 429, 503], 20000);
   const json = await res.json();
   const values = json?.values?.[indicator];
   if (!values) return [];
@@ -943,19 +1187,66 @@ async function fetchFREDSeries(seriesId, startYear, endYear) {
     .sort((a, b) => a.year - b.year);
 }
 
+// ── Cross-source indicator mapping (World Bank ↔ IMF DataMapper) ──────────────
+// When one source is unavailable the other is tried automatically.
+const WB_TO_IMF_INDICATOR = {
+  'NY.GDP.MKTP.KD.ZG': 'NGDP_RPCH',  // GDP growth %
+  'NY.GDP.MKTP.CD':    'NGDPD',       // GDP current USD
+  'NY.GDP.PCAP.CD':    'NGDPDPC',     // GDP per capita
+  'FP.CPI.TOTL.ZG':   'PCPIPCH',     // Inflation
+  'SL.UEM.TOTL.ZS':   'LUR',         // Unemployment rate
+  'NE.GDI.TOTL.ZS':   'NID_NGDP',   // Investment % GDP
+  'NE.EXP.GNFS.CD':   'TXG_RPCH',   // Exports (WB=USD, IMF=growth%)
+  'NE.IMP.GNFS.CD':   'TMG_RPCH',   // Imports (WB=USD, IMF=growth%)
+  'BX.KLT.DINV.CD.WD':'BX_FDI_DINV_CD_WD', // FDI inflows
+  'GC.DOD.TOTL.GD.ZS':'GGXWDG_NGDP', // Government debt % GDP
+};
+const IMF_TO_WB_INDICATOR = Object.fromEntries(
+  Object.entries(WB_TO_IMF_INDICATOR).map(([wb, imf]) => [imf, wb])
+);
+
 /** Execute a data tool call and return the result as a string. */
 async function executeDataTool(name, input) {
   if (name === 'fetch_world_bank') {
     const { country_codes, indicator, start_year = 2000, end_year = 2024 } = input;
-    const rows = await fetchWorldBankIndicator(country_codes, indicator, start_year, end_year);
-    const sourceUrl = `https://data.worldbank.org/indicator/${indicator}?locations=${Array.isArray(country_codes) ? country_codes.join('-') : country_codes}`;
-    return JSON.stringify({ rows, source: 'World Bank Open Data', indicator, sourceUrl });
+    try {
+      const rows = await fetchWorldBankIndicator(country_codes, indicator, start_year, end_year);
+      if (rows.length === 0) throw new Error('World Bank returned no data for this query');
+      const sourceUrl = `https://data.worldbank.org/indicator/${indicator}?locations=${Array.isArray(country_codes) ? country_codes.join('-') : country_codes}`;
+      return JSON.stringify({ rows, source: 'World Bank Open Data', indicator, sourceUrl });
+    } catch (wbErr) {
+      // Auto-fallback: try IMF DataMapper if a matching indicator exists
+      const imfIndicator = WB_TO_IMF_INDICATOR[indicator];
+      if (!imfIndicator) throw wbErr;
+      const codeList = Array.isArray(country_codes) ? country_codes : [country_codes];
+      const iso3Codes = codeList.map(c => countries.alpha2ToAlpha3(c.toUpperCase())).filter(Boolean);
+      if (!iso3Codes.length) throw wbErr;
+      if (IS_DEV) console.log(`[fallback] WB→IMF: ${indicator} → ${imfIndicator}`);
+      const rows = await fetchIMFIndicator(imfIndicator, iso3Codes);
+      const sourceUrl = `https://www.imf.org/external/datamapper/${imfIndicator}`;
+      return JSON.stringify({ rows, source: 'IMF DataMapper', indicator: imfIndicator, sourceUrl, note: `World Bank unavailable (${wbErr.message}) — using IMF DataMapper equivalent` });
+    }
   }
   if (name === 'fetch_imf') {
     const { indicator, country_codes } = input;
-    const rows = await fetchIMFIndicator(indicator, country_codes);
-    const sourceUrl = `https://www.imf.org/external/datamapper/${indicator}`;
-    return JSON.stringify({ rows, source: 'IMF DataMapper', indicator, sourceUrl });
+    try {
+      const rows = await fetchIMFIndicator(indicator, country_codes);
+      if (rows.length === 0) throw new Error('IMF returned no data for this query');
+      const sourceUrl = `https://www.imf.org/external/datamapper/${indicator}`;
+      return JSON.stringify({ rows, source: 'IMF DataMapper', indicator, sourceUrl });
+    } catch (imfErr) {
+      // Auto-fallback: try World Bank if a matching indicator exists
+      const wbIndicator = IMF_TO_WB_INDICATOR[indicator];
+      if (!wbIndicator) throw imfErr;
+      const codeList = Array.isArray(country_codes) ? country_codes : [country_codes];
+      // IMF uses ISO3 codes; World Bank needs ISO2 — convert
+      const iso2Codes = codeList.map(c => countries.alpha3ToAlpha2(c.toUpperCase())).filter(Boolean);
+      if (!iso2Codes.length) throw imfErr;
+      if (IS_DEV) console.log(`[fallback] IMF→WB: ${indicator} → ${wbIndicator}`);
+      const rows = await fetchWorldBankIndicator(iso2Codes, wbIndicator, 2000, 2024);
+      const sourceUrl = `https://data.worldbank.org/indicator/${wbIndicator}`;
+      return JSON.stringify({ rows, source: 'World Bank Open Data', indicator: wbIndicator, sourceUrl, note: `IMF DataMapper unavailable (${imfErr.message}) — using World Bank equivalent` });
+    }
   }
   if (name === 'fetch_fred') {
     const { series_id, start_year = 2000, end_year = 2024 } = input;
@@ -1117,7 +1408,7 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
   // Cache check — keyed on the full conversation so the same sequence of
   // messages always returns the same response (within the same calendar year).
   const isSingleTurn = messages.length === 1;
-  const ck = cacheKey('/chat', messages);
+  const ck = await cacheKey('/chat', messages);
   if (ck) {
     const cached = apiCache.get(ck);
     if (cached) {
@@ -1318,7 +1609,7 @@ app.post('/api/search', apiLimiter, async (req, res) => {
   if (!body) return;
   const { query } = body;
 
-  const ck = cacheKey('/search', { query });
+  const ck = await cacheKey('/search', { query });
   const cached = apiCache.get(ck);
   if (cached) { if (IS_DEV) console.log('[cache hit] /api/search:', query.slice(0, 40)); return res.json(cached); }
 
@@ -1797,7 +2088,7 @@ app.post('/api/analytics', requireAuth, apiLimiter, async (req, res) => {
   if (!body) return;
   const { query, context = '' } = body;
 
-  const ck = cacheKey('/analytics', { query, context: context.slice(0, 500) });
+  const ck = await cacheKey('/analytics', { query, context: context.slice(0, 500) });
   const cached = apiCache.get(ck);
   if (cached) {
     if (IS_DEV) console.log('[cache hit] /api/analytics');

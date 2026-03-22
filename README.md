@@ -88,6 +88,7 @@ Every algorithm is written from first principles with **zero ML libraries**.
 
 ### Backend (`server.js`)
 - **Custom LRU Cache** — doubly-linked list + `Map` for O(1) get/put; 1-hour TTL for country data, 30-min TTL for search
+- **LLM Query Canonicalization** — Kimi 2.5 (`moonshot-v1-8k`) converts any user query to a structured JSON canonical form `{countries, indicators, timeframe, question_type}` before hashing it into a cache key, so semantically identical but differently-worded queries always share the same cache entry. Falls back to a built-in keyword normaliser if `KIMI_API_KEY` is not set.
 - **World Bank API proxy** — fetches GDP, growth, trade, and per-capita data for any ISO country code; merges into a unified `CountryDataset`
 - **Agentic tool-use loop** — up to 8 turns of `web_search_20250305` calls before returning a single response
 - **Auth** — bcrypt password hashing, JWT tokens, SQLite-backed user and session storage
@@ -182,7 +183,9 @@ cd super-dash
 npm install
 
 # 2. Configure environment
-echo "ANTHROPIC_API_KEY=your_key_here" > .env
+cp .env.example .env
+# Required: ANTHROPIC_API_KEY
+# Optional: KIMI_API_KEY (enables LLM-based query canonicalization for better cache hit rates)
 
 # 3. Development (two terminals)
 npm run dev:server   # Express API on :3000
@@ -210,7 +213,7 @@ Open [http://localhost:5173](http://localhost:5173) in development or [http://lo
 | Toasts | Sonner |
 | Backend | Express 5 · Node ≥ 20 |
 | Database | better-sqlite3 |
-| AI | Anthropic Claude API (tool-use agentic loop) |
+| AI | Anthropic Claude API (tool-use agentic loop) · Kimi 2.5 (query canonicalization) |
 | Security | Helmet.js · express-rate-limit · bcryptjs · jsonwebtoken |
 
 ---
