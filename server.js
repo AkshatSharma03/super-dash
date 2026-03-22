@@ -36,8 +36,16 @@ const TRUSTED_NEWS_DOMAINS = 'reuters.com,bloomberg.com,ft.com,wsj.com,economist
 
 // LRU cache
 const CACHE_CAP         = 200;
-const TTL_CHAT_MS       = 60 * 60 * 1000;
 const TTL_SEARCH_MS     = 30 * 60 * 1000;
+
+// Chat cache TTL: expires at midnight UTC on Jan 1 of the NEXT calendar year.
+// This means the same question returns the same answer all year, then resets when
+// new annual data becomes available.
+function chatCacheTtlMs() {
+  const now  = new Date();
+  const flip = Date.UTC(now.getUTCFullYear() + 1, 0, 1); // Jan 1 next year, 00:00 UTC
+  return flip - Date.now();
+}
 
 // Rate limiting
 const RL_WINDOW_MS      = 15 * 60 * 1000;
@@ -606,7 +614,7 @@ Rules:
 9. digitalPctByYear: estimate for ALL years 2010–2024 (annual).`;
 
   const bdRes = await callAnthropic({
-    model: MODEL, max_tokens: 4000,
+    model: MODEL, max_tokens: 4000, temperature: 0,
     system: 'Return only valid JSON matching the schema given. No markdown, no explanation.',
     messages: [{ role: 'user', content: breakdownPrompt }],
   });
@@ -1106,9 +1114,10 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no'); // disable nginx/Railway response buffering
   res.flushHeaders();
 
-  // Cache check — single-turn requests only
+  // Cache check — keyed on the full conversation so the same sequence of
+  // messages always returns the same response (within the same calendar year).
   const isSingleTurn = messages.length === 1;
-  const ck = isSingleTurn ? cacheKey('/chat', messages) : null;
+  const ck = cacheKey('/chat', messages);
   if (ck) {
     const cached = apiCache.get(ck);
     if (cached) {
@@ -1173,7 +1182,7 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       };
 
       const { toolUses, content, stopReason } = await streamAnthropicTurn(
-        { model: MODEL, max_tokens: 64000, system: buildVerifiedChatSystem(), tools: availableTools, messages: loopMessages },
+        { model: MODEL, max_tokens: 64000, temperature: 0, system: buildVerifiedChatSystem(), tools: availableTools, messages: loopMessages },
         onDelta,
       );
 
@@ -1288,7 +1297,7 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       }
     }
 
-    if (ck) apiCache.put(ck, parsed, TTL_CHAT_MS);
+    apiCache.put(ck, parsed, chatCacheTtlMs());
     track(req.user?.id || 'guest', 'chat_sent', {
       message_count:    messages.length,
       charts_returned:  parsed.charts?.length ?? 0,
@@ -1333,7 +1342,7 @@ app.post('/api/search', apiLimiter, async (req, res) => {
     const msgs = [{ role: 'user', content: newsPrefix + query }];
     for (let turn = 0; turn < MAX_SEARCH_TURNS; turn++) {
       const data = await callAnthropic(
-        { model: MODEL, max_tokens: 4000, system: SEARCH_SYSTEM, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }], messages: msgs },
+        { model: MODEL, max_tokens: 4000, temperature: 0, system: SEARCH_SYSTEM, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }], messages: msgs },
         { 'anthropic-beta': 'web-search-2025-03-05' }
       );
 
@@ -1357,7 +1366,7 @@ app.post('/api/search', apiLimiter, async (req, res) => {
   } catch (_) {
     try {
       const data = await callAnthropic({
-        model: MODEL, max_tokens: 4000,
+        model: MODEL, max_tokens: 4000, temperature: 0,
         system: SEARCH_SYSTEM + '\n\nNote: Web search unavailable. Answer from training knowledge (data up to early 2025). Clearly note when figures may be outdated.',
         messages: [{ role: 'user', content: query }],
       });
@@ -1435,7 +1444,7 @@ Rules:
 
   try {
     const data = await callAnthropic({
-      model: MODEL, max_tokens: 4000,
+      model: MODEL, max_tokens: 4000, temperature: 0,
       system: CSV_SYSTEM,
       messages: [{ role: 'user', content: prompt }],
     });
@@ -1862,7 +1871,7 @@ Rules:
           existingUrls.add(ns.url);
         }
       }
-      apiCache.put(ck, parsed, TTL_CHAT_MS);
+      apiCache.put(ck, parsed, chatCacheTtlMs());
       return res.json(parsed);
     }
   } catch (e) {
@@ -1878,6 +1887,7 @@ Rules:
     const data = await callAnthropic({
       model: MODEL,
       max_tokens: 3000,
+      temperature: 0,
       system: systemPrompt,
       messages: [{ role: 'user', content: userMessage }],
     });
@@ -1894,7 +1904,7 @@ Rules:
     } catch {
       parsed = { insight: text, charts: [], sources: [], followUps: [] };
     }
-    apiCache.put(ck, parsed, TTL_CHAT_MS);
+    apiCache.put(ck, parsed, chatCacheTtlMs());
     track(req.user?.id || 'guest', 'analytics_queried', {
       query_length: query.length,
       has_context: context.length > 0,
