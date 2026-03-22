@@ -262,21 +262,61 @@ function validateAIResponse(parsed) {
 
 // ── Semantic query normalisation for cache keys ───────────────────────────────
 //
-// Goal: "How has the EU's export composition shifted since 2015?",
-//       "tell me about eu export composition change from 2015?", and
-//       "EU export composition evolution since 2015" should all resolve
-//       to the SAME cache key so every user gets the same cached answer.
+// Two-phase approach so phrasing variants always resolve to the same key:
+//   Phase 1 – multi-word phrase replacement (before tokenising)
+//   Phase 2 – word-level synonym mapping + stopword removal + sort
 //
-// Strategy: extract the content-bearing keywords, normalise synonyms,
-// sort them, and hash the sorted set.  Question framing, articles,
-// prepositions, and phrasing variants are all discarded.
-// The ORIGINAL text is still sent to Claude unchanged.
+// The ORIGINAL text is always sent to Claude unchanged.
 
-// Words that carry no semantic content for topic-matching purposes.
+// Phase 1: ordered list of [regex, replacement] applied before splitting.
+// Longer / more specific phrases must come before shorter ones.
+const QUERY_PHRASES = [
+  // ── Economic indicators (multi-word → single token) ──────────────────────
+  [/gross domestic product/g,               'gdp'],
+  [/consumer price index/g,                 'inflation'],
+  [/foreign direct investment/g,            'fdi'],
+  [/current account/g,                      'currentaccount'],
+  [/trade (?:deficit|surplus|balance)/g,    'tradebalance'],
+  [/balance of (?:trade|payments)/g,        'tradebalance'],
+  [/purchasing power parity/g,              'ppp'],
+  [/(?:government|public|national) debt/g,  'debt'],
+  [/debt.to.gdp/g,                          'debt gdp'],
+  [/debt (?:percentage|percent|pct|ratio|share)/g, 'debt gdp'], // "debt percentage" ≡ "debt-to-GDP"
+  [/interest rate/g,                        'interestrate'],
+  [/exchange rate/g,                        'exchangerate'],
+  [/labour|labor market/g,                  'unemployment'],
+  [/market capitalisation|market cap/g,     'marketcap'],
+  // ── Country / region names (multi-word → single token) ───────────────────
+  [/united states(?: of america)?/g,        'us'],
+  [/united kingdom/g,                       'uk'],
+  [/european union/g,                       'eu'],
+  [/great britain/g,                        'uk'],
+  [/euro ?zone|euro ?area/g,                'eu'],
+  [/south korea/g,                          'southkorea'],
+  [/north korea/g,                          'northkorea'],
+  [/saudi arabia/g,                         'saudiarabia'],
+  [/south africa/g,                         'southafrica'],
+  [/new zealand/g,                          'newzealand'],
+  [/czech republic/g,                       'czechia'],
+  // ── Time-period shorthands ────────────────────────────────────────────────
+  [/last two decades?|past two decades?/g,  '20year'],
+  [/last decade|past decade/g,              '10year'],
+  [/last (\d+) years?/g,                    (_, n) => `${n}year`],
+  [/past (\d+) years?/g,                    (_, n) => `${n}year`],
+  [/over (?:the )?(?:last|past) (\d+) years?/g, (_, n) => `${n}year`],
+];
+
+// Phase 2: words that carry no semantic content in an economics context.
 const QUERY_STOPWORDS = new Set([
-  'a','an','the','and','or','but','in','of','to','for','on','at','by',
+  // articles / prepositions / conjunctions
+  'a','an','the','and','or','but','in','of','to','for','on','at','by','as',
   'with','from','after','since','until','before','between','about','into',
-  'through','during','how','what','when','where','which','who','why','whose',
+  'through','during','per',
+  // standalone financial terms that are noise without context
+  // ("trade deficit/surplus/balance" is handled by the phrase step above)
+  'balance','surplus','deficit',
+  // question words / discourse markers
+  'how','what','when','where','which','who','why','whose',
   'has','have','had','is','are','was','were','been','be','will','would',
   'could','should','do','does','did','can','may','might','shall','need',
   'tell','me','show','give','please','explain','describe','analyze','analyse',
@@ -287,11 +327,39 @@ const QUERY_STOPWORDS = new Set([
   'also','just','very','really','quite','rather','even','still','already',
   'now','then','ago','onwards','onward','overall','general','generally',
   'become','became','went','go','came','come','got',
+  // measurement words that don't distinguish queries on an economics platform
+  'rate','rates','ratio','ratios','percentage','pct','level','levels',
+  'figure','figures','number','numbers','data','statistics','stat','stats',
+  'value','values','amount','amounts','index','indices','indicator','metric',
+  'inflow','inflows','outflow','outflows','volume','volumes',
+  // generic economic adjectives (everything on this platform is economic)
+  'economic','fiscal','monetary','financial','macro','macroeconomic',
+  // hedge/filler words
+  'recent','latest','current','annual','yearly','monthly','total',
+  'overall','aggregate','average','key','main','major','top',
 ]);
 
-// Synonym map — maps surface variants to a single canonical keyword.
+// Phase 2: word-level synonym map (applied after phrase replacement + tokenising).
 const QUERY_SYNONYMS = {
-  // change / movement
+  // ── Country adjectives / aliases → canonical lowercase name ──────────────
+  usa: 'us', america: 'us', american: 'us', americans: 'us',
+  british: 'uk', britain: 'uk', england: 'uk', english: 'uk',
+  german: 'germany', deutsch: 'germany', deutschland: 'germany',
+  french: 'france',
+  japanese: 'japan',
+  chinese: 'china', prc: 'china',
+  indian: 'india',
+  brazilian: 'brazil',
+  russian: 'russia',
+  korean: 'southkorea',
+  // ── Economic indicator aliases ────────────────────────────────────────────
+  cpi: 'inflation', inflationary: 'inflation', prices: 'inflation',
+  economic: 'gdp',  // "India economic growth" ≡ "India GDP growth"
+  unemployment: 'unemployment', jobless: 'unemployment', unemployed: 'unemployment',
+  jobs: 'employment', employed: 'employment', employment: 'employment',
+  // Note: deficit/surplus/balance are handled by phrase step ("trade deficit" → "tradebalance")
+  // Standalone uses are dropped via stopwords to avoid false matches.
+  // ── Change / movement verbs → 'change' ───────────────────────────────────
   shifted: 'change', shift: 'change', shifts: 'change',
   changed: 'change', changes: 'change', changing: 'change',
   evolved:  'change', evolve: 'change', evolution: 'change',
@@ -300,45 +368,52 @@ const QUERY_SYNONYMS = {
   transitioned: 'change', transition: 'change',
   developed: 'change', development: 'change',
   happened:  'change', happen: 'change', happens: 'change',
-  // growth / increase
+  // ── Growth / increase → 'growth' ─────────────────────────────────────────
   grown:    'growth', grew: 'growth', growing: 'growth',
   increase: 'growth', increased: 'growth', increasing: 'growth',
   rise:     'growth', rose: 'growth', risen: 'growth', rising: 'growth',
-  surge:    'growth', surged: 'growth',
-  // decline
+  surge:    'growth', surged: 'growth', expand: 'growth', expanded: 'growth',
+  // ── Decline → 'decline' ───────────────────────────────────────────────────
   declined: 'decline', decreasing: 'decline', decreased: 'decline',
   fell:     'decline', fall: 'decline', fallen: 'decline', falling: 'decline',
-  dropped:  'decline', drop: 'decline',
-  // comparison
-  versus:   'vs', compared: 'vs', against: 'vs', comparison: 'vs',
-  // composition / structure
+  dropped:  'decline', drop: 'decline', contraction: 'decline', contracted: 'decline',
+  // ── Comparison words — drop entirely (subjects already captured) ──────────
+  versus: null, vs: null, compared: null, against: null, comparison: null,
+  // ── Composition / structure ───────────────────────────────────────────────
   composition: 'composition', structure: 'composition', makeup: 'composition',
-  breakdown:   'composition', mix: 'composition',
-  // exports / imports
-  exports:  'export', exported: 'export', exporting: 'export',
-  imports:  'import', imported: 'import', importing: 'import',
+  breakdown: 'composition', mix: 'composition',
+  // ── Trade ────────────────────────────────────────────────────────────────
+  exports: 'export', exported: 'export', exporting: 'export',
+  imports: 'import', imported: 'import', importing: 'import',
+  // ── Measurement words not in stopwords ───────────────────────────────────
+  gross: null, domestic: null, product: null,   // residue after phrase step
+  government: null, public: null, national: null, // residue after phrase step
 };
 
 /**
- * Extract a sorted set of canonical semantic keywords from a query.
- * Used only for the cache key — the original text goes to Claude.
+ * Extract a sorted canonical keyword set from a user query.
+ * Used only for the cache key — the original text still goes to Claude.
+ *
+ * Phase 1: replace known multi-word phrases with a single token.
+ * Phase 2: tokenise, apply word synonyms, drop stopwords, sort.
  */
 function semanticKey(text) {
   if (typeof text !== 'string') return text;
-  const words = text
-    .toLowerCase()
-    // remove possessives (EU's → EU)
-    .replace(/'s\b/g, '')
-    .replace(/'/g, '')
-    // strip punctuation, keep alphanumerics and spaces
-    .replace(/[^a-z0-9\s]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
 
+  // Phase 1 — phrase replacement
+  let t = text.toLowerCase().replace(/'s\b/g, '').replace(/'/g, '');
+  for (const [re, rep] of QUERY_PHRASES) t = t.replace(re, rep);
+
+  // Phase 2 — tokenise, map synonyms, filter, sort
   const keywords = [...new Set(
-    words
-      .map(w => QUERY_SYNONYMS[w] ?? w)   // normalise synonyms
-      .filter(w => !QUERY_STOPWORDS.has(w) && w.length > 1)
+    t.replace(/[^a-z0-9\s]/g, ' ')
+     .split(/\s+/)
+     .filter(Boolean)
+     .map(w => {
+       if (w in QUERY_SYNONYMS) return QUERY_SYNONYMS[w]; // null = drop
+       return w;
+     })
+     .filter(w => w !== null && !QUERY_STOPWORDS.has(w) && w.length > 1)
   )].sort();
 
   return keywords.join(' ');
@@ -346,10 +421,8 @@ function semanticKey(text) {
 
 /**
  * Build a stable cache key for a /chat request.
- * User message content is reduced to its semantic keyword set so that
- * phrasing variants ("How has the EU's export composition shifted since 2015?"
- * vs "tell me about eu export composition change from 2015?") resolve to
- * the same key and return the same cached response.
+ * User message content is reduced to its semantic keyword set so phrasing
+ * variants resolve to the same key and return the same cached response.
  */
 function cacheKey(endpoint, messages) {
   const normalizedMessages = Array.isArray(messages)
