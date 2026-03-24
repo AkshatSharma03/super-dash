@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "econchart-local": {
+      "command": "node",
+      "args": ["mcp-server.js"],
+      "env": {
+        "FRED_API_KEY": "${FRED_API_KEY}"
+      }
+    },
+    "econchart-remote": {
+      "type": "sse",
+      "url": "https://super-dash-production.up.railway.app/mcp/sse",
+      "headers": {
+        "x-mcp-key": "${MCP_API_KEY}"
+      }
+    }
+  }
+}
