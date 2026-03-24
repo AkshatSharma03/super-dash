@@ -39,7 +39,7 @@ The app supports two tiers: **guest users** (instant access, in-memory sessions)
 
 ```
 super-dash/
-├── server.js                   # Express 5 API (~1400 lines)
+├── server.js                   # Express 5 API (~2200 lines)
 ├── src/
 │   ├── App.tsx                 # Auth gate, header, mode router
 │   ├── types/index.ts          # All shared TypeScript interfaces
@@ -133,6 +133,7 @@ CREATE INDEX idx_sessions_user_id ON chat_sessions(user_id);
 | POST | `/api/auth/login` | Validate credentials, return JWT |
 | POST | `/api/auth/guest` | Instant guest JWT (24h, no DB record) |
 | GET | `/api/auth/me` | Verify token, return user profile |
+| POST | `/api/auth/logout` | Revoke current token |
 | PATCH | `/api/auth/password` | Change password |
 | DELETE | `/api/auth/account` | Delete account (password confirmation required) |
 
@@ -213,7 +214,7 @@ The CSV parser in `src/utils/csv.ts` is a hand-written state machine that handle
 **Why**: Avoids redundant API calls. Country data is expensive to fetch; fetching it once and sharing it is the right tradeoff.
 
 ### 9. Server-Side API Key Isolation
-The Anthropic API key, NewsAPI key, and external data source calls all live in `server.js`. The Vite client bundle never sees these secrets.
+All API keys (Anthropic, Kimi, FRED, PostHog) and all external data source calls live in `server.js`. The Vite client bundle never sees these secrets.
 
 **Why**: Basic security hygiene — API keys in client bundles get scraped.
 
@@ -295,11 +296,11 @@ If `KIMI_API_KEY` is not set, or if the Kimi call fails (network error, timeout,
 **1. Replace SQLite with PostgreSQL**
 SQLite works for a single-instance deployment but breaks under horizontal scaling — two servers cannot share the same SQLite file. Migrating to Postgres (e.g., Railway Postgres) unlocks multi-instance deployments, built-in backups, and better tooling. Main work: swap `better-sqlite3` (sync) for `pg`/`postgres` (async), update all DB calls to `await`.
 
-**2. Proper Session Token Management**
-Currently JWTs have no server-side revocation. If a user logs out or changes their password, old tokens remain valid until expiry. A token blocklist (Redis or a DB table) or switching to opaque session tokens with server-side storage would fix this.
+**2. Extend Token Revocation**
+Logout revokes the current JWT via a `revoked_tokens` table. Password change and account delete do not revoke previously issued tokens, so old tokens remain valid until their 7-day expiry. Calling `revokeCurrentToken()` in those two routes would fully close the gap.
 
-**3. Input Validation Layer**
-There is no schema validation library (e.g., Zod) on API request bodies. Malformed inputs are handled ad-hoc. A consistent validation layer at the route level would harden the API and simplify error messages.
+**3. Pagination for Large Response Sets**
+`GET /api/sessions` returns all sessions with no pagination. `GET /api/country/history` returns the full cache table. Heavy users and large caches will degrade over time; cursor-based pagination on both routes would fix this.
 
 **4. CSV Upload Size Limits & Streaming**
 Large CSV files are currently read entirely into memory. Adding `multer` with size limits and streaming the file through the CSV parser would prevent memory exhaustion on large uploads.
@@ -312,30 +313,24 @@ The agentic search loop runs up to 8 turns server-side before returning. Users s
 **6. Refresh Token Flow**
 Access tokens expire after 7 days with no renewal mechanism. A short-lived access token (15 min) + long-lived refresh token pattern would be more secure and standard.
 
-**7. Pagination for Chat Sessions**
-`GET /api/sessions` returns all sessions for a user with no pagination. Heavy users accumulate hundreds of sessions; this will degrade with scale.
-
-**8. Algorithm Result Persistence**
+**7. Algorithm Result Persistence**
 Analytics results (regression, clustering, etc.) are recomputed client-side on every visit. Caching algorithm outputs server-side (keyed by country + algorithm + date) would make the Analytics tab load instantly on repeat visits.
 
-**9. Chart Accessibility**
+**8. Chart Accessibility**
 Recharts charts lack ARIA labels and keyboard navigation. Adding accessible descriptions and ensuring color choices meet WCAG 2.1 AA contrast ratios would make the app usable for screen reader users.
 
 ### Lower Priority / Nice to Have
 
-**10. Internationalisation (i18n)**
+**9. Internationalisation (i18n)**
 All UI strings are hardcoded in English. Extracting them into a locale file and using `react-i18next` would allow non-English support.
 
-**11. Offline Support / PWA**
+**10. Offline Support / PWA**
 A service worker could cache the app shell and last-viewed country data, allowing basic offline usage. Given the app is data-heavy this is a partial win, but useful for slow connections.
 
-**12. More Data Sources**
-The World Bank API has gaps for some countries and many indicators (inflation, unemployment, FDI) aren't surfaced. Integrating FRED (Federal Reserve), Eurostat, or UN Comtrade would significantly broaden coverage.
-
-**13. Collaborative Sessions**
+**11. Collaborative Sessions**
 Currently sessions are per-user. Sharing a session link (read-only or collaborative) would be a strong B2B feature for teams doing joint economic research.
 
-**14. Test Coverage for Backend Routes**
+**12. Test Coverage for Backend Routes**
 Unit tests cover algorithms and utilities well, but `server.js` has no integration tests. Adding supertest-based route tests would catch regressions in the API layer.
 
 ---
@@ -371,7 +366,6 @@ npm run test:coverage
 | `JWT_SECRET` | Yes (prod) | Secret for signing JWTs |
 | `PORT` | No | Server port (default 3000) |
 | `DB_PATH` | No | SQLite file path (default `data/econChart.db`) |
-| `NEWS_API_KEY` | No | NewsAPI.org for live news context |
 | `KIMI_API_KEY` | No | Kimi 2.5 API key for LLM query canonicalization; falls back to built-in normaliser if absent |
 | `KIMI_MODEL` | No | Kimi model override (default `moonshot-v1-8k`; set to `kimi-k2` if available) |
 | `VITE_POSTHOG_KEY` | No | PostHog client analytics |

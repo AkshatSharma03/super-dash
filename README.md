@@ -9,7 +9,7 @@
 | Mode | Description |
 |------|-------------|
 | 💬 **AI Chat** | Conversational interface — Claude generates interactive Recharts visualisations and expert analysis from any natural-language prompt. Persistent session history. |
-| 🔍 **Search** | Live web search powered by Claude's tool-use loop; returns sourced, cited summaries from World Bank, IMF, Reuters, and Bloomberg. Trie-powered O(m) autocomplete. |
+| 🔍 **Search** | Live web search powered by Claude's tool-use loop (up to 8 turns); returns sourced, cited summaries. Trie-powered O(m) autocomplete. |
 | 📁 **Data Upload** | Drag-and-drop any CSV → auto-parsed → Claude generates tailored charts and insights for your own dataset. |
 | 🧮 **Analytics** | Eight-algorithm panel (regression, CAGR, HP filter, correlation, HHI, anomaly, K-Means, trade openness) on live data for any country. |
 | 🌍 **Country Data** | Real GDP and trade data from the World Bank for any country — cached locally, with dual-handle year-range filtering and sector-level breakdowns. |
@@ -90,7 +90,7 @@ Every algorithm is written from first principles with **zero ML libraries**.
 - **Custom LRU Cache** — doubly-linked list + `Map` for O(1) get/put; 1-hour TTL for country data, 30-min TTL for search
 - **LLM Query Canonicalization** — Kimi 2.5 (`moonshot-v1-8k`) converts any user query to a structured JSON canonical form `{countries, indicators, timeframe, question_type}` before hashing it into a cache key, so semantically identical but differently-worded queries always share the same cache entry. Falls back to a built-in keyword normaliser if `KIMI_API_KEY` is not set.
 - **World Bank API proxy** — fetches GDP, growth, trade, and per-capita data for any ISO country code; merges into a unified `CountryDataset`
-- **Agentic tool-use loop** — up to 8 turns of `web_search_20250305` calls before returning a single response
+- **Agentic tool-use loops** — `/api/chat` runs up to 6 data-tool turns (World Bank/IMF/FRED); `/api/search` runs up to 8 web-search turns
 - **Auth** — bcrypt password hashing, JWT tokens, SQLite-backed user and session storage
 - **Rate limiting** — `express-rate-limit` at 20 requests / 15 minutes per IP
 - **Security** — `helmet()` middleware; API key is server-side only, never in the client bundle
@@ -222,12 +222,12 @@ Open [http://localhost:5173](http://localhost:5173) in development or [http://lo
 
 | Source | Used for |
 |--------|---------|
-| [World Bank Open Data](https://data.worldbank.org) | GDP, growth rates, GDP per capita — any country |
-| [UN Comtrade](https://comtrade.un.org) | Trade flows by partner and sector |
-| [IMF](https://www.imf.org/en/Data) | Macro indicators, forecasts |
-| Claude web search | Live news, current economic analysis |
+| [World Bank Open Data](https://data.worldbank.org) | GDP, growth rates, GDP per capita, trade — any country |
+| [IMF DataMapper](https://www.imf.org/en/Data) | Macro indicators, WEO forecasts |
+| [FRED](https://fred.stlouisfed.org) | US time series (optional, requires `FRED_API_KEY`) |
+| Claude web search | Live sourced economic research (Search mode) |
 
-> **Note:** Sector-level trade breakdowns are AI-estimated from published aggregate sources. All AI Chat and Search responses cite live sources at query time.
+> **Note:** All AI Chat responses use only real data fetched from World Bank / IMF APIs. Search mode uses Claude's live web search tool.
 
 ---
 
