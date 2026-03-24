@@ -9,7 +9,7 @@
     },
     "econchart-remote": {
       "type": "sse",
-      "url": "https://<your-app>.railway.app/mcp/sse",
+      "url": "https://super-dash-production.up.railway.app/mcp/sse",
       "headers": {
         "x-mcp-key": "${MCP_API_KEY}"
       }
