@@ -644,7 +644,7 @@ async function fetchIndicatorWithFallback(isoCode, indicatorType) {
   try {
     const cfg = DATA_SOURCES.worldbank;
     const indicator = cfg.indicators[indicatorType];
-    const url = `${cfg.baseUrl}/country/${code}/indicator/${indicator}?date=2010:2024&format=json&per_page=30`;
+    const url = `${cfg.baseUrl}/country/${code}/indicator/${indicator}?date=2010:2024&format=json&per_page=100`;
     
     const res = await fetchWithRetry(url, {}, cfg.retries, 1000, [429, 503], cfg.timeout);
     
@@ -1130,7 +1130,7 @@ function toolStatusText(name, input) {
  */
 async function fetchWorldBankIndicator(countryCodes, indicator, startYear, endYear) {
   const codes = Array.isArray(countryCodes) ? countryCodes.join(';') : countryCodes;
-  const url = `https://api.worldbank.org/v2/country/${codes}/indicator/${indicator}?format=json&date=${startYear}:${endYear}&per_page=500`;
+  const url = `https://api.worldbank.org/v2/country/${codes}/indicator/${indicator}?format=json&date=${startYear}:${endYear}&per_page=1000`;
   const ck = `wb:${url}`;
   const hit = rawDataCache.get(ck);
   if (hit) return hit;
@@ -1278,7 +1278,7 @@ const DATA_TOOLS = [
       properties: {
         country_codes: {
           type: 'array', items: { type: 'string' },
-          description: 'ISO2 country codes (e.g. ["US","CN","DE"]). Up to 5 countries.',
+          description: 'ISO2 country codes (e.g. ["US","CN","DE"]). IMPORTANT: for "top N countries" or any ranking/comparison across many countries use ["all"] to fetch every country at once — this is the ONLY way to get a correct global ranking. When using ["all"], always set start_year = end_year (single year) to stay within the 1000-row limit.',
         },
         indicator: {
           type: 'string',
@@ -1353,6 +1353,7 @@ Fetch multiple indicators in separate tool calls and combine them into multi-ser
 
 `}WORKFLOW:
 - Identify which indicators and countries are needed.
+- For "top N", "highest", "lowest", "ranking", or "which countries" queries: ALWAYS use country_codes: ["all"] with start_year = end_year (single year) to fetch the complete global dataset. Never hand-pick countries for a ranking — the correct top-N can only be determined from a full dataset sort.
 - Fire all required tool calls (can be parallel).
 - Map the returned rows directly into chart data arrays.
 - Write your analysis citing specific figures with years from the tool results.
