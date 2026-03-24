@@ -172,6 +172,9 @@ class LRUCache {
 
 const apiCache   = new LRUCache(CACHE_CAP);
 const canonCache = new LRUCache(2000); // stores Kimi canonical strings, 7-day TTL
+// Shared raw API response cache — ensures chat and country endpoints always see the same data
+const rawDataCache  = new LRUCache(500);
+const RAW_DATA_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, same as country SQLite cache
 
 // ── SQLite database ────────────────────────────────────────────────────────────
 mkdirSync(join(__dirname, 'data'), { recursive: true });
@@ -656,6 +659,11 @@ async function fetchIndicatorWithFallback(isoCode, indicatorType) {
   }
 
   // Try IMF second (good coverage, different methodology)
+  // Skip IMF for trade data: IMF exports/imports are volume growth rates (%), not absolute USD.
+  // Mixing these with World Bank USD values produces completely inconsistent numbers.
+  if (indicatorType === 'exports' || indicatorType === 'imports') {
+    return { source: 'unavailable', data: [], note: 'World Bank unavailable; IMF trade data skipped (growth % ≠ USD)' };
+  }
   try {
     const cfg = DATA_SOURCES.imf;
     const indicator = cfg.indicators[indicatorType];
@@ -843,8 +851,7 @@ Return ONLY this JSON (no markdown, no explanation):
   "exportData": [{"year":2010,"total":X,"<sector_key>":X,...}, ...],
   "importData": [{"year":2010,"total":X,"<partner_key>":X,...}, ...],
   "pieExports": [{"name":"Label","value":X}, ...],
-  "pieImports": [{"name":"Label","value":X}, ...],
-  "digitalPctByYear": {"2010":1.2,"2011":1.4,...}
+  "pieImports": [{"name":"Label","value":X}, ...]
 }
 
 Rules:
@@ -855,8 +862,7 @@ Rules:
 5. Include ONLY years present in the provided totals.
 6. Export sector colors: #F59E0B #94a3b8 #10B981 #8B5CF6 #06B6D4 #64748b
 7. Import partner colors: #EF4444 #F59E0B #10B981 #F97316 #8B5CF6 #64748b
-8. pieExports/pieImports use the most recent year available.
-9. digitalPctByYear: estimate for ALL years 2010–2024 (annual).`;
+8. pieExports/pieImports use the most recent year available.`;
 
   const bdRes = await callAnthropic({
     model: MODEL, max_tokens: 4000, temperature: 0,
@@ -868,12 +874,7 @@ Rules:
   try { bd = JSON.parse(bdText.replace(/```json|```/g, '').trim()); }
   catch { throw new Error(`Claude breakdown parse failed for ${code}: ${bdText.slice(0, 200)}`); }
 
-  // Merge digital_pct into gdpData
-  const digMap = bd.digitalPctByYear ?? {};
-  const gdpDataFinal = gdpData.map(d => ({
-    ...d,
-    digital_pct: digMap[String(d.year)] != null ? +Number(digMap[String(d.year)]).toFixed(1) : undefined,
-  }));
+  const gdpDataFinal = gdpData;
 
   // Build KPIs
   const lastGDP  = gdpDataFinal[gdpDataFinal.length - 1];
@@ -888,7 +889,6 @@ Rules:
   const topPartner = (bd.importPartners ?? []).find(p => p.key !== 'other');
   const topPie     = (bd.pieImports   ?? []).find(p => p.name !== 'Other' && p.name !== 'other');
   const topPct     = topPie && isAbsoluteValues && impTotal > 0 ? Math.round((topPie.value / impTotal) * 100) : null;
-  const lastDigPct = digMap[String(lastGDP?.year)];
 
   const kpis = [
     { label: `GDP ${lastGDP?.year ?? ''}`, value: `$${lastGDP?.gdp_bn}B`,
@@ -905,8 +905,6 @@ Rules:
       label: 'Trade Balance', value: `${balance >= 0 ? '+' : ''}$${balance}B`, sub: expYear,
       trend: balance >= 0 ? '↑ Surplus' : '↓ Deficit', color: '#06B6D4'
     }] : []),
-    { label: 'Digital GDP%', value: lastDigPct != null ? `${lastDigPct}%` : 'N/A',
-      sub: 'of total GDP', trend: null, color: '#F97316' },
     { label: '#1 Importer', value: topPartner?.label ?? 'N/A',
       sub: topPie && topPct != null ? `$${topPie.value}B · ${topPct}% share` : '',
       trend: null, color: '#EF4444' },
@@ -1130,10 +1128,13 @@ function toolStatusText(name, input) {
 async function fetchWorldBankIndicator(countryCodes, indicator, startYear, endYear) {
   const codes = Array.isArray(countryCodes) ? countryCodes.join(';') : countryCodes;
   const url = `https://api.worldbank.org/v2/country/${codes}/indicator/${indicator}?format=json&date=${startYear}:${endYear}&per_page=500`;
+  const ck = `wb:${url}`;
+  const hit = rawDataCache.get(ck);
+  if (hit) return hit;
   const res = await fetchWithRetry(url, { headers: { Accept: 'application/json' } }, 2, 1500, [429, 503], 20000);
   const json = await res.json();
   if (!Array.isArray(json) || !json[1]) return [];
-  return json[1]
+  const result = json[1]
     .filter(d => d.value !== null && d.value !== undefined)
     .map(d => ({
       country:       d.country?.value ?? codes,
@@ -1144,6 +1145,8 @@ async function fetchWorldBankIndicator(countryCodes, indicator, startYear, endYe
       indicatorName: d.indicator?.value ?? indicator,
     }))
     .sort((a, b) => a.year - b.year);
+  rawDataCache.put(ck, result, RAW_DATA_TTL_MS);
+  return result;
 }
 
 /**
@@ -1154,6 +1157,9 @@ async function fetchWorldBankIndicator(countryCodes, indicator, startYear, endYe
 async function fetchIMFIndicator(indicator, countryCodes) {
   const codes = Array.isArray(countryCodes) ? countryCodes.join('/') : countryCodes;
   const url = `https://www.imf.org/external/datamapper/api/v1/${indicator}/${codes}`;
+  const ck = `imf:${url}`;
+  const hit = rawDataCache.get(ck);
+  if (hit) return hit;
   // IMF DataMapper sometimes returns 403 as a transient anti-scrape measure — retry it.
   const res = await fetchWithRetry(url, { headers: { Accept: 'application/json' } }, 3, 2000, [403, 429, 503], 20000);
   const json = await res.json();
@@ -1166,7 +1172,9 @@ async function fetchIMFIndicator(indicator, countryCodes) {
         rows.push({ countryCode, year: parseInt(year, 10), value });
     }
   }
-  return rows.sort((a, b) => a.year - b.year);
+  const result = rows.sort((a, b) => a.year - b.year);
+  rawDataCache.put(ck, result, RAW_DATA_TTL_MS);
+  return result;
 }
 
 /**
