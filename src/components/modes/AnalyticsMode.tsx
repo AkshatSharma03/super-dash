@@ -476,6 +476,7 @@ interface SelectorProps {
 }
 
 function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorProps) {
+  const isMobile = useMobile();
   const [history, setHistory] = useState<CountrySearchResult[]>([]);
 
   useEffect(() => {
@@ -512,7 +513,7 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
       <div className="flex flex-wrap gap-1.5 sm:gap-2">
         {POPULAR_COUNTRIES.slice(0, isMobile ? 6 : undefined).map(c => (
           <button key={c.code} onClick={() => onSelect(c.code)}
-            className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs cursor-pointer transition-snap border-2 sm:border-3 font-bold"
+            className="flex items-center gap-1 px-2 sm:px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs cursor-pointer transition-snap border-2 sm:border-3 font-bold"
             style={{
               background:  dataset?.code === c.code ? "#FF006E" : "#FFFFFF",
               borderColor: "#1A1A2E",
@@ -612,7 +613,7 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
             const on = activeAlgos.has(a.id);
             return (
               <button key={a.id} onClick={() => toggleAlgo(a.id)}
-                className="px-2 sm:px-3 py-2 sm:py-3 cursor-pointer text-left transition-snap border-2 sm:border-3 shadow-hard-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+                className="px-2 sm:px-3 py-2 sm:py-3 min-h-11 cursor-pointer text-left transition-snap border-2 sm:border-3 shadow-hard-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
                 style={{ 
                   background: on ? a.color : "#FFFFFF", 
                   borderColor: "#1A1A2E",

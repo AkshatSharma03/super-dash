@@ -47,6 +47,14 @@ body {
   font-weight: 500;
 }
 
+button,
+a,
+input,
+textarea,
+select {
+  touch-action: manipulation;
+}
+
 /* ── Memphis Scrollbars ── */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: #FAFAFA; border-left: 3px solid #1A1A2E; }
@@ -313,6 +321,10 @@ input[type="range"] { cursor: pointer; }
   .ec-tabs::-webkit-scrollbar { display: none; }
 
   .ec-user-chip { margin-left: auto; }
+
+  .ec-mobile-safe-bottom {
+    padding-bottom: max(8px, env(safe-area-inset-bottom));
+  }
 
   .ec-tab-text { display: none; }
   .ec-tabs button {

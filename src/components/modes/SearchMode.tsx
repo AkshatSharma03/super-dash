@@ -9,7 +9,6 @@ import { performWebSearch } from "../../utils/api";
 import { getSearchTrie } from "../../algorithms/trie";
 import type { SearchResult } from "../../types";
 import { MarkdownText } from "../ui";
-import { buildSearchReportHTML, printHTML } from "../../utils/export";
 import { Button }  from "@/components/ui/button";
 import { Input }   from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -62,6 +61,12 @@ export default function SearchMode() {
     setLoading(false);
   };
 
+  const exportSearch = async () => {
+    if (!result) return;
+    const { buildSearchReportHTML, printHTML } = await import("../../utils/export");
+    printHTML(buildSearchReportHTML(searched, result));
+  };
+
   return (
     <div className="max-w-[860px] mx-auto">
 
@@ -82,14 +87,14 @@ export default function SearchMode() {
             className="flex-1 h-11 text-sm focus-visible:ring-emerald-500 focus-visible:border-emerald-500"
           />
           <Button onClick={() => doSearch(query)} disabled={loading || !query.trim()}
-            className="h-11 px-6 whitespace-nowrap bg-gradient-to-br from-[#10B981] to-[#059669] shadow-[0_2px_10px_#10B98144] font-bold">
+            className="h-11 min-h-11 px-6 whitespace-nowrap bg-gradient-to-br from-[#10B981] to-[#059669] shadow-[0_2px_10px_#10B98144] font-bold">
             {loading ? "…" : "Search →"}
           </Button>
         </div>
 
         {/* Trie autocomplete dropdown */}
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute top-[calc(100%+4px)] left-0 right-[54px] bg-white border-3 border-memphis-cyan z-[100] overflow-hidden shadow-hard">
+          <div className={cn("absolute top-[calc(100%+4px)] left-0 bg-white border-3 border-memphis-cyan z-[100] overflow-hidden shadow-hard", isMobile ? "right-0" : "right-[54px]")}>
             <div className="px-3 py-1.5 text-[10px] text-memphis-cyan font-black uppercase tracking-[0.8px] border-b-3 border-memphis-black bg-memphis-cyan/10">
               Trie Suggestions — O(m) prefix match
             </div>
@@ -113,7 +118,7 @@ export default function SearchMode() {
           <div className={cn("grid gap-1.5 mb-6", isMobile ? "grid-cols-1" : "grid-cols-2")}>
             {SEARCH_SUGGESTIONS.map((s, i) => (
               <button key={i} onClick={() => doSearch(s)}
-                className="bg-card border border-border rounded-lg px-3.5 py-2.5 text-xs text-muted-foreground cursor-pointer text-left leading-[1.45] transition-all hover:border-emerald-500/40 hover:text-slate-300 hover:bg-emerald-500/5">
+                className="bg-card border border-border rounded-lg px-3.5 py-3 min-h-11 text-xs text-muted-foreground cursor-pointer text-left leading-[1.45] transition-all hover:border-emerald-500/40 hover:text-slate-300 hover:bg-emerald-500/5">
                 {s}
               </button>
             ))}
@@ -150,7 +155,7 @@ export default function SearchMode() {
             <span className="text-xs text-muted-foreground italic">"{searched}"</span>
             <div className="ml-auto flex gap-2">
               <Button variant="outline" size="sm" className="text-xs"
-                onClick={() => printHTML(buildSearchReportHTML(searched, result))}
+                onClick={exportSearch}
                 title="Export research summary with cited sources as PDF/HTML">
                 Export ↓
               </Button>

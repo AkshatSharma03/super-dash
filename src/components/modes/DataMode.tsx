@@ -73,8 +73,8 @@ export default function DataMode() {
           onDragLeave={() => setDragOver(false)}
           onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}
           onClick={() => fileRef.current?.click()}
-          className={cn(
-            "border-4 border-dashed py-14 px-6 text-center cursor-pointer transition-snap mb-5 relative overflow-hidden bg-white shadow-hard",
+            className={cn(
+             "border-4 border-dashed py-14 px-6 text-center cursor-pointer transition-snap mb-5 relative overflow-hidden bg-white shadow-hard min-h-[240px]",
             dragOver ? "border-memphis-orange bg-memphis-orange/5" : "border-memphis-black hover:-translate-y-px hover:shadow-hard-lg"
           )}>
           <input ref={fileRef} type="file" accept=".csv" className="hidden"
@@ -99,7 +99,7 @@ export default function DataMode() {
           <div className="flex items-center gap-2.5 mb-4 flex-wrap">
             <Badge>📁 {file?.name}</Badge>
             <span className="text-[11px] text-muted-foreground">{csv.rows.length} rows · {csv.headers.length} columns</span>
-            <Button variant="outline" size="sm" onClick={reset} className="ml-auto text-xs">Remove file</Button>
+            <Button variant="outline" size="sm" onClick={reset} className="ml-auto text-xs min-h-11">Remove file</Button>
           </div>
 
           {/* Scrollable preview table */}
@@ -143,7 +143,7 @@ export default function DataMode() {
           </div>
 
           <Button onClick={generate} disabled={loading}
-            className="bg-[#F59E0B] hover:bg-[#D97706] text-[#0f1117] font-bold shadow-[0_2px_12px_#F59E0B44] gap-2">
+            className="bg-[#F59E0B] hover:bg-[#D97706] text-[#0f1117] font-bold shadow-[0_2px_12px_#F59E0B44] gap-2 min-h-11">
             {loading ? (
               <>
                 <span className="w-3.5 h-3.5 rounded-full border-2 border-muted/50 border-t-muted/70 inline-block animate-spin" />

@@ -1,21 +1,22 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // APP SHELL — Memphis Design Edition — Bold colors, thick borders, geometric patterns
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import type { Mode, User, CountryDataset } from "./types";
 import { useMobile } from "./utils/useMobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { fetchMe, getCountryData, refreshCountryData, logoutApi } from "./utils/api";
 import { identifyUser, resetUser, track } from "./analytics";
-import AuthPage from "./components/auth/AuthPage";
-import SettingsPanel from "./components/auth/SettingsPanel";
-import DashboardMode from "./components/modes/DashboardMode";
-import ChatMode from "./components/modes/ChatMode";
-import SearchMode from "./components/modes/SearchMode";
-import DataMode from "./components/modes/DataMode";
-import AnalyticsMode from "./components/modes/AnalyticsMode";
-import ExportMode from "./components/modes/ExportMode";
+
+const AuthPage = lazy(() => import("./components/auth/AuthPage"));
+const SettingsPanel = lazy(() => import("./components/auth/SettingsPanel"));
+const DashboardMode = lazy(() => import("./components/modes/DashboardMode"));
+const ChatMode = lazy(() => import("./components/modes/ChatMode"));
+const SearchMode = lazy(() => import("./components/modes/SearchMode"));
+const DataMode = lazy(() => import("./components/modes/DataMode"));
+const AnalyticsMode = lazy(() => import("./components/modes/AnalyticsMode"));
+const ExportMode = lazy(() => import("./components/modes/ExportMode"));
 
 const MODES: [Mode, string][] = [
   ["chat", "💬 AI Chat"],
@@ -42,7 +43,16 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [mode, setMode] = useState<Mode>("chat");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isMobile = useMobile();
+
+  const MOBILE_PRIMARY_MODES: Mode[] = ["chat", "search", "data", "analytics", "dashboard"];
+
+  const switchMode = (nextMode: Mode) => {
+    setMode(nextMode);
+    setMobileMenuOpen(false);
+    track("mode_viewed", { mode: nextMode });
+  };
 
   // ── Country data — lives here so fetches survive tab switches ───────────────
   const [countryData, setCountryData] = useState<CountryDataset | null>(null);
@@ -119,14 +129,22 @@ export default function App() {
   };
 
   if (!authReady) return null;
-  if (!user || !token) return <AuthPage onAuth={handleAuth} />;
+  if (!user || !token) return (
+    <Suspense fallback={null}>
+      <AuthPage onAuth={handleAuth} />
+    </Suspense>
+  );
 
   const { label, desc } = MODE_META[mode];
   const modeIcon = MODES.find(m => m[0] === mode)?.[1].split(" ")[0] ?? "";
   const fetchingInBg = countryLoading && mode !== "dashboard";
 
   return (
-    <div className="bg-memphis-offwhite h-screen flex flex-col text-memphis-black" style={{ fontFamily: "Inter,sans-serif" }}>
+    <div className="bg-memphis-offwhite h-[100dvh] flex flex-col text-memphis-black" style={{ fontFamily: "Inter,sans-serif" }}>
+
+      {isMobile && mobileMenuOpen && (
+        <div className="fixed inset-0 z-[120] bg-black/55" onClick={() => setMobileMenuOpen(false)} />
+      )}
 
       {/* ── Memphis Header with Zigzag Pattern ── */}
       <header className="ec-header px-3 sm:px-6 py-3 sm:py-4 border-b-4 sm:border-b-4 border-b-3 border-memphis-black flex items-center gap-2 sm:gap-4 shrink-0 flex-wrap bg-white relative">
@@ -152,8 +170,20 @@ export default function App() {
           <span className="text-base sm:text-lg font-black text-memphis-black tracking-tight uppercase">EconChart</span>
         </div>
 
+        {isMobile && (
+          <Button
+            variant="outline"
+            size="icon"
+            className="ml-auto"
+            onClick={() => setMobileMenuOpen(v => !v)}
+            aria-label="Open mobile menu"
+          >
+            ☰
+          </Button>
+        )}
+
         {/* Mode tabs — Memphis Bold Tabs */}
-        <nav className="ec-tabs ml-4 flex bg-memphis-offwhite border-3 border-memphis-black shadow-hard p-1 gap-1 flex-nowrap">
+        <nav className={cn("ec-tabs ml-4 flex bg-memphis-offwhite border-3 border-memphis-black shadow-hard p-1 gap-1 flex-nowrap", isMobile && "hidden")}>
           {MODES.map(([m, lbl]) => {
             const isBgFetch = m === "dashboard" && fetchingInBg;
             const [emoji, ...words] = lbl.split(" ");
@@ -161,7 +191,7 @@ export default function App() {
             return (
               <button
                 key={m}
-                onClick={() => { setMode(m); track("mode_viewed", { mode: m }); }}
+                onClick={() => switchMode(m)}
                 className={cn(
                   "border-3 px-4 py-2 text-xs font-black uppercase tracking-wide transition-snap whitespace-nowrap flex items-center gap-2 shadow-hard-sm",
                   isActive
@@ -180,7 +210,7 @@ export default function App() {
         </nav>
 
         {/* User chip */}
-        <div className="ec-user-chip ml-auto flex items-center gap-3">
+        <div className={cn("ec-user-chip ml-auto items-center gap-3", isMobile ? "hidden" : "flex")}>
           {user.isGuest ? (
             <>
               <span className="text-xs font-bold text-memphis-black/60 uppercase tracking-wide">Guest</span>
@@ -205,6 +235,43 @@ export default function App() {
           )}
         </div>
       </header>
+
+      {isMobile && (
+        <aside
+          className={cn(
+            "fixed top-0 right-0 h-[100dvh] w-[82vw] max-w-[320px] z-[130] bg-white border-l-3 border-memphis-black shadow-hard-lg p-4 transition-transform duration-150",
+            mobileMenuOpen ? "translate-x-0" : "translate-x-full"
+          )}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs font-black uppercase tracking-wide">Menu</span>
+            <Button variant="outline" size="icon" onClick={() => setMobileMenuOpen(false)} aria-label="Close mobile menu">✕</Button>
+          </div>
+
+          <div className="border-3 border-memphis-black bg-memphis-offwhite p-1 mb-4">
+            <button
+              onClick={() => switchMode("export")}
+              className={cn(
+                "w-full min-h-11 text-left px-3 py-2 border-3 font-black text-xs uppercase tracking-wide transition-snap",
+                mode === "export" ? "bg-memphis-black text-white border-memphis-black" : "bg-white text-memphis-black border-memphis-black"
+              )}
+            >
+              📤 Export Center
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            {!user.isGuest && (
+              <Button variant="outline" size="sm" className="justify-start" onClick={() => { setSettingsOpen(true); setMobileMenuOpen(false); }}>
+                Settings
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="justify-start" onClick={logout}>
+              {user.isGuest ? "Sign Up" : "Log Out"}
+            </Button>
+          </div>
+        </aside>
+      )}
 
       {/* ── Mode badge + description with Stripe Pattern ── */}
       <div className="px-3 sm:px-6 py-2 sm:py-3 border-b-3 sm:border-b-4 border-memphis-black shrink-0 flex items-center gap-2 sm:gap-3 bg-memphis-yellow relative">
@@ -238,7 +305,7 @@ export default function App() {
       {/* ── Main content with Dot Pattern ── */}
       <main className={cn(
         "flex-1 relative",
-        mode === "chat" ? "overflow-hidden p-3 sm:p-6 pb-0" : "overflow-y-auto p-3 sm:p-6"
+        mode === "chat" ? "overflow-hidden p-3 sm:p-6 pb-20 sm:pb-0" : "overflow-y-auto p-3 sm:p-6 pb-20 sm:pb-6"
       )}>
         {/* Dot pattern background */}
         <div className="absolute inset-0 opacity-30 pointer-events-none"
@@ -248,45 +315,84 @@ export default function App() {
           }}
         />
         <div className="relative z-10">
-          {mode === "chat" && <div className="max-w-[1060px] mx-auto h-full flex flex-col"><ChatMode token={token} isGuest={user.isGuest ?? false} /></div>}
-          {mode === "search" && <SearchMode />}
-          {mode === "data" && <DataMode />}
-          {mode === "analytics" && (
-            <AnalyticsMode
-              token={token}
-              dataset={analyticsData}
-              loading={analyticsLoading}
-              error={analyticsError}
-              onSelectCountry={code => loadAnalyticsCountry(code, token)}
-            />
-          )}
-          {mode === "dashboard" && (
-            <div className="max-w-[1100px] mx-auto">
-              <DashboardMode
+          <Suspense
+            fallback={
+              <div className="max-w-[1100px] mx-auto py-10 text-center">
+                <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide text-memphis-black/60">
+                  <span className="w-2 h-2 bg-memphis-pink border-2 border-memphis-black inline-block" style={{ animation: "ecPulse 1s steps(1) infinite" }} />
+                  Loading view
+                </span>
+              </div>
+            }
+          >
+            {mode === "chat" && <div className="max-w-[1060px] mx-auto h-full flex flex-col"><ChatMode token={token} isGuest={user.isGuest ?? false} /></div>}
+            {mode === "search" && <SearchMode />}
+            {mode === "data" && <DataMode />}
+            {mode === "analytics" && (
+              <AnalyticsMode
                 token={token}
-                dataset={countryData}
-                loading={countryLoading}
-                error={countryError}
-                onSelectCountry={code => loadCountry(code, token)}
-                onRefresh={() => countryData && handleRefreshCountry(token, countryData.code)}
+                dataset={analyticsData}
+                loading={analyticsLoading}
+                error={analyticsError}
+                onSelectCountry={code => loadAnalyticsCountry(code, token)}
               />
-            </div>
-          )}
-          {mode === "export" && (
-            <div className="max-w-[1100px] mx-auto">
-              <ExportMode dashDataset={countryData} analyticsDataset={analyticsData} />
-            </div>
-          )}
+            )}
+            {mode === "dashboard" && (
+              <div className="max-w-[1100px] mx-auto">
+                <DashboardMode
+                  token={token}
+                  dataset={countryData}
+                  loading={countryLoading}
+                  error={countryError}
+                  onSelectCountry={code => loadCountry(code, token)}
+                  onRefresh={() => countryData && handleRefreshCountry(token, countryData.code)}
+                />
+              </div>
+            )}
+            {mode === "export" && (
+              <div className="max-w-[1100px] mx-auto">
+                <ExportMode dashDataset={countryData} analyticsDataset={analyticsData} />
+              </div>
+            )}
+          </Suspense>
         </div>
       </main>
 
+      {isMobile && (
+        <nav className="fixed bottom-0 left-0 right-0 z-[110] bg-white border-t-3 border-memphis-black px-1 pt-1 pb-[max(8px,env(safe-area-inset-bottom))]">
+          <div className="grid grid-cols-5 gap-1">
+            {MOBILE_PRIMARY_MODES.map((m) => {
+              const def = MODES.find(([modeKey]) => modeKey === m);
+              const [emoji, ...labelParts] = (def?.[1] ?? "").split(" ");
+              const active = m === mode;
+              return (
+                <button
+                  key={m}
+                  onClick={() => switchMode(m)}
+                  className={cn(
+                    "min-h-11 px-1.5 py-1 border-2 border-memphis-black flex flex-col items-center justify-center text-[10px] font-black uppercase tracking-wide",
+                    active ? "bg-memphis-black text-white" : "bg-memphis-offwhite text-memphis-black"
+                  )}
+                  aria-label={labelParts.join(" ")}
+                >
+                  <span className="text-sm leading-none">{emoji}</span>
+                  <span className="leading-none mt-1">{labelParts[0]}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
+
       {settingsOpen && !user.isGuest && (
-        <SettingsPanel
-          user={user}
-          token={token}
-          onClose={() => setSettingsOpen(false)}
-          onLogout={logout}
-        />
+        <Suspense fallback={null}>
+          <SettingsPanel
+            user={user}
+            token={token}
+            onClose={() => setSettingsOpen(false)}
+            onLogout={logout}
+          />
+        </Suspense>
       )}
     </div>
   );

@@ -5,6 +5,7 @@
 // This component owns only UI-local state: year range, search, tab, history.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useMemo } from "react";
+import { useMobile } from "../../utils/useMobile";
 import {
   ComposedChart, Bar, Line, BarChart, AreaChart, Area,
   PieChart, Pie, Cell, LineChart, XAxis, YAxis,
@@ -36,6 +37,7 @@ interface Props {
 }
 
 export default function DashboardMode({ token, dataset, loading, error, onSelectCountry, onRefresh }: Props) {
+  const isMobile = useMobile();
   // ── UI-local state ──────────────────────────────────────────────────────────
   const [tab,       setTab]       = useState<DashTab>("GDP");
   const [yearRange, setYearRange] = useState<[number, number]>([2010, 2024]);
@@ -119,12 +121,12 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
             const active = dataset?.code === c.code;
             return (
               <button key={c.code} onClick={() => onSelectCountry(c.code)} disabled={loading}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs transition-snap border-3 font-bold"
+                className="flex items-center gap-1.5 px-3 py-2 min-h-11 text-xs transition-snap border-3 font-bold"
                 style={{
                   background:  active ? "#FF006E" : "#FFFFFF",
                   borderColor: "#1A1A2E",
                   color:       active ? "#FFFFFF" : "#1A1A2E",
-                  boxShadow:   active ? "4px 4px 0 #1A1A2E" : "none",
+                  boxShadow:   active ? (isMobile ? "2px 2px 0 #1A1A2E" : "4px 4px 0 #1A1A2E") : "none",
                   cursor:      loading ? "not-allowed" : "pointer",
                 }}>
                 <span className="text-base">{c.flag}</span>
@@ -206,19 +208,19 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         </div>
 
         {/* KPI row */}
-        <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))" }}>
+        <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(auto-fit,minmax(140px,1fr))" }}>
           {dataset.kpis.map(k => <KPI key={k.label} label={k.label} value={k.value} sub={k.sub} trend={k.trend} color={k.color} />)}
         </div>
 
         {/* Sub-tab selector */}
-        <div className="flex gap-1 mb-4 bg-memphis-offwhite border-3 border-memphis-black p-1 w-fit shadow-hard-sm">
+        <div className="flex gap-1 mb-4 bg-memphis-offwhite border-3 border-memphis-black p-1 w-full sm:w-fit overflow-x-auto shadow-hard-sm">
           {DASH_TABS.map(t => <Btn key={t} onClick={() => setTab(t)} active={tab === t}>{t}</Btn>)}
         </div>
 
         {/* ── GDP tab ── */}
         {tab === "GDP" && <>
           <Card title={`GDP (Nominal $B)${gdp.some(d => d.digital_pct) ? " vs Digital Economy %" : ""}`}>
-            <ResponsiveContainer width="100%" height={270}>
+            <ResponsiveContainer width="100%" height={isMobile ? 220 : 270}>
               <ComposedChart data={gdp} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid {...GRID} />
                 <XAxis dataKey="year" tick={AX} />
@@ -232,9 +234,9 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               </ComposedChart>
             </ResponsiveContainer>
           </Card>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card title="Real GDP Growth Rate (%)">
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
                 <BarChart data={gdp} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid {...GRID} />
                   <XAxis dataKey="year" tick={AX} /><YAxis tick={AX} />
@@ -246,7 +248,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               </ResponsiveContainer>
             </Card>
             <Card title="GDP Per Capita (USD)">
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
                 <AreaChart data={gdp} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid {...GRID} />
                   <XAxis dataKey="year" tick={AX} /><YAxis tick={AX} />
@@ -261,7 +263,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         {/* ── Exports tab ── */}
         {tab === "Exports" && <>
           <Card title="Export Composition by Sector ($B)">
-            <ResponsiveContainer width="100%" height={270}>
+            <ResponsiveContainer width="100%" height={isMobile ? 220 : 270}>
               <BarChart data={exp} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid {...GRID} />
                 <XAxis dataKey="year" tick={AX} /><YAxis tick={AX} />
@@ -273,12 +275,12 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               </BarChart>
             </ResponsiveContainer>
           </Card>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card title="Export Breakdown (latest year)">
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={isMobile ? 190 : 220}>
                 <PieChart>
-                  <Pie data={dataset.pieExports} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}
-                    label={({ name, value }: { name: string; value: number }) => `${name}: $${value}B`} labelLine>
+                  <Pie data={dataset.pieExports} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={isMobile ? 62 : 80}
+                    label={!isMobile ? ({ name, value }: { name: string; value: number }) => `${name}: $${value}B` : false} labelLine={!isMobile}>
                     {dataset.pieExports.map((_, i) => <Cell key={i} fill={P[i % P.length]} />)}
                   </Pie>
                   <Tooltip {...TT} />
@@ -286,7 +288,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               </ResponsiveContainer>
             </Card>
             <Card title="Total Exports Over Time ($B)">
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={isMobile ? 190 : 220}>
                 <AreaChart data={exp} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid {...GRID} />
                   <XAxis dataKey="year" tick={AX} /><YAxis tick={AX} />
@@ -301,7 +303,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         {/* ── Imports tab ── */}
         {tab === "Imports" && <>
           <Card title="Imports by Partner ($B) — Stacked">
-            <ResponsiveContainer width="100%" height={270}>
+            <ResponsiveContainer width="100%" height={isMobile ? 220 : 270}>
               <AreaChart data={imp} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid {...GRID} />
                 <XAxis dataKey="year" tick={AX} /><YAxis tick={AX} />
@@ -313,9 +315,9 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               </AreaChart>
             </ResponsiveContainer>
           </Card>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Card title="Top 3 Import Partners ($B)">
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={isMobile ? 190 : 220}>
                 <LineChart data={imp} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
                   <CartesianGrid {...GRID} />
                   <XAxis dataKey="year" tick={AX} /><YAxis tick={AX} />
@@ -328,10 +330,10 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               </ResponsiveContainer>
             </Card>
             <Card title="Import Share by Partner (latest year)">
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={isMobile ? 190 : 220}>
                 <PieChart>
-                  <Pie data={dataset.pieImports} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80}
-                    label={({ name, value }: { name: string; value: number }) => `${name}: $${value}B`} labelLine>
+                  <Pie data={dataset.pieImports} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={isMobile ? 62 : 80}
+                    label={!isMobile ? ({ name, value }: { name: string; value: number }) => `${name}: $${value}B` : false} labelLine={!isMobile}>
                     {dataset.pieImports.map((_, i) => <Cell key={i} fill={P[i % P.length]} />)}
                   </Pie>
                   <Tooltip {...TT} />
@@ -344,7 +346,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         {/* ── Trade Balance tab ── */}
         {tab === "Trade Balance" && <>
           <Card title="Exports vs Imports vs Trade Balance ($B)">
-            <ResponsiveContainer width="100%" height={270}>
+            <ResponsiveContainer width="100%" height={isMobile ? 220 : 270}>
               <ComposedChart data={bal} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid {...GRID} />
                 <XAxis dataKey="year" tick={AX} /><YAxis tick={AX} />
@@ -356,7 +358,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
             </ResponsiveContainer>
           </Card>
           <Card title="Annual Trade Surplus / Deficit ($B)">
-            <ResponsiveContainer width="100%" height={200}>
+            <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
               <BarChart data={bal} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                 <CartesianGrid {...GRID} />
                 <XAxis dataKey="year" tick={AX} /><YAxis tick={AX} />

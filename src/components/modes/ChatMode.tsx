@@ -8,7 +8,6 @@ import { useMobile } from "../../utils/useMobile";
 import { askClaudeStream, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
 import type { Message, AIResponse, ChatSession } from "../../types";
 import { ChartCard, SourceList } from "../ui";
-import { buildChatReportHTML, printHTML } from "../../utils/export";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -212,8 +211,9 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
     setStreamingInsight("");
   };
 
-  const exportConversation = () => {
+  const exportConversation = async () => {
     const title = sessions.find(s => s.id === activeSessionId)?.title ?? "AI Chat Report";
+    const { buildChatReportHTML, printHTML } = await import("../../utils/export");
     printHTML(buildChatReportHTML(messages, title));
   };
 
@@ -310,7 +310,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
               <div className={cn("grid gap-2", isMobile ? "grid-cols-1" : "grid-cols-2")}>
                 {CHAT_SUGGESTIONS.map((s, i) => (
                   <button key={i} onClick={() => send(s)}
-                    className="bg-card border border-border rounded-xl px-3.5 py-3 text-xs text-muted-foreground cursor-pointer text-left leading-relaxed transition-all hover:border-accent/40 hover:text-slate-300 hover:bg-[#1a1d2e]">
+                    className="bg-card border border-border rounded-xl px-3.5 py-3 min-h-11 text-xs text-muted-foreground cursor-pointer text-left leading-relaxed transition-all hover:border-accent/40 hover:text-slate-300 hover:bg-[#1a1d2e]">
                     {s}
                   </button>
                 ))}
@@ -333,7 +333,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
         <div className="border-t border-muted pt-3 shrink-0">
           <div className="max-w-[820px] mx-auto flex gap-2">
             {isMobile && (
-              <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} title="Chat history">☰</Button>
+              <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} title="Chat history" className="min-h-11 min-w-11">☰</Button>
             )}
             {messages.length > 0 && (
               <>
