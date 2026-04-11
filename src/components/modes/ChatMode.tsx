@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Sparkles, MessageSquare, Menu, X, Plus } from "lucide-react";
+import { AlertTriangle, Sparkles, BarChart3, Menu, X, Plus } from "lucide-react";
 
 // ── ChatMessage sub-component ─────────────────────────────────────────────────
 
@@ -299,9 +299,10 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
           {isEmpty && !loading ? (
             <div className="max-w-[640px] mx-auto pt-5 px-1 sm:px-0" style={{ animation: "fadeInUp .3s ease-out" }}>
               <div className="text-center mb-7">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center mx-auto mb-3.5 shadow-[0_0_24px_#8B5CF644]"
-                  style={{ background: "linear-gradient(135deg,#8B5CF6,#00AAFF)" }}><MessageSquare className="w-6 h-6 sm:w-7 sm:h-7 text-white" /></div>
-                <h2 className="text-lg font-extrabold text-white tracking-[-0.3px] mb-2">Ask anything about any economy</h2>
+                <div className="w-12 h-12 sm:w-14 sm:h-14 border-3 border-memphis-black bg-memphis-pink flex items-center justify-center mx-auto mb-3.5 shadow-hard">
+                  <BarChart3 className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+                </div>
+                <h2 className="text-lg font-extrabold text-memphis-black tracking-[-0.3px] mb-2">Ask anything about any economy</h2>
                 <p className="text-[13px] text-muted-foreground leading-[1.65]">
                   Generate interactive charts and expert analysis from World Bank, IMF, UN Comtrade, and OECD data.<br />
                   Ask about any country, sector, or time period.
