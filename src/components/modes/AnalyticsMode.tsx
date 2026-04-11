@@ -487,8 +487,8 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
   const extraHistory = history.filter(h => !POPULAR_COUNTRIES.some(p => p.code === h.code));
 
   return (
-    <div className="bg-white p-5 border-3 border-memphis-black shadow-hard-lg mb-5">
-      <div className="flex items-center gap-2.5 mb-4 flex-wrap">
+    <div className="bg-white p-3 sm:p-5 border-3 border-memphis-black shadow-hard-lg mb-5">
+      <div className="flex items-center gap-2.5 mb-3 sm:mb-4 flex-wrap">
         <span className="text-[11px] font-black text-memphis-black/60 uppercase tracking-[0.5px]">Data Source</span>
         {dataset && !loading && (
           <span className="text-xs flex items-center gap-1.5">
@@ -509,20 +509,20 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
       <CountrySearchInput token={token} onSelect={onSelect} className="mb-4" />
 
       {/* Quick picks */}
-      <div className="flex flex-wrap gap-2">
-        {POPULAR_COUNTRIES.map(c => (
+      <div className="flex flex-wrap gap-1.5 sm:gap-2">
+        {POPULAR_COUNTRIES.slice(0, isMobile ? 6 : undefined).map(c => (
           <button key={c.code} onClick={() => onSelect(c.code)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer transition-snap border-3 font-bold"
+            className="flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs cursor-pointer transition-snap border-2 sm:border-3 font-bold"
             style={{
               background:  dataset?.code === c.code ? "#FF006E" : "#FFFFFF",
               borderColor: "#1A1A2E",
               color:       dataset?.code === c.code ? "#FFFFFF" : "#1A1A2E",
-              boxShadow:   dataset?.code === c.code ? "4px 4px 0 #1A1A2E" : "none",
+              boxShadow:   dataset?.code === c.code ? (isMobile ? "2px 2px 0 #1A1A2E" : "4px 4px 0 #1A1A2E") : "none",
             }}>
-            <span className="text-sm">{c.flag}</span>{c.name}
+            <span className="text-sm">{c.flag}</span><span className="hidden sm:inline">{c.name}</span><span className="sm:hidden">{c.code}</span>
           </button>
         ))}
-        {extraHistory.map(h => (
+        {!isMobile && extraHistory.map(h => (
           <button key={h.code} onClick={() => onSelect(h.code)}
             className="flex items-center gap-1.5 bg-memphis-offwhite border-2 border-dashed border-memphis-black text-memphis-black/60 px-3 py-1.5 text-[11px] cursor-pointer font-medium">
             <span className="text-[13px]">{h.flag}</span>{h.name}
