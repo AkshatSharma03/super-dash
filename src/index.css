@@ -2,98 +2,300 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── shadcn CSS variables — mapped to the app's dark palette ── */
+/* ── MEMPHIS DESIGN SYSTEM ───────────────────────────────────────────────── */
 @layer base {
   :root {
-    --background:  222 25% 7%;       /* #0f1117 */
-    --foreground:  214 32% 91%;      /* #e2e8f0 */
-    --card:        224 27% 12%;      /* #161929 */
-    --card-foreground: 214 32% 91%;
-    --popover:     222 27% 9%;       /* #0a0d14 */
-    --popover-foreground: 214 32% 91%;
-    --primary:     199 100% 50%;     /* #00AAFF */
+    /* Memphis Color Palette - Bold & Electric */
+    --memphis-pink: 340 100% 50%;      /* #FF006E hot pink */
+    --memphis-cyan: 192 100% 50%;       /* #00D9FF cyan */
+    --memphis-orange: 18 97% 50%;       /* #FB5607 orange */
+    --memphis-yellow: 45 100% 52%;      /* #FFBE0B yellow */
+    --memphis-lime: 168 100% 48%;       /* #00F5D4 mint */
+    --memphis-purple: 270 83% 58%;      /* #8338EC purple */
+    
+    /* Core UI tokens */
+    --background: 0 0% 98%;            /* #FAFAFA off-white */
+    --foreground: 230 30% 13%;          /* #1A1A2E near-black */
+    --card: 0 0% 100%;                   /* #FFFFFF pure white */
+    --card-foreground: 230 30% 13%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 230 30% 13%;
+    --primary: 340 100% 50%;            /* Hot pink primary */
     --primary-foreground: 0 0% 100%;
-    --secondary:   225 28% 18%;      /* #2d3348 */
-    --secondary-foreground: 215 20% 65%;
-    --muted:       225 25% 15%;      /* #1e2130 */
-    --muted-foreground: 215 16% 47%; /* #64748b */
-    --accent:      258 89% 66%;      /* #8B5CF6 */
+    --secondary: 192 100% 50%;          /* Cyan secondary */
+    --secondary-foreground: 230 30% 13%;
+    --muted: 230 20% 92%;
+    --muted-foreground: 230 15% 40%;
+    --accent: 18 97% 50%;               /* Orange accent */
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 72% 51%;        /* #EF4444 */
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border:      225 28% 18%;      /* #2d3348 */
-    --input:       224 27% 12%;      /* #161929 */
-    --ring:        199 100% 50%;     /* #00AAFF */
-    --radius:      0.5rem;
+    --border: 230 30% 13%;              /* Thick dark borders */
+    --input: 230 30% 13%;
+    --ring: 340 100% 50%;
+    --radius: 0rem;                      /* SHARP CORNERS - Memphis style */
   }
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html, body, #root { height: 100%; }
-body { font-family: 'Inter', sans-serif; background: #0f1117; color: #e2e8f0; -webkit-font-smoothing: antialiased; }
-
-/* ── Scrollbars ── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: #0f1117; }
-::-webkit-scrollbar-thumb { background: #2d3348; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #3d4460; }
-
-a { color: #00AAFF; text-decoration: none; }
-a:hover { text-decoration: underline; }
-input[type="range"] { cursor: pointer; }
-
-/* ── Animations ── */
-@keyframes spin { 0% { transform: rotate(0deg) } 100% { transform: rotate(360deg) } }
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
+body { 
+  font-family: 'Inter', sans-serif; 
+  background: #FAFAFA; 
+  color: #1A1A2E; 
+  -webkit-font-smoothing: antialiased;
+  font-weight: 500;
 }
 
-@keyframes slideInRight {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
+/* ── Memphis Scrollbars ── */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: #FAFAFA; border-left: 3px solid #1A1A2E; }
+::-webkit-scrollbar-thumb { 
+  background: #FF006E; 
+  border: 2px solid #1A1A2E;
+}
+::-webkit-scrollbar-thumb:hover { background: #00D9FF; }
+
+a { color: #FF006E; text-decoration: none; font-weight: 700; }
+a:hover { 
+  text-decoration: underline; 
+  text-decoration-thickness: 3px;
+  text-underline-offset: 3px;
+}
+input[type="range"] { cursor: pointer; }
+
+/* ── SNAPPY ANIMATIONS (Memphis = fast/hard, no fade) ── */
+@keyframes hardPop {
+  0% { transform: scale(0.95); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
+}
+
+@keyframes slideInHard {
+  0% { transform: translateX(100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
 }
 
 @keyframes slideInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
+  0% { transform: translateY(20px); opacity: 0; }
+  100% { transform: translateY(0); opacity: 1; }
 }
 
-/* Typing indicator dots — used in ChatMode loading state */
 @keyframes typingDot {
-  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
-  40%           { opacity: 1;    transform: translateY(-4px); }
+  0%, 80%, 100% { opacity: 0.3; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-6px); }
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.4; }
+@keyframes pulseHard {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
 }
 
 @keyframes ecPulse {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50%      { opacity: 0.4; transform: scale(0.7); }
+  50% { opacity: 0.6; transform: scale(0.85); }
 }
 
 @keyframes searchSpin {
-  0%   { transform: rotate(0deg);   border-top-color: #10B981; }
-  50%  { border-top-color: #00AAFF; }
-  100% { transform: rotate(360deg); border-top-color: #10B981; }
+  0% { transform: rotate(0deg); border-top-color: #FF006E; }
+  33% { border-top-color: #00D9FF; }
+  66% { border-top-color: #FB5607; }
+  100% { transform: rotate(360deg); border-top-color: #FF006E; }
+}
+
+/* ── GEOMETRIC BACKGROUND PATTERNS ── */
+
+/* Dot Grid Pattern */
+.bg-pattern-dots {
+  background-color: #FAFAFA;
+  background-image: radial-gradient(#1A1A2E 2px, transparent 2px);
+  background-size: 24px 24px;
+}
+
+/* Zigzag Pattern */
+.bg-pattern-zigzag {
+  background-color: #FAFAFA;
+  background-image: 
+    linear-gradient(135deg, #FF006E 25%, transparent 25%),
+    linear-gradient(225deg, #FF006E 25%, transparent 25%),
+    linear-gradient(45deg, #FF006E 25%, transparent 25%),
+    linear-gradient(315deg, #FF006E 25%, transparent 25%);
+  background-position: 8px 0, 8px 0, 0 0, 0 0;
+  background-size: 16px 16px;
+  background-repeat: repeat-x;
+}
+
+/* Diagonal Stripes Pattern */
+.bg-pattern-stripes {
+  background: repeating-linear-gradient(
+    45deg,
+    #FFBE0B,
+    #FFBE0B 8px,
+    #1A1A2E 8px,
+    #1A1A2E 16px
+  );
+}
+
+/* Circle Scatter Pattern */
+.bg-pattern-circles {
+  background-color: #FAFAFA;
+  background-image: 
+    radial-gradient(circle at 20% 30%, #00D9FF 6px, transparent 6px),
+    radial-gradient(circle at 80% 70%, #FB5607 8px, transparent 8px),
+    radial-gradient(circle at 40% 80%, #8338EC 5px, transparent 5px),
+    radial-gradient(circle at 70% 20%, #FF006E 7px, transparent 7px);
+  background-size: 100px 100px;
+}
+
+/* Grid Pattern */
+.bg-pattern-grid {
+  background-color: #FAFAFA;
+  background-image: 
+    linear-gradient(#1A1A2E 3px, transparent 3px),
+    linear-gradient(90deg, #1A1A2E 3px, transparent 3px);
+  background-size: 40px 40px;
+}
+
+/* Checkerboard Pattern */
+.bg-pattern-checker {
+  background-color: #FAFAFA;
+  background-image: 
+    linear-gradient(45deg, #1A1A2E 25%, transparent 25%),
+    linear-gradient(-45deg, #1A1A2E 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #1A1A2E 75%),
+    linear-gradient(-45deg, transparent 75%, #1A1A2E 75%);
+  background-size: 20px 20px;
+  background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+}
+
+/* Memphis Utility Classes */
+.memphis-border { border: 3px solid #1A1A2E; }
+.memphis-border-thick { border: 4px solid #1A1A2E; }
+.memphis-shadow { box-shadow: 4px 4px 0 #1A1A2E; }
+.memphis-shadow-pink { box-shadow: 4px 4px 0 #FF006E; }
+.memphis-shadow-cyan { box-shadow: 4px 4px 0 #00D9FF; }
+.memphis-shadow-orange { box-shadow: 4px 4px 0 #FB5607; }
+
+/* Corner Circle Accents */
+.corner-circle-tl::before,
+.corner-circle-tr::after,
+.corner-circle-bl::before,
+.corner-circle-br::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 3px solid #1A1A2E;
+  background: #FF006E;
+}
+
+.corner-circle-tl { position: relative; }
+.corner-circle-tl::before { top: -8px; left: -8px; }
+.corner-circle-tr { position: relative; }
+.corner-circle-tr::after { top: -8px; right: -8px; background: #00D9FF; }
+.corner-circle-bl { position: relative; }
+.corner-circle-bl::before { bottom: -8px; left: -8px; background: #FB5607; }
+.corner-circle-br { position: relative; }
+.corner-circle-br::after { bottom: -8px; right: -8px; background: #8338EC; }
+
+/* Section-Specific Pattern Classes */
+.section-header {
+  background-color: #FAFAFA;
+  border-bottom: 4px solid #1A1A2E;
+  position: relative;
+}
+
+.section-header::after {
+  content: '';
+  position: absolute;
+  bottom: -12px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: repeating-linear-gradient(
+    45deg,
+    #FF006E,
+    #FF006E 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+.section-main {
+  background-color: #FAFAFA;
+  background-image: radial-gradient(#00D9FF 2px, transparent 2px);
+  background-size: 32px 32px;
+}
+
+.card-memphis {
+  position: relative;
+  background: #FFFFFF;
+  border: 3px solid #1A1A2E;
+  box-shadow: 6px 6px 0 #1A1A2E;
+}
+
+.card-memphis::before {
+  content: '';
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #FF006E;
+  border: 3px solid #1A1A2E;
+}
+
+/* Mode Badge Stripes */
+.mode-badge-stripes {
+  position: relative;
+  background: #FFFFFF;
+  border: 3px solid #1A1A2E;
+  overflow: hidden;
+}
+
+.mode-badge-stripes::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: repeating-linear-gradient(
+    90deg,
+    #FFBE0B 0px,
+    #FFBE0B 6px,
+    #FB5607 6px,
+    #FB5607 12px,
+    #00D9FF 12px,
+    #00D9FF 18px
+  );
+}
+
+/* Hard transitions for snappy feel */
+.transition-hard {
+  transition: all 0.1s steps(1);
+}
+
+.transition-snap {
+  transition: transform 0.1s ease-out, box-shadow 0.1s steps(1);
+}
+
+/* Button press effect */
+.btn-press:active {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 #1A1A2E;
 }
 
 /* ── Mobile responsive (≤ 640px) ── */
 @media (max-width: 640px) {
-  /* Header: two-row layout —
-     Row 1: Brand (left) + User chip (right)
-     Row 2: Tab strip (full width) */
   .ec-header {
     flex-wrap: wrap;
-    row-gap: 6px;
-    padding: 8px 12px !important;
+    row-gap: 8px;
+    padding: 12px 16px !important;
   }
 
-  /* Tab strip: full-width second row, scrollable, no scrollbar */
   .ec-tabs {
     order: 3;
     flex-basis: 100%;
@@ -105,20 +307,21 @@ input[type="range"] { cursor: pointer; }
   }
   .ec-tabs::-webkit-scrollbar { display: none; }
 
-  /* User chip: pushed to end of row 1 */
   .ec-user-chip { margin-left: auto; }
 
-  /* Tab buttons: show emoji only, hide text label */
   .ec-tab-text { display: none; }
   .ec-tabs button {
-    min-width: 40px;
-    padding: 6px 10px !important;
-    font-size: 16px !important;
+    min-width: 44px;
+    padding: 8px 12px !important;
+    font-size: 18px !important;
+    border-width: 2px !important;
   }
 
-  /* Mode description bar: hide the long description text */
   .ec-mode-desc { display: none; }
-
-  /* User chip: hide username label, keep avatar + chevron */
   .ec-user-name { display: none !important; }
+  
+  /* Smaller patterns on mobile */
+  .bg-pattern-dots { background-size: 16px 16px; }
+  .bg-pattern-circles { background-size: 60px 60px; }
+  .section-main { background-size: 20px 20px; }
 }
