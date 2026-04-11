@@ -335,7 +335,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
               <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" style={{ animation: "pulse 2s ease-in-out infinite" }} />
               Economic Intelligence Platform
             </div>
-            <h1 className="text-[38px] font-black leading-[1.15] text-white tracking-[-0.5px] mb-4">
+            <h1 className="text-[38px] font-black leading-[1.15] text-memphis-black tracking-[-0.5px] mb-4">
               Generate accurate dynamic charts for any economic query
             </h1>
             <p className="text-sm text-muted-foreground leading-[1.8] mb-10">
@@ -348,7 +348,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
                     {icon}
                   </div>
                   <div>
-                    <div className="text-[13px] font-semibold text-slate-300 mb-0.5">{title}</div>
+                    <div className="text-[13px] font-semibold text-memphis-black mb-0.5">{title}</div>
                     <div className="text-xs text-muted-foreground leading-[1.55]">{desc}</div>
                   </div>
                 </div>
