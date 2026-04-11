@@ -603,30 +603,30 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       <CountrySelector token={token} dataset={dataset} loading={loading} error={error} onSelect={onSelectCountry} />
 
       {/* ── Algorithm picker ── */}
-      <div className="bg-white p-5 border-3 border-memphis-black shadow-hard-lg mb-5">
-        <p className="text-[11px] font-black text-memphis-black/60 uppercase tracking-[0.5px] mb-4">
+      <div className="bg-white p-3 sm:p-5 border-3 border-memphis-black shadow-hard-lg mb-5">
+        <p className="text-[11px] font-black text-memphis-black/60 uppercase tracking-[0.5px] mb-3 sm:mb-4">
           Algorithms · {activeAlgos.size}/{ALGOS.length} active
         </p>
-        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
+        <div className="grid gap-2 sm:gap-3" style={{ gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill, minmax(190px, 1fr))" }}>
           {ALGOS.map(a => {
             const on = activeAlgos.has(a.id);
             return (
               <button key={a.id} onClick={() => toggleAlgo(a.id)}
-                className="px-3 py-3 cursor-pointer text-left transition-snap border-3 shadow-hard-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+                className="px-2 sm:px-3 py-2 sm:py-3 cursor-pointer text-left transition-snap border-2 sm:border-3 shadow-hard-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
                 style={{ 
                   background: on ? a.color : "#FFFFFF", 
                   borderColor: "#1A1A2E",
                   color: on ? "#FFFFFF" : "#1A1A2E",
-                  boxShadow: on ? "4px 4px 0 #1A1A2E" : "2px 2px 0 #1A1A2E"
+                  boxShadow: on ? (isMobile ? "2px 2px 0 #1A1A2E" : "4px 4px 0 #1A1A2E") : (isMobile ? "1px 1px 0 #1A1A2E" : "2px 2px 0 #1A1A2E")
                 }}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-black uppercase">{a.name}</span>
-                  <span className="w-4 h-4 flex items-center justify-center text-[9px] text-white font-black border-2 border-white shrink-0"
+                <div className="flex items-center justify-between mb-0.5 sm:mb-1">
+                  <span className="text-[10px] sm:text-[11px] font-black uppercase leading-tight">{a.name}</span>
+                  <span className="w-3 h-3 sm:w-4 sm:h-4 flex items-center justify-center text-[8px] sm:text-[9px] text-white font-black border border-white sm:border-2 shrink-0"
                     style={{ background: on ? "#FFFFFF" : "#1A1A2E", color: on ? "#1A1A2E" : "#FFFFFF" }}>
                     {on ? "✓" : ""}
                   </span>
                 </div>
-                <p className="text-[10px] leading-snug font-medium" style={{ opacity: on ? 0.9 : 0.6 }}>{a.desc}</p>
+                <p className="text-[9px] sm:text-[10px] leading-snug font-medium hidden sm:block" style={{ opacity: on ? 0.9 : 0.6 }}>{a.desc}</p>
               </button>
             );
           })}
@@ -634,8 +634,8 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       </div>
 
       {/* ── AI query ── */}
-      <div className="bg-memphis-yellow p-5 border-3 border-memphis-black shadow-hard-lg mb-5 relative">
-        <div className="absolute -top-2 left-4 right-4 h-2 bg-repeating-linear-gradient"
+      <div className="bg-memphis-yellow p-3 sm:p-5 border-3 border-memphis-black shadow-hard-lg mb-5 relative">
+        <div className="absolute -top-1.5 sm:-top-2 left-4 right-4 h-1.5 sm:h-2 bg-repeating-linear-gradient"
           style={{
             background: `repeating-linear-gradient(
               90deg,
@@ -646,13 +646,13 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
             )`
           }}
         />
-        <p className="text-[11px] font-black text-memphis-black uppercase tracking-[0.5px] mb-3 mt-1">AI Economic Query</p>
-        <div className={`flex gap-3 ${isMobile ? "flex-col" : ""}`}>
+        <p className="text-[11px] font-black text-memphis-black uppercase tracking-[0.5px] mb-2 sm:mb-3 mt-1">AI Economic Query</p>
+        <div className={`flex gap-2 sm:gap-3 ${isMobile ? "flex-col" : ""}`}>
           <Input value={query} onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runQuery(); } }}
-            placeholder={dataset ? `Ask about ${dataset.name}'s economy…` : "Select a country above, then ask a question…"}
+            placeholder={dataset ? `Ask about ${dataset.name}…` : "Select a country first…"}
             disabled={aiLoading}
-            className="flex-1 bg-white border-3 border-memphis-black"
+            className="flex-1 bg-white border-2 sm:border-3 border-memphis-black"
           />
           <Button onClick={runQuery} disabled={aiLoading || !query.trim()}>
             {aiLoading ? "Analyzing…" : "Analyze"}
