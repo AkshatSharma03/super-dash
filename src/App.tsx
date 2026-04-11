@@ -305,7 +305,9 @@ export default function App() {
       {/* ── Main content with Dot Pattern ── */}
       <main className={cn(
         "flex-1 relative",
-        mode === "chat" ? "overflow-hidden p-3 sm:p-6 pb-20 sm:pb-0" : "overflow-y-auto p-3 sm:p-6 pb-20 sm:pb-6"
+        mode === "chat"
+          ? "overflow-hidden p-3 sm:p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-0"
+          : "overflow-y-auto p-3 sm:p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-6"
       )}>
         {/* Dot pattern background */}
         <div className="absolute inset-0 opacity-30 pointer-events-none"

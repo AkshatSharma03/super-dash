@@ -99,7 +99,7 @@ export default function SearchMode() {
               Trie Suggestions — O(m) prefix match
             </div>
             {suggestions.map((s, i) => (
-              <button key={i} onMouseDown={() => doSearch(s)}
+              <button key={i} onPointerDown={() => doSearch(s)}
                 className={cn(
                   "block w-full text-left bg-transparent border-none px-3.5 py-2.5 text-[13px] text-memphis-black/70 cursor-pointer transition-snap hover:bg-memphis-cyan/10 hover:text-memphis-black",
                   i < suggestions.length - 1 && "border-b-2 border-memphis-black/10"

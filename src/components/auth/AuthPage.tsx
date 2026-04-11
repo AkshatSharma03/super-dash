@@ -320,9 +320,11 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
         </div>
         <span className="text-[13px] sm:text-[15px] font-black text-memphis-black tracking-tight uppercase">EconChart</span>
         <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-          <Button onClick={switchToLogin} size="sm" className="px-3 sm:px-4 whitespace-nowrap">
-            Sign in
-          </Button>
+          {view !== "login" && (
+            <Button onClick={switchToLogin} size="sm" className="px-3 sm:px-4 whitespace-nowrap">
+              Sign in
+            </Button>
+          )}
           <Button onClick={continueAsGuest} disabled={guestLoading} size="sm" className="px-3 sm:px-4 whitespace-nowrap">
             {guestLoading ? "Starting…" : <><span className="sm:hidden">Start free</span><span className="hidden sm:inline">Get started free</span></>}
           </Button>

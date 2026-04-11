@@ -47,7 +47,7 @@ export default function CountrySearchInput({ token, onSelect, placeholder = "Sea
       {open && results.length > 0 && (
         <div className="absolute top-[calc(100%+4px)] left-0 right-0 max-h-[280px] overflow-y-auto bg-white border-3 border-memphis-black z-[100] shadow-hard">
           {results.map(c => (
-            <button key={c.code} onMouseDown={() => pick(c.code)}
+            <button key={c.code} onPointerDown={() => pick(c.code)}
               className="grid grid-cols-[24px_minmax(0,1fr)_44px] items-center gap-2 w-full min-h-11 bg-transparent border-0 border-b-2 border-b-memphis-black/10 px-3 py-2 cursor-pointer text-memphis-black text-[13px] hover:bg-memphis-cyan/10">
               <span className="text-lg">{c.flag}</span>
               <span className="font-semibold truncate text-left">{c.name}</span>

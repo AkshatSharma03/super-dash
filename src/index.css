@@ -44,7 +44,12 @@ body {
   background: #FAFAFA; 
   color: #1A1A2E; 
   -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
   font-weight: 500;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
 }
 
 button,
@@ -298,6 +303,12 @@ input[type="range"] { cursor: pointer; }
 
 /* ── Mobile responsive (≤ 640px) ── */
 @media (max-width: 640px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
   .ec-header {
     flex-wrap: wrap;
     row-gap: 8px;
