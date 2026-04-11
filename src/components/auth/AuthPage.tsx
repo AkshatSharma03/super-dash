@@ -5,6 +5,7 @@
 import { useState, useEffect } from "react";
 import { login, register, guestLogin, requestPasswordReset, resetPassword } from "../../utils/api";
 import type { User } from "../../types";
+import { useMobile } from "../../utils/useMobile";
 import { Button }  from "@/components/ui/button";
 import { Input }   from "@/components/ui/input";
 import { Label }   from "@/components/ui/label";
@@ -27,6 +28,7 @@ const FEATURES = [
 type View = "login" | "register" | "forgot" | "reset";
 
 export default function AuthPage({ onAuth }: AuthPageProps) {
+  const isMobile = useMobile();
   const [view,         setView]        = useState<View>("login");
   const [name,         setName]        = useState("");
   const [email,        setEmail]       = useState("");
@@ -40,6 +42,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
   const [resetToken,   setResetToken]  = useState<string | null>(null);
   // Dev-mode: server returns reset URL when SMTP is not configured
   const [devResetUrl,  setDevResetUrl] = useState<string | null>(null);
+  const visibleFeatures = isMobile ? FEATURES.slice(0, 3) : FEATURES;
 
   // Detect ?reset=TOKEN in the URL and switch to reset view
   useEffect(() => {
@@ -128,7 +131,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
   const renderForgotForm = () => (
     <>
       <div className="mb-5">
-        <h2 className="text-xl font-extrabold text-white tracking-[-0.3px] mb-1.5">Reset your password</h2>
+        <h2 className="text-xl font-extrabold text-memphis-black tracking-[-0.3px] mb-1.5">Reset your password</h2>
         <p className="text-xs text-muted-foreground">Enter your email and we'll send a reset link</p>
       </div>
 
@@ -182,7 +185,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
   const renderResetForm = () => (
     <>
       <div className="mb-5">
-        <h2 className="text-xl font-extrabold text-white tracking-[-0.3px] mb-1.5">Choose a new password</h2>
+        <h2 className="text-xl font-extrabold text-memphis-black tracking-[-0.3px] mb-1.5">Choose a new password</h2>
         <p className="text-xs text-muted-foreground">Must be at least 8 characters</p>
       </div>
 
@@ -226,7 +229,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
   const renderAuthForm = () => (
     <>
       <div className="mb-5">
-        <h2 className="text-xl font-extrabold text-white tracking-[-0.3px] mb-1.5">
+        <h2 className="text-xl font-extrabold text-memphis-black tracking-[-0.3px] mb-1.5">
           {view === "login" ? "Welcome back" : "Create your account"}
         </h2>
         <p className="text-xs text-muted-foreground">
@@ -307,7 +310,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
   );
 
   return (
-    <div className="bg-background min-h-screen text-foreground" style={{ fontFamily: "Inter,sans-serif" }}>
+    <div className="bg-background min-h-[100dvh] text-foreground" style={{ fontFamily: "Inter,sans-serif" }}>
 
       {/* ── Top nav ── */}
       <nav className="px-4 sm:px-8 py-3 border-b-3 border-memphis-black flex items-center gap-3 bg-white">
@@ -325,10 +328,10 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
       </nav>
 
       {/* ── Body: hero + form ── */}
-      <div className="flex min-h-[calc(100vh-63px)] flex-col lg:flex-row">
+      <div className="flex min-h-[calc(100dvh-63px)] flex-col lg:flex-row">
 
         {/* Left: hero */}
-        <div className="flex-1 min-w-0 px-5 sm:px-8 lg:px-14 py-8 sm:py-10 lg:py-[60px] flex flex-col justify-center">
+        <div className="order-2 lg:order-1 flex-1 min-w-0 px-5 sm:px-8 lg:px-14 py-6 sm:py-10 lg:py-[60px] flex flex-col justify-center">
           <div className="max-w-[540px]">
             <div className="text-[10px] font-black uppercase tracking-[2px] mb-5 bg-memphis-pink/10 border-2 border-memphis-pink inline-flex items-center gap-1.5 px-3.5 py-1.5 text-memphis-pink">
               <span className="w-2 h-2 bg-memphis-pink inline-block" style={{ animation: "pulse 2s ease-in-out infinite" }} />
@@ -341,7 +344,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
               Ask questions in plain language. Get interactive, publication-ready charts backed by World Bank, IMF, UN Comtrade, and OECD data — for any country or region in the world.
             </p>
             <div className="flex flex-col gap-3.5">
-              {FEATURES.map(([icon, title, desc]) => (
+              {visibleFeatures.map(([icon, title, desc]) => (
                 <div key={title} className="flex gap-3 items-start">
                   <div className="w-8 h-8 sm:w-9 sm:h-9 border-2 border-memphis-black bg-white flex items-center justify-center text-[14px] sm:text-[15px] shrink-0 shadow-hard-sm">
                     {icon}
@@ -352,12 +355,17 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
                   </div>
                 </div>
               ))}
+              {isMobile && FEATURES.length > visibleFeatures.length && (
+                <p className="text-[11px] text-memphis-black/60 font-semibold">
+                  +{FEATURES.length - visibleFeatures.length} more capabilities after sign-in
+                </p>
+              )}
             </div>
           </div>
         </div>
 
         {/* Right: auth form */}
-        <div className="w-full lg:w-[420px] shrink-0 px-5 sm:px-8 lg:px-11 py-8 sm:py-10 lg:py-[60px] border-t-3 lg:border-t-0 lg:border-l-3 border-memphis-black flex flex-col justify-center bg-white">
+        <div className="order-1 lg:order-2 w-full lg:w-[420px] shrink-0 px-5 sm:px-8 lg:px-11 py-6 sm:py-10 lg:py-[60px] border-b-3 lg:border-b-0 lg:border-l-3 border-memphis-black flex flex-col justify-center bg-white">
           {view === "forgot" && renderForgotForm()}
           {view === "reset"  && renderResetForm()}
           {(view === "login" || view === "register") && renderAuthForm()}

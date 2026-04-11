@@ -314,7 +314,7 @@ export default function App() {
             backgroundSize: '24px 24px'
           }}
         />
-        <div className="relative z-10">
+        <div className={cn("relative z-10", mode === "chat" && "h-full")}>
           <Suspense
             fallback={
               <div className="max-w-[1100px] mx-auto py-10 text-center">
