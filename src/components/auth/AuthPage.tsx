@@ -313,16 +313,18 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
     <div className="bg-background min-h-[100dvh] text-foreground" style={{ fontFamily: "Inter,sans-serif" }}>
 
       {/* ── Top nav ── */}
-      <nav className="px-4 sm:px-8 py-3 border-b-3 border-memphis-black flex items-center gap-3 bg-white">
+      <nav className="px-3 sm:px-8 py-3 border-b-3 border-memphis-black flex items-center gap-2 sm:gap-3 bg-white">
         <div className="w-8 h-8 border-3 border-memphis-black flex items-center justify-center text-base shadow-hard-sm"
           style={{ background: "#FF006E" }}>
           <BarChart3 className="w-4 h-4 text-white" />
         </div>
-        <span className="text-[15px] font-black text-memphis-black tracking-tight uppercase">EconChart</span>
-        <div className="ml-auto flex gap-2">
-          <Button onClick={switchToLogin}>Sign in</Button>
-          <Button onClick={continueAsGuest} disabled={guestLoading}>
-            {guestLoading ? "Starting…" : "Get started free"}
+        <span className="text-[13px] sm:text-[15px] font-black text-memphis-black tracking-tight uppercase">EconChart</span>
+        <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
+          <Button onClick={switchToLogin} size="sm" className="px-3 sm:px-4 whitespace-nowrap">
+            Sign in
+          </Button>
+          <Button onClick={continueAsGuest} disabled={guestLoading} size="sm" className="px-3 sm:px-4 whitespace-nowrap">
+            {guestLoading ? "Starting…" : <><span className="sm:hidden">Start free</span><span className="hidden sm:inline">Get started free</span></>}
           </Button>
         </div>
       </nav>

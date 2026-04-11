@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge }  from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
+import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2, Globe2, RefreshCw } from "lucide-react";
 
 
@@ -116,12 +117,15 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         </div>
 
         {/* Popular quick-select */}
-        <div className="flex flex-wrap gap-2">
+        <div className={cn("gap-2", isMobile ? "grid grid-cols-2" : "flex flex-wrap")}>
           {POPULAR_COUNTRIES.map(c => {
             const active = dataset?.code === c.code;
             return (
               <button key={c.code} onClick={() => onSelectCountry(c.code)} disabled={loading}
-                className="flex items-center gap-1.5 px-3 py-2 min-h-11 text-xs transition-snap border-3 font-bold"
+                className={cn(
+                  "flex items-center gap-1.5 px-3 py-2 min-h-11 text-xs transition-snap border-3 font-bold",
+                  isMobile ? "w-full justify-start" : ""
+                )}
                 style={{
                   background:  active ? "#FF006E" : "#FFFFFF",
                   borderColor: "#1A1A2E",
@@ -130,7 +134,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
                   cursor:      loading ? "not-allowed" : "pointer",
                 }}>
                 <span className="text-base">{c.flag}</span>
-                {c.name}
+                <span className={cn("truncate", isMobile ? "max-w-[72px]" : "")}>{isMobile ? c.code : c.name}</span>
               </button>
             );
           })}
@@ -143,12 +147,15 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
           <div className="text-[11px] font-black text-memphis-black/60 uppercase tracking-[0.6px] mb-2.5">
             Previously fetched
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className={cn("gap-2", isMobile ? "grid grid-cols-2" : "flex flex-wrap")}>
             {history.map(h => {
               const isActive = dataset?.code === h.code;
               return (
                 <button key={h.code} onClick={() => onSelectCountry(h.code)} disabled={loading}
-                  className="flex flex-col items-start gap-0.5 px-3 py-2 transition-snap min-w-[100px] sm:min-w-[120px] border-3 shadow-hard-sm"
+                  className={cn(
+                    "flex flex-col items-start gap-0.5 px-3 py-2 transition-snap border-3 shadow-hard-sm",
+                    isMobile ? "w-full min-h-[76px]" : "min-w-[100px] sm:min-w-[120px]"
+                  )}
                   style={{
                     background: isActive ? "#FF006E" : "#FFFFFF",
                     borderColor: "#1A1A2E",
@@ -157,9 +164,9 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
                   }}>
                   <span className="text-sm flex items-center gap-1.5">
                     <span className="text-xl">{h.flag}</span>
-                    <span className="font-black text-[13px]">{h.name}</span>
+                    <span className="font-black text-[13px] truncate max-w-[110px]">{isMobile ? h.code : h.name}</span>
                   </span>
-                  <span className="text-[10px] opacity-70">{h.region} · cached {timeAgo(h.cachedAt)}</span>
+                  <span className="text-[10px] opacity-70 truncate w-full">{h.region} · cached {timeAgo(h.cachedAt)}</span>
                 </button>
               );
             })}

@@ -511,17 +511,17 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
       <CountrySearchInput token={token} onSelect={onSelect} className="mb-4" />
 
       {/* Quick picks */}
-      <div className="flex flex-wrap gap-1.5 sm:gap-2">
+      <div className={isMobile ? "grid grid-cols-3 gap-1.5" : "flex flex-wrap gap-1.5 sm:gap-2"}>
         {POPULAR_COUNTRIES.slice(0, isMobile ? 6 : undefined).map(c => (
           <button key={c.code} onClick={() => onSelect(c.code)}
-            className="flex items-center gap-1 px-2 sm:px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs cursor-pointer transition-snap border-2 sm:border-3 font-bold"
+            className="flex items-center justify-center gap-1 px-2 sm:px-3 py-2 sm:py-1.5 min-h-11 sm:min-h-0 text-[11px] sm:text-xs cursor-pointer transition-snap border-2 sm:border-3 font-bold w-full"
             style={{
               background:  dataset?.code === c.code ? "#FF006E" : "#FFFFFF",
               borderColor: "#1A1A2E",
               color:       dataset?.code === c.code ? "#FFFFFF" : "#1A1A2E",
               boxShadow:   dataset?.code === c.code ? (isMobile ? "2px 2px 0 #1A1A2E" : "4px 4px 0 #1A1A2E") : "none",
             }}>
-            <span className="text-sm">{c.flag}</span><span className="hidden sm:inline">{c.name}</span><span className="sm:hidden">{c.code}</span>
+            <span className="text-sm">{c.flag}</span><span className="hidden sm:inline truncate max-w-[94px]">{c.name}</span><span className="sm:hidden">{c.code}</span>
           </button>
         ))}
         {!isMobile && extraHistory.map(h => (
