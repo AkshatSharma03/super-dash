@@ -310,46 +310,45 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
     <div className="bg-background min-h-screen text-foreground" style={{ fontFamily: "Inter,sans-serif" }}>
 
       {/* ── Top nav ── */}
-      <nav className="px-8 py-3 border-b border-muted flex items-center gap-3 bg-popover">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base shadow-[0_0_12px_#00AAFF44]"
-          style={{ background: "linear-gradient(135deg,#00AAFF,#8B5CF6)" }}>
+      <nav className="px-4 sm:px-8 py-3 border-b-3 border-memphis-black flex items-center gap-3 bg-white">
+        <div className="w-8 h-8 border-3 border-memphis-black flex items-center justify-center text-base shadow-hard-sm"
+          style={{ background: "#FF006E" }}>
           📊
         </div>
-        <span className="text-[15px] font-extrabold text-white tracking-[-0.3px]">EconChart</span>
+        <span className="text-[15px] font-black text-memphis-black tracking-tight uppercase">EconChart</span>
         <div className="ml-auto flex gap-2">
-          <Button variant="outline" size="sm" onClick={switchToLogin}>Sign in</Button>
-          <Button size="sm" onClick={continueAsGuest} disabled={guestLoading}
-            className="bg-gradient-to-r from-[#00AAFF] to-[#0088DD] shadow-[0_2px_10px_#00AAFF44]">
+          <Button onClick={switchToLogin}>Sign in</Button>
+          <Button onClick={continueAsGuest} disabled={guestLoading}>
             {guestLoading ? "Starting…" : "Get started free"}
           </Button>
         </div>
       </nav>
 
       {/* ── Body: hero + form ── */}
-      <div className="flex min-h-[calc(100vh-63px)] flex-wrap">
+      <div className="flex min-h-[calc(100vh-63px)] flex-col lg:flex-row">
 
         {/* Left: hero */}
-        <div className="flex-1 min-w-[320px] px-14 py-[60px] flex flex-col justify-center">
+        <div className="flex-1 min-w-0 px-5 sm:px-8 lg:px-14 py-8 sm:py-10 lg:py-[60px] flex flex-col justify-center">
           <div className="max-w-[540px]">
-            <div className="text-[10px] text-primary font-bold uppercase tracking-[2px] mb-5 bg-primary/10 border border-primary/30 rounded-full inline-flex items-center gap-1.5 px-3.5 py-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" style={{ animation: "pulse 2s ease-in-out infinite" }} />
+            <div className="text-[10px] font-black uppercase tracking-[2px] mb-5 bg-memphis-pink/10 border-2 border-memphis-pink inline-flex items-center gap-1.5 px-3.5 py-1.5 text-memphis-pink">
+              <span className="w-2 h-2 bg-memphis-pink inline-block" style={{ animation: "pulse 2s ease-in-out infinite" }} />
               Economic Intelligence Platform
             </div>
-            <h1 className="text-[38px] font-black leading-[1.15] text-memphis-black tracking-[-0.5px] mb-4">
+            <h1 className="text-[28px] sm:text-[32px] lg:text-[38px] font-black leading-[1.15] text-memphis-black tracking-[-0.5px] mb-4">
               Generate accurate dynamic charts for any economic query
             </h1>
-            <p className="text-sm text-muted-foreground leading-[1.8] mb-10">
+            <p className="text-sm text-memphis-black/70 leading-[1.8] mb-8 lg:mb-10">
               Ask questions in plain language. Get interactive, publication-ready charts backed by World Bank, IMF, UN Comtrade, and OECD data — for any country or region in the world.
             </p>
             <div className="flex flex-col gap-3.5">
               {FEATURES.map(([icon, title, desc]) => (
-                <div key={title} className="flex gap-3.5 items-start">
-                  <div className="w-9 h-9 rounded-lg bg-card border border-border flex items-center justify-center text-[15px] shrink-0">
+                <div key={title} className="flex gap-3 items-start">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 border-2 border-memphis-black bg-white flex items-center justify-center text-[14px] sm:text-[15px] shrink-0 shadow-hard-sm">
                     {icon}
                   </div>
                   <div>
                     <div className="text-[13px] font-semibold text-memphis-black mb-0.5">{title}</div>
-                    <div className="text-xs text-muted-foreground leading-[1.55]">{desc}</div>
+                    <div className="text-xs text-memphis-black/60 leading-[1.55]">{desc}</div>
                   </div>
                 </div>
               ))}
@@ -358,7 +357,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
         </div>
 
         {/* Right: auth form */}
-        <div className="w-[420px] shrink-0 px-11 py-[60px] border-l border-muted flex flex-col justify-center bg-popover">
+        <div className="w-full lg:w-[420px] shrink-0 px-5 sm:px-8 lg:px-11 py-8 sm:py-10 lg:py-[60px] border-t-3 lg:border-t-0 lg:border-l-3 border-memphis-black flex flex-col justify-center bg-white">
           {view === "forgot" && renderForgotForm()}
           {view === "reset"  && renderResetForm()}
           {(view === "login" || view === "register") && renderAuthForm()}

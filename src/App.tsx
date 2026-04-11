@@ -129,9 +129,9 @@ export default function App() {
     <div className="bg-memphis-offwhite h-screen flex flex-col text-memphis-black" style={{ fontFamily: "Inter,sans-serif" }}>
 
       {/* ── Memphis Header with Zigzag Pattern ── */}
-      <header className="ec-header px-6 py-4 border-b-4 border-memphis-black flex items-center gap-4 shrink-0 flex-wrap bg-white relative">
-        {/* Zigzag decoration at bottom */}
-        <div className="absolute bottom-0 left-0 right-0 h-3 bg-repeating-linear-gradient pattern-zigzag" 
+      <header className="ec-header px-3 sm:px-6 py-3 sm:py-4 border-b-4 sm:border-b-4 border-b-3 border-memphis-black flex items-center gap-2 sm:gap-4 shrink-0 flex-wrap bg-white relative">
+        {/* Zigzag decoration at bottom - hidden on mobile */}
+        <div className="absolute bottom-0 left-0 right-0 h-3 bg-repeating-linear-gradient pattern-zigzag hidden sm:block" 
           style={{
             background: `repeating-linear-gradient(
               45deg,
@@ -144,12 +144,12 @@ export default function App() {
         />
 
         {/* Brand — Bold Memphis Style */}
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 border-3 border-memphis-black flex items-center justify-center text-lg font-black shadow-hard"
+        <div className="flex items-center gap-2 sm:gap-3">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 border-2 sm:border-3 border-memphis-black flex items-center justify-center text-base sm:text-lg font-black shadow-hard-sm sm:shadow-hard"
             style={{ background: "#FF006E" }}>
             📊
           </div>
-          <span className="text-lg font-black text-memphis-black tracking-tight uppercase">EconChart</span>
+          <span className="text-base sm:text-lg font-black text-memphis-black tracking-tight uppercase">EconChart</span>
         </div>
 
         {/* Mode tabs — Memphis Bold Tabs */}
@@ -207,9 +207,9 @@ export default function App() {
       </header>
 
       {/* ── Mode badge + description with Stripe Pattern ── */}
-      <div className="px-6 py-3 border-b-4 border-memphis-black shrink-0 flex items-center gap-3 bg-memphis-yellow relative">
-        {/* Stripe decoration */}
-        <div className="absolute top-0 left-0 right-0 h-2"
+      <div className="px-3 sm:px-6 py-2 sm:py-3 border-b-3 sm:border-b-4 border-memphis-black shrink-0 flex items-center gap-2 sm:gap-3 bg-memphis-yellow relative">
+        {/* Stripe decoration - thinner on mobile */}
+        <div className="absolute top-0 left-0 right-0 h-1.5 sm:h-2"
           style={{
             background: `repeating-linear-gradient(
               90deg,
@@ -222,7 +222,7 @@ export default function App() {
             )`
           }}
         />
-        <div className="w-1 h-6 bg-memphis-black mt-2" />
+        <div className="w-1 h-5 sm:h-6 bg-memphis-black mt-1.5 sm:mt-2" />
         <span className="mt-2 text-xs border-3 border-memphis-black px-3 py-1 font-black uppercase tracking-wider bg-white shadow-hard-sm">
           {modeIcon} {label}
         </span>
@@ -238,7 +238,7 @@ export default function App() {
       {/* ── Main content with Dot Pattern ── */}
       <main className={cn(
         "flex-1 relative",
-        mode === "chat" ? "overflow-hidden p-6 pb-0" : "overflow-y-auto p-6"
+        mode === "chat" ? "overflow-hidden p-3 sm:p-6 pb-0" : "overflow-y-auto p-3 sm:p-6"
       )}>
         {/* Dot pattern background */}
         <div className="absolute inset-0 opacity-30 pointer-events-none"

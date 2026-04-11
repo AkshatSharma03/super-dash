@@ -293,7 +293,8 @@ input[type="range"] { cursor: pointer; }
   .ec-header {
     flex-wrap: wrap;
     row-gap: 8px;
-    padding: 12px 16px !important;
+    padding: 10px 12px !important;
+    border-bottom-width: 3px !important;
   }
 
   .ec-tabs {
@@ -304,6 +305,10 @@ input[type="range"] { cursor: pointer; }
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
+    border-width: 2px !important;
+    box-shadow: 2px 2px 0 #1A1A2E !important;
+    padding: 2px !important;
+    gap: 2px !important;
   }
   .ec-tabs::-webkit-scrollbar { display: none; }
 
@@ -311,17 +316,35 @@ input[type="range"] { cursor: pointer; }
 
   .ec-tab-text { display: none; }
   .ec-tabs button {
-    min-width: 44px;
-    padding: 8px 12px !important;
-    font-size: 18px !important;
+    min-width: 40px;
+    padding: 6px 8px !important;
+    font-size: 16px !important;
     border-width: 2px !important;
+    box-shadow: 2px 2px 0 #1A1A2E !important;
+  }
+  .ec-tabs button:active {
+    box-shadow: 1px 1px 0 #1A1A2E !important;
+    transform: translate(1px, 1px);
   }
 
   .ec-mode-desc { display: none; }
   .ec-user-name { display: none !important; }
   
-  /* Smaller patterns on mobile */
-  .bg-pattern-dots { background-size: 16px 16px; }
-  .bg-pattern-circles { background-size: 60px 60px; }
-  .section-main { background-size: 20px 20px; }
+  /* Reduced patterns on mobile - less visual noise */
+  .bg-pattern-dots { background-size: 24px 24px; opacity: 0.15; }
+  .bg-pattern-circles { background-size: 80px 80px; opacity: 0.2; }
+  .section-main { 
+    background-size: 28px 28px; 
+    opacity: 0.15;
+  }
+  
+  /* Remove zigzag on mobile - too busy */
+  .ec-header > div[class*="absolute"] { 
+    display: none !important; 
+  }
+  
+  /* Mode badge bar - thinner stripe */
+  .bg-memphis-yellow > div:first-child {
+    height: 3px !important;
+  }
 }
