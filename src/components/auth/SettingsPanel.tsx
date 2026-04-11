@@ -22,9 +22,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div className="mb-6">
       <div className="flex items-center gap-2 mb-3.5">
-        <div className="flex-1 h-px bg-muted" />
-        <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest whitespace-nowrap">{title}</h3>
-        <div className="flex-1 h-px bg-muted" />
+        <div className="flex-1 h-1 bg-memphis-black" />
+        <h3 className="text-[10px] font-black text-memphis-black/50 uppercase tracking-widest whitespace-nowrap">{title}</h3>
+        <div className="flex-1 h-1 bg-memphis-black" />
       </div>
       {children}
     </div>
@@ -82,22 +82,23 @@ export default function SettingsPanel({ user, token, onClose, onLogout }: Props)
 
   return (
     <Sheet open onOpenChange={open => { if (!open) onClose(); }}>
-      <SheetContent side="right" className="w-[360px] bg-popover border-l border-border p-0 flex flex-col overflow-y-auto">
+      <SheetContent side="right" className="w-[360px] bg-white border-l-4 border-memphis-black p-0 flex flex-col overflow-y-auto shadow-hard-xl">
 
         {/* Header */}
-        <SheetHeader className="px-5 py-3.5 border-b border-border bg-[#080b10] flex-row items-center gap-2.5 space-y-0">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[13px]" style={{ background: "linear-gradient(135deg,#00AAFF,#8B5CF6)" }}>⚙</div>
-          <SheetTitle className="text-sm font-bold flex-1">Account Settings</SheetTitle>
+        <SheetHeader className="px-5 py-3.5 border-b-4 border-memphis-black bg-memphis-offwhite flex-row items-center gap-2.5 space-y-0">
+          <div className="w-8 h-8 flex items-center justify-center text-[13px] font-black text-white border-3 border-memphis-black shadow-hard-sm" style={{ background: "#FF006E" }}>⚙</div>
+          <SheetTitle className="text-sm font-black flex-1 uppercase tracking-wide">Account Settings</SheetTitle>
         </SheetHeader>
 
         <div className="p-5 flex-1">
 
           {/* Profile + Usage */}
           <Section title="Profile">
-            <div className="bg-[#161929] border border-[#2d3348] rounded-[10px] p-4 mb-3">
+            <div className="bg-white border-3 border-memphis-black p-4 mb-3 shadow-hard relative">
+              <div className="absolute -top-2 -right-2 w-4 h-4 bg-memphis-cyan border-2 border-memphis-black" />
               <div className={`flex items-center gap-3 ${memberSince ? "mb-2.5" : ""}`}>
-                <div className="w-10 h-10 rounded-full flex items-center justify-center text-[17px] font-bold text-white shrink-0 shadow-[0_0_14px_#00AAFF33]"
-                  style={{ background: "linear-gradient(135deg,#00AAFF,#8B5CF6)" }}>
+                <div className="w-10 h-10 flex items-center justify-center text-[17px] font-black text-white shrink-0 border-3 border-memphis-black shadow-hard-sm"
+                  style={{ background: "#FF006E" }}>
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 <div>

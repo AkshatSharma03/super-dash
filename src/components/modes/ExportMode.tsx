@@ -458,12 +458,12 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               </div>
 
               <SectionTitle>Preview — GDP Data ({dashDataset.gdpData.length} rows)</SectionTitle>
-              <div className="overflow-x-auto rounded-md border border-[#1e2130]">
+              <div className="overflow-x-auto border-3 border-memphis-black bg-white shadow-hard">
                 <table className="w-full border-collapse text-[11px]">
                   <thead>
-                    <tr className="bg-[#161929]">
+                    <tr className="bg-memphis-pink">
                       {["Year","GDP ($B)","Growth %","GDP/Capita"].map(h => (
-                        <th key={h} className="px-2.5 py-1.5 text-right text-slate-600 font-semibold border-b border-b-[#1e2130] whitespace-nowrap">
+                        <th key={h} className="px-2.5 py-1.5 text-right text-white font-black border-b-3 border-memphis-black whitespace-nowrap">
                           {h}
                         </th>
                       ))}
@@ -472,13 +472,13 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
                   <tbody>
                     {dashDataset.gdpData.slice(-8).map(d => (
                       <tr key={d.year}>
-                        <td className="px-2.5 py-1 text-right text-slate-400 border-b border-b-[#0f1117]">{d.year}</td>
-                        <td className="px-2.5 py-1 text-right text-slate-100 font-semibold border-b border-b-[#0f1117]">${d.gdp_bn}B</td>
-                        <td className="px-2.5 py-1 text-right font-semibold border-b border-b-[#0f1117]"
-                          style={{ color: (d.gdp_growth ?? 0) >= 0 ? "#10b981" : "#ef4444" }}>
+                        <td className="px-2.5 py-1 text-right text-memphis-black/60 border-b-2 border-memphis-black/10">{d.year}</td>
+                        <td className="px-2.5 py-1 text-right text-memphis-black font-bold border-b-2 border-memphis-black/10">${d.gdp_bn}B</td>
+                        <td className="px-2.5 py-1 text-right font-bold border-b-2 border-memphis-black/10"
+                          style={{ color: (d.gdp_growth ?? 0) >= 0 ? "#00F5D4" : "#FF006E" }}>
                           {d.gdp_growth != null ? `${d.gdp_growth > 0 ? "+" : ""}${d.gdp_growth}%` : "—"}
                         </td>
-                        <td className="px-2.5 py-1 text-right text-slate-400 border-b border-b-[#0f1117]">
+                        <td className="px-2.5 py-1 text-right text-memphis-black/60 border-b-2 border-memphis-black/10">
                           {d.gdp_per_capita != null ? `$${d.gdp_per_capita.toLocaleString()}` : "—"}
                         </td>
                       </tr>
@@ -524,9 +524,9 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
                   const csv = algoCsvs[key];
                   const rows = csv ? csv.split("\n").length - 1 : 0;
                   return (
-                    <div key={key} className="bg-[#161929] rounded-md px-2.5 py-[7px] border border-[#1e2130]">
-                      <p className="text-[10px] text-slate-600 font-semibold">{name}</p>
-                      <p className={`text-[13px] font-bold ${csv ? "text-slate-100" : "text-gray-700"}`}>
+                    <div key={key} className="bg-white border-3 border-memphis-black px-2.5 py-[7px] shadow-hard-sm">
+                      <p className="text-[10px] text-memphis-black/50 font-bold">{name}</p>
+                      <p className={`text-[13px] font-black ${csv ? "text-memphis-black" : "text-memphis-black/30"}`}>
                         {csv ? `${rows} rows` : "—"}
                       </p>
                     </div>

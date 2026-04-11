@@ -237,12 +237,12 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
       </div>
 
       {/* Tab toggle */}
-      <div className="flex bg-card rounded-xl p-[3px] mb-5 border border-border">
+      <div className="flex bg-white border-3 border-memphis-black p-1 mb-5 shadow-hard">
         {(["login", "register"] as const).map(t => (
           <button key={t} onClick={() => t === "login" ? switchToLogin() : switchToRegister()}
             className={cn(
-              "flex-1 rounded-lg py-1.5 text-xs font-semibold transition-all border-none cursor-pointer",
-              view === t ? "bg-secondary text-foreground" : "bg-transparent text-muted-foreground"
+              "flex-1 py-2 text-xs font-black transition-snap border-3 cursor-pointer uppercase tracking-wide",
+              view === t ? "bg-memphis-pink text-white border-memphis-black shadow-hard-sm" : "bg-transparent text-memphis-black border-transparent"
             )}>
             {t === "login" ? "Sign in" : "Register"}
           </button>
@@ -295,9 +295,9 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
       </p>
 
       <div className="flex items-center gap-2.5 mt-4">
-        <div className="flex-1 h-px bg-muted" />
-        <span className="text-[11px] text-border">or</span>
-        <div className="flex-1 h-px bg-muted" />
+        <div className="flex-1 h-1 bg-memphis-black" />
+        <span className="text-[11px] text-memphis-black/50 font-bold">or</span>
+        <div className="flex-1 h-1 bg-memphis-black" />
       </div>
       <Button variant="outline" onClick={continueAsGuest} disabled={guestLoading} className="mt-3 w-full">
         {guestLoading ? "Starting…" : "Continue without account →"}

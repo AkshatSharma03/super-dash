@@ -89,17 +89,17 @@ export default function SearchMode() {
 
         {/* Trie autocomplete dropdown */}
         {showSuggestions && suggestions.length > 0 && (
-          <div className="absolute top-[calc(100%+4px)] left-0 right-[54px] bg-muted border border-emerald-500/30 rounded-xl z-[100] overflow-hidden">
-            <div className="px-3 py-1.5 text-[10px] text-emerald-500 font-bold uppercase tracking-[0.8px] border-b border-border">
+          <div className="absolute top-[calc(100%+4px)] left-0 right-[54px] bg-white border-3 border-memphis-cyan z-[100] overflow-hidden shadow-hard">
+            <div className="px-3 py-1.5 text-[10px] text-memphis-cyan font-black uppercase tracking-[0.8px] border-b-3 border-memphis-black bg-memphis-cyan/10">
               Trie Suggestions — O(m) prefix match
             </div>
             {suggestions.map((s, i) => (
               <button key={i} onMouseDown={() => doSearch(s)}
                 className={cn(
-                  "block w-full text-left bg-transparent border-none px-3.5 py-2.5 text-[13px] text-slate-400 cursor-pointer transition-colors hover:bg-emerald-500/10 hover:text-foreground",
-                  i < suggestions.length - 1 && "border-b border-border/25"
+                  "block w-full text-left bg-transparent border-none px-3.5 py-2.5 text-[13px] text-memphis-black/70 cursor-pointer transition-snap hover:bg-memphis-cyan/10 hover:text-memphis-black",
+                  i < suggestions.length - 1 && "border-b-2 border-memphis-black/10"
                 )}>
-                {s}
+                <span className="text-memphis-cyan mr-2 font-black">↳</span>{s}
               </button>
             ))}
           </div>

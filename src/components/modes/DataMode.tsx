@@ -74,20 +74,20 @@ export default function DataMode() {
           onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}
           onClick={() => fileRef.current?.click()}
           className={cn(
-            "border-2 border-dashed rounded-2xl py-14 px-6 text-center cursor-pointer transition-all mb-4 relative overflow-hidden",
-            dragOver ? "border-amber-500 bg-amber-500/5" : "border-border bg-card hover:border-border/80"
+            "border-4 border-dashed py-14 px-6 text-center cursor-pointer transition-snap mb-5 relative overflow-hidden bg-white shadow-hard",
+            dragOver ? "border-memphis-orange bg-memphis-orange/5" : "border-memphis-black hover:-translate-y-px hover:shadow-hard-lg"
           )}>
           <input ref={fileRef} type="file" accept=".csv" className="hidden"
             onChange={e => handleFile(e.target.files?.[0])} />
           <div className={cn(
-            "w-14 h-14 rounded-[14px] border flex items-center justify-center text-2xl mx-auto mb-3.5 transition-all",
-            dragOver ? "bg-amber-500/15 border-amber-500/40" : "bg-muted border-border"
+            "w-14 h-14 border-3 flex items-center justify-center text-2xl mx-auto mb-3.5 transition-snap shadow-hard-sm",
+            dragOver ? "bg-memphis-orange/20 border-memphis-orange" : "bg-memphis-offwhite border-memphis-black"
           )}>📂</div>
-          <p className={cn("text-base font-bold mb-1.5 transition-colors", dragOver ? "text-amber-500" : "text-foreground")}>
+          <p className={cn("text-base font-black mb-1.5 transition-colors uppercase tracking-wide", dragOver ? "text-memphis-orange" : "text-memphis-black")}>
             Drop your CSV file here
           </p>
-          <p className="text-[13px] text-muted-foreground mb-5">or click to browse · CSV files only</p>
-          <span className="bg-amber-500/10 text-amber-500 border border-amber-500/30 rounded-lg px-5 py-2 text-[13px] font-semibold inline-block">
+          <p className="text-[13px] text-memphis-black/60 mb-5">or click to browse · CSV files only</p>
+          <span className="bg-memphis-yellow text-memphis-black border-3 border-memphis-black px-5 py-2 text-[13px] font-black inline-block shadow-hard-sm">
             Select CSV File
           </span>
         </div>
@@ -96,8 +96,8 @@ export default function DataMode() {
       {/* ── File loaded: preview + context + generate ── */}
       {csv && (
         <>
-          <div className="flex items-center gap-2.5 mb-3 flex-wrap">
-            <Badge variant="warning">📁 {file?.name}</Badge>
+          <div className="flex items-center gap-2.5 mb-4 flex-wrap">
+            <Badge>📁 {file?.name}</Badge>
             <span className="text-[11px] text-muted-foreground">{csv.rows.length} rows · {csv.headers.length} columns</span>
             <Button variant="outline" size="sm" onClick={reset} className="ml-auto text-xs">Remove file</Button>
           </div>

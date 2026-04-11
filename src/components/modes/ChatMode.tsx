@@ -20,8 +20,8 @@ import { AlertTriangle } from "lucide-react";
 function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string) => void }) {
   if (msg.role === "user") return (
     <div className="flex justify-end mb-3.5">
-      <div className="text-white rounded-[14px_14px_3px_14px] px-4 py-2.5 max-w-[72%] text-sm leading-[1.55] shadow-[0_2px_8px_#00AAFF30]"
-        style={{ background: "linear-gradient(135deg, #0099EE, #0077CC)" }}>
+      <div className="text-white px-4 py-2.5 max-w-[72%] text-sm leading-[1.55] border-3 border-memphis-black shadow-hard"
+        style={{ background: "#FF006E" }}>
         {msg.content}
       </div>
     </div>
@@ -31,13 +31,14 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
   return (
     <div className="mb-5" style={{ animation: "fadeInUp .25s ease-out" }}>
       {insight && (
-        <div className="bg-[#1a1d2e] border border-border border-l-[3px] border-l-accent rounded-[0_12px_12px_0] p-4 mb-3.5">
+        <div className="bg-white border-3 border-memphis-black border-l-[6px] border-l-memphis-pink p-4 mb-3.5 shadow-hard relative">
+          <div className="absolute -top-3 -right-3 w-4 h-4 bg-memphis-cyan border-3 border-memphis-black" />
           <div className="flex gap-2 items-center mb-2">
-            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0"
-              style={{ background: "linear-gradient(135deg,#8B5CF6,#6D28D9)" }}>✦</div>
-            <span className="text-[10px] text-accent font-bold uppercase tracking-[0.8px]">Analysis</span>
+            <div className="w-5 h-5 flex items-center justify-center text-[10px] shrink-0 font-black text-white border-2 border-memphis-black"
+              style={{ background: "#FF006E" }}>✦</div>
+            <span className="text-[10px] text-memphis-pink font-black uppercase tracking-[0.8px]">Analysis</span>
           </div>
-          <p className="text-sm text-slate-300 leading-[1.75]">{insight}</p>
+          <p className="text-sm text-memphis-black leading-[1.75]">{insight}</p>
         </div>
       )}
       {error && (
@@ -52,7 +53,7 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
         <div className="flex gap-1.5 flex-wrap">
           {followUps.map((q, i) => (
             <button key={i} onClick={() => onFollowUp(q)}
-              className="bg-card border border-border rounded-full px-3 py-1.5 text-xs text-muted-foreground cursor-pointer transition-all hover:border-accent/40 hover:text-accent hover:bg-accent/10">
+              className="bg-white border-3 border-memphis-black px-3 py-1.5 text-xs text-memphis-black cursor-pointer transition-snap hover:bg-memphis-pink hover:text-white hover:shadow-hard-sm font-medium">
               {q}
             </button>
           ))}
@@ -66,35 +67,36 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
 
 function StreamingMessage({ statusText, insightSoFar }: { statusText: string; insightSoFar: string }) {
   return (
-    <div className="mb-5" style={{ animation: "fadeInUp .25s ease-out" }}>
+    <div className="mb-5" style={{ animation: "slideInUp 0.1s ease-out" }}>
       {/* Insight text streaming in */}
       {insightSoFar && (
-        <div className="bg-[#1a1d2e] border border-border border-l-[3px] border-l-accent rounded-[0_12px_12px_0] p-4 mb-3.5">
+        <div className="bg-white border-3 border-memphis-black border-l-[6px] border-l-memphis-pink p-4 mb-3.5 shadow-hard relative">
+          <div className="absolute -top-3 -right-3 w-4 h-4 bg-memphis-cyan border-3 border-memphis-black" />
           <div className="flex gap-2 items-center mb-2">
-            <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0"
-              style={{ background: "linear-gradient(135deg,#8B5CF6,#6D28D9)" }}>✦</div>
-            <span className="text-[10px] text-accent font-bold uppercase tracking-[0.8px]">Analysis</span>
+            <div className="w-5 h-5 flex items-center justify-center text-[10px] shrink-0 font-black text-white border-2 border-memphis-black"
+              style={{ background: "#FF006E" }}>✦</div>
+            <span className="text-[10px] text-memphis-pink font-black uppercase tracking-[0.8px]">Analysis</span>
           </div>
-          <p className="text-sm text-slate-300 leading-[1.75]">
+          <p className="text-sm text-memphis-black leading-[1.75]">
             {insightSoFar}
-            <span className="inline-block w-0.5 h-[1em] bg-accent ml-0.5 align-middle"
-              style={{ animation: "typingDot 1s ease-in-out infinite" }} />
+            <span className="inline-block w-0.5 h-[1em] bg-memphis-pink ml-0.5 align-middle"
+              style={{ animation: "typingDot 1s steps(1) infinite" }} />
           </p>
         </div>
       )}
 
       {/* Status / loading indicator */}
       {!insightSoFar && (
-        <div className="bg-[#1a1d2e] border border-accent/20 border-l-[3px] border-l-accent rounded-[0_12px_12px_0] px-4 py-3 inline-flex gap-2.5 items-center mb-4">
-          <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] shrink-0"
-            style={{ background: "linear-gradient(135deg,#8B5CF6,#6D28D9)" }}>✦</div>
-          <span className="text-[13px] text-muted-foreground">
+        <div className="bg-white border-3 border-memphis-black border-l-[6px] border-l-memphis-cyan px-4 py-3 inline-flex gap-2.5 items-center mb-4 shadow-hard-sm">
+          <div className="w-5 h-5 flex items-center justify-center text-[10px] shrink-0 font-black text-white border-2 border-memphis-black"
+            style={{ background: "#00D9FF" }}>✦</div>
+          <span className="text-[13px] text-memphis-black/70 font-medium">
             {statusText || "Generating charts and analysis"}
           </span>
-          <div className="flex gap-0.75 items-center">
+          <div className="flex gap-1 items-center">
             {[0, 1, 2].map(i => (
-              <span key={i} className="w-1.5 h-1.5 rounded-full bg-accent block"
-                style={{ animation: `typingDot 1.2s ease-in-out ${i * 0.22}s infinite` }} />
+              <span key={i} className="w-1.5 h-1.5 bg-memphis-pink border border-memphis-black block"
+                style={{ animation: `typingDot 1s steps(1) ${i * 0.22}s infinite` }} />
             ))}
           </div>
         </div>

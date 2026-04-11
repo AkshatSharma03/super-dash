@@ -99,32 +99,32 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
 
           {/* Year range slider — only shown after data loads */}
           {dataset && (
-            <div className="flex items-center gap-3 bg-card border border-border rounded-lg px-3.5 py-2 shrink-0">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">Years</span>
-              <span className="text-xs font-bold text-primary tabular-nums">{yearRange[0]}</span>
+            <div className="flex items-center gap-3 bg-white border-3 border-memphis-black px-3.5 py-2 shrink-0 shadow-hard-sm">
+              <span className="text-[10px] font-black text-memphis-black/60 uppercase tracking-wide">Years</span>
+              <span className="text-xs font-black text-memphis-pink tabular-nums">{yearRange[0]}</span>
               <Slider
                 min={yearMin} max={yearMax}
                 value={yearRange}
                 onValueChange={([a, b]) => setYearRange([a, b])}
                 className="w-28"
               />
-              <span className="text-xs font-bold text-primary tabular-nums">{yearRange[1]}</span>
+              <span className="text-xs font-black text-memphis-pink tabular-nums">{yearRange[1]}</span>
             </div>
           )}
         </div>
 
         {/* Popular quick-select */}
-        <div className="flex flex-wrap gap-[7px]">
+        <div className="flex flex-wrap gap-2">
           {POPULAR_COUNTRIES.map(c => {
             const active = dataset?.code === c.code;
             return (
               <button key={c.code} onClick={() => onSelectCountry(c.code)} disabled={loading}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs transition-snap border-3 font-bold"
                 style={{
-                  background:  active ? "#00AAFF18" : "#161929",
-                  border:      `1px solid ${active ? "#00AAFF55" : "#2d3348"}`,
-                  color:       active ? "#00AAFF" : "#94a3b8",
-                  fontWeight:  active ? 700 : 500,
+                  background:  active ? "#FF006E" : "#FFFFFF",
+                  borderColor: "#1A1A2E",
+                  color:       active ? "#FFFFFF" : "#1A1A2E",
+                  boxShadow:   active ? "4px 4px 0 #1A1A2E" : "none",
                   cursor:      loading ? "not-allowed" : "pointer",
                 }}>
                 <span className="text-base">{c.flag}</span>
@@ -138,7 +138,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
       {/* ── Previously fetched history ────────────────────────────────────── */}
       {history.length > 0 && (
         <div className="mb-5">
-          <div className="text-[11px] font-semibold text-slate-600 uppercase tracking-[0.6px] mb-2.5">
+          <div className="text-[11px] font-black text-memphis-black/60 uppercase tracking-[0.6px] mb-2.5">
             Previously fetched
           </div>
           <div className="flex flex-wrap gap-2">
@@ -146,17 +146,18 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               const isActive = dataset?.code === h.code;
               return (
                 <button key={h.code} onClick={() => onSelectCountry(h.code)} disabled={loading}
-                  className="flex flex-col items-start gap-0.5 rounded-[10px] px-3.5 py-2 transition-all min-w-[120px]"
+                  className="flex flex-col items-start gap-0.5 px-3.5 py-2 transition-snap min-w-[120px] border-3 shadow-hard-sm"
                   style={{
-                    background: isActive ? "#00AAFF10" : "#0d1018",
-                    border:     `1px solid ${isActive ? "#00AAFF44" : "#1e2130"}`,
+                    background: isActive ? "#FF006E" : "#FFFFFF",
+                    borderColor: "#1A1A2E",
+                    color: isActive ? "#FFFFFF" : "#1A1A2E",
                     cursor:     loading ? "not-allowed" : "pointer",
                   }}>
                   <span className="text-sm flex items-center gap-1.5">
                     <span className="text-xl">{h.flag}</span>
-                    <span className="font-semibold text-[13px]" style={{ color: isActive ? "#00AAFF" : "#e2e8f0" }}>{h.name}</span>
+                    <span className="font-black text-[13px]">{h.name}</span>
                   </span>
-                  <span className="text-[10px] text-slate-700">{h.region} · cached {timeAgo(h.cachedAt)}</span>
+                  <span className="text-[10px] opacity-70">{h.region} · cached {timeAgo(h.cachedAt)}</span>
                 </button>
               );
             })}
@@ -166,7 +167,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
 
       {/* ── Loading ───────────────────────────────────────────────────────── */}
       {loading && (
-        <div className="text-center py-[60px] text-slate-600">
+        <div className="text-center py-[60px] text-memphis-black/60">
           <div className="text-[28px] mb-3 inline-block" style={{ animation: "spin 1.2s linear infinite" }}>⟳</div>
           <div className="text-sm">Fetching data from World Bank…</div>
           <div className="text-xs mt-1.5 text-slate-700">GDP, trade totals + AI-estimated sector breakdown</div>
@@ -210,7 +211,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         </div>
 
         {/* Sub-tab selector */}
-        <div className="flex gap-1 mb-4 bg-muted rounded-xl p-1 w-fit">
+        <div className="flex gap-1 mb-4 bg-memphis-offwhite border-3 border-memphis-black p-1 w-fit shadow-hard-sm">
           {DASH_TABS.map(t => <Btn key={t} onClick={() => setTab(t)} active={tab === t}>{t}</Btn>)}
         </div>
 

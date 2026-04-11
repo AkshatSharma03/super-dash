@@ -42,14 +42,14 @@ import type { AnomalyPoint }           from "../../algorithms/anomaly";
 // ── Algorithm catalogue ───────────────────────────────────────────────────────
 interface AlgoDef { id: string; name: string; desc: string; color: string; }
 const ALGOS: AlgoDef[] = [
-  { id: "regression",  name: "OLS Regression",    desc: "GDP trend forecast with 95% confidence band",   color: "#00AAFF" },
-  { id: "hhi",         name: "HHI Concentration", desc: "Trade concentration index over time",            color: "#8B5CF6" },
-  { id: "kmeans",      name: "K-Means Clustering",desc: "Unsupervised economic era detection (k=3)",      color: "#10B981" },
-  { id: "anomaly",     name: "Z-Score Anomaly",   desc: "Statistical outliers across 6 economic metrics", color: "#EF4444" },
-  { id: "hp",          name: "HP Filter",         desc: "Hodrick-Prescott business cycle decomposition",  color: "#F97316" },
-  { id: "cagr",        name: "CAGR Analysis",     desc: "Compound annual growth rates by period",         color: "#F59E0B" },
-  { id: "correlation", name: "Correlation Matrix",desc: "Pearson r between GDP, trade, and growth",       color: "#06B6D4" },
-  { id: "openness",    name: "Trade Openness",    desc: "(Exports + Imports) / GDP × 100 over time",      color: "#A78BFA" },
+  { id: "regression",  name: "OLS Regression",    desc: "GDP trend forecast with 95% confidence band",   color: "#FF006E" },
+  { id: "hhi",         name: "HHI Concentration", desc: "Trade concentration index over time",            color: "#8338EC" },
+  { id: "kmeans",      name: "K-Means Clustering",desc: "Unsupervised economic era detection (k=3)",      color: "#00F5D4" },
+  { id: "anomaly",     name: "Z-Score Anomaly",   desc: "Statistical outliers across 6 economic metrics", color: "#FB5607" },
+  { id: "hp",          name: "HP Filter",         desc: "Hodrick-Prescott business cycle decomposition",  color: "#FFBE0B" },
+  { id: "cagr",        name: "CAGR Analysis",     desc: "Compound annual growth rates by period",         color: "#00D9FF" },
+  { id: "correlation", name: "Correlation Matrix",desc: "Pearson r between GDP, trade, and growth",       color: "#FF006E" },
+  { id: "openness",    name: "Trade Openness",    desc: "(Exports + Imports) / GDP × 100 over time",      color: "#8338EC" },
 ];
 const DEFAULT_ALGOS = new Set(["regression", "anomaly", "cagr", "hp"]);
 
@@ -58,12 +58,12 @@ interface TTEntry { dataKey: string; name: string; value: number | null; color?:
 function ChartTip({ active, payload, label }: { active?: boolean; payload?: TTEntry[]; label?: string | number }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-[#0f1117] border border-[#2d3348] rounded-lg px-3.5 py-2.5 text-xs">
-      <p className="text-slate-400 font-semibold mb-1.5">{label}</p>
+    <div className="bg-white border-3 border-memphis-black px-3.5 py-2.5 text-xs shadow-hard">
+      <p className="text-memphis-black/60 font-semibold mb-1.5">{label}</p>
       {payload.filter(p => p.dataKey !== "ciLow").map((p, i) => (
-        <p key={i} className="text-slate-100 my-0.5 flex gap-2 items-center">
-          <span className="w-2 h-2 rounded-full shrink-0 inline-block" style={{ background: p.color ?? "#e2e8f0" }} />
-          <span className="text-slate-400">{p.name}:</span>
+        <p key={i} className="text-memphis-black my-0.5 flex gap-2 items-center">
+          <span className="w-2 h-2 shrink-0 inline-block" style={{ background: p.color ?? "#1A1A2E" }} />
+          <span className="text-memphis-black/50">{p.name}:</span>
           <span className="font-semibold">{p.value === null ? "—" : p.value}</span>
         </p>
       ))}
@@ -84,14 +84,14 @@ function RegressionPanel({ dataset }: { dataset: CountryDataset }) {
   }, [dataset]);
 
   return (
-    <AnalyticsCard title={`${dataset.name} GDP Forecast — OLS Regression`}
+      <AnalyticsCard title={`${dataset.name} GDP Forecast — OLS Regression`}
       subtitle="β = (XᵀX)⁻¹Xᵀy · dashed region = 95% prediction interval"
-      badge="Linear Regression" badgeColor="#00AAFF">
+      badge="Linear Regression" badgeColor="#FF006E">
       <div className="flex gap-6 mb-3.5 flex-wrap">
-        <Stat label="Slope"  value={`+$${model.slope.toFixed(1)}B/yr`} color="#00AAFF" />
-        <Stat label="R²"     value={`${(model.r2 * 100).toFixed(1)}%`} color="#10B981" />
-        <Stat label="+1 yr"  value={`$${model.predict(points[points.length - 2]?.year ?? 2025).toFixed(0)}B`} color="#F59E0B" />
-        <Stat label="+2 yr"  value={`$${model.predict(points[points.length - 1]?.year ?? 2026).toFixed(0)}B`} color="#F97316" />
+        <Stat label="Slope"  value={`+$${model.slope.toFixed(1)}B/yr`} color="#FF006E" />
+        <Stat label="R²"     value={`${(model.r2 * 100).toFixed(1)}%`} color="#00D9FF" />
+        <Stat label="+1 yr"  value={`$${model.predict(points[points.length - 2]?.year ?? 2025).toFixed(0)}B`} color="#FFBE0B" />
+        <Stat label="+2 yr"  value={`$${model.predict(points[points.length - 1]?.year ?? 2026).toFixed(0)}B`} color="#FB5607" />
       </div>
       <ResponsiveContainer width="100%" height={240}>
         <ComposedChart data={points} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
@@ -106,7 +106,7 @@ function RegressionPanel({ dataset }: { dataset: CountryDataset }) {
           <Line dataKey="trend"  name="OLS Trend" stroke="#F59E0B" strokeWidth={2} dot={{ r: 3 }} connectNulls strokeDasharray="5 3" />
         </ComposedChart>
       </ResponsiveContainer>
-      <p className="mt-2.5 text-[11px] text-slate-500">RSE = ${model.rse.toFixed(1)}B. Forecast bars are blank — only the trend line extends forward.</p>
+      <p className="mt-2.5 text-[11px] text-memphis-black/50">RSE = ${model.rse.toFixed(1)}B. Forecast bars are blank — only the trend line extends forward.</p>
     </AnalyticsCard>
   );
 }
@@ -117,20 +117,20 @@ function HHIPanel({ dataset }: { dataset: CountryDataset }) {
     [dataset]);
   const latest = series[series.length - 1];
   if (!latest) return (
-    <AnalyticsCard title="HHI" badge="HHI" badgeColor="#8B5CF6">
-      <p className="text-slate-500 text-[13px]">Not enough trade data.</p>
+    <AnalyticsCard title="HHI" badge="HHI" badgeColor="#8338EC">
+      <p className="text-memphis-black/50 text-[13px]">Not enough trade data.</p>
     </AnalyticsCard>
   );
 
   return (
     <AnalyticsCard title={`${dataset.name} Trade Concentration — HHI`}
       subtitle="HHI = Σ(sᵢ%)². <1500 competitive · 1500–2500 moderate · >2500 concentrated"
-      badge="HHI Algorithm" badgeColor="#8B5CF6">
+      badge="HHI Algorithm" badgeColor="#8338EC">
       <div className="flex gap-6 mb-3.5 flex-wrap">
-        <Stat label="Import HHI" value={String(latest.importHHI)} color={latest.importHHI < 1500 ? "#10B981" : latest.importHHI < 2500 ? "#F59E0B" : "#EF4444"} />
-        <Stat label="Level"      value={latest.importLevel}       color="#94a3b8" />
-        <Stat label="Export HHI" value={String(latest.exportHHI)} color={latest.exportHHI < 2500 ? "#F59E0B" : "#EF4444"} />
-        <Stat label="Level"      value={latest.exportLevel}       color="#94a3b8" />
+        <Stat label="Import HHI" value={String(latest.importHHI)} color={latest.importHHI < 1500 ? "#00F5D4" : latest.importHHI < 2500 ? "#FFBE0B" : "#FF006E"} />
+        <Stat label="Level"      value={latest.importLevel}       color="#1A1A2E" />
+        <Stat label="Export HHI" value={String(latest.exportHHI)} color={latest.exportHHI < 2500 ? "#FFBE0B" : "#FF006E"} />
+        <Stat label="Level"      value={latest.exportLevel}       color="#1A1A2E" />
       </div>
       <ResponsiveContainer width="100%" height={220}>
         <ComposedChart data={series} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
@@ -434,17 +434,18 @@ function OpennessPanel({ dataset }: { dataset: CountryDataset }) {
 // ── AI Query result panel ─────────────────────────────────────────────────────
 function AIResultPanel({ result }: { result: AIResponse }) {
   return (
-    <div className="bg-[#161929] rounded-xl p-5 border border-[#2d3348]" style={{ borderTop: "2px solid #8B5CF644" }}>
+    <div className="bg-white p-5 border-3 border-memphis-black shadow-hard-lg relative">
+      <div className="absolute -top-3 -right-3 w-6 h-6 bg-memphis-pink border-3 border-memphis-black" />
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-[#8B5CF622] text-[#8B5CF6] border border-[#8B5CF644] uppercase tracking-[0.5px]">AI Analysis</span>
+        <span className="text-[9px] font-black px-2 py-0.5 bg-memphis-pink text-white border-3 border-memphis-black uppercase tracking-[0.5px]">AI Analysis</span>
       </div>
       {result.insight && (
-        <p className="mb-4 text-sm text-slate-300 leading-relaxed">{result.insight}</p>
+        <p className="mb-4 text-sm text-memphis-black leading-relaxed">{result.insight}</p>
       )}
       {result.charts?.map(c => (
         <div key={c.id} className="mb-4">
-          <p className="mb-1.5 text-[13px] font-bold text-slate-100">{c.title}</p>
-          {c.description && <p className="mb-2 text-[11px] text-slate-500">{c.description}</p>}
+          <p className="mb-1.5 text-[13px] font-black text-memphis-black">{c.title}</p>
+          {c.description && <p className="mb-2 text-[11px] text-memphis-black/50">{c.description}</p>}
           <DynChart chart={c} />
         </div>
       ))}
@@ -453,10 +454,10 @@ function AIResultPanel({ result }: { result: AIResponse }) {
       )}
       {result.followUps && result.followUps.length > 0 && (
         <div className="mt-2.5">
-          <p className="mb-1.5 text-[10px] text-slate-600 uppercase tracking-[0.5px]">Follow-ups</p>
+          <p className="mb-1.5 text-[10px] text-memphis-black/60 uppercase tracking-[0.5px]">Follow-ups</p>
           <div className="flex flex-wrap gap-1.5">
             {result.followUps.map((q, i) => (
-              <span key={i} className="text-[11px] text-slate-500 bg-[#1e2130] rounded-md px-2.5 py-1 border border-[#2d3348]">{q}</span>
+              <span key={i} className="text-[11px] text-memphis-black/70 bg-memphis-offwhite border-2 border-memphis-black px-2.5 py-1">{q}</span>
             ))}
           </div>
         </div>
@@ -486,44 +487,44 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
   const extraHistory = history.filter(h => !POPULAR_COUNTRIES.some(p => p.code === h.code));
 
   return (
-    <div className="bg-[#161929] rounded-xl p-4 border border-[#2d3348] mb-4">
-      <div className="flex items-center gap-2.5 mb-3 flex-wrap">
-        <span className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.5px]">Data Source</span>
+    <div className="bg-white p-5 border-3 border-memphis-black shadow-hard-lg mb-5">
+      <div className="flex items-center gap-2.5 mb-4 flex-wrap">
+        <span className="text-[11px] font-black text-memphis-black/60 uppercase tracking-[0.5px]">Data Source</span>
         {dataset && !loading && (
           <span className="text-xs flex items-center gap-1.5">
             <span className="text-base">{dataset.flag}</span>
-            <span className="font-bold text-slate-100">{dataset.name}</span>
-            <span className="text-slate-500">· {dataset.region}</span>
+            <span className="font-black text-memphis-black">{dataset.name}</span>
+            <span className="text-memphis-black/50">· {dataset.region}</span>
           </span>
         )}
         {loading && (
-          <span className="text-xs text-[#00AAFF] flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#00AAFF] inline-block" style={{ animation: "ecPulse 1.2s ease-in-out infinite" }} />
+          <span className="text-xs text-memphis-pink flex items-center gap-1.5">
+            <span className="w-2 h-2 bg-memphis-pink border-2 border-memphis-black inline-block" style={{ animation: "ecPulse 1s steps(1) infinite" }} />
             Loading…
           </span>
         )}
-        {error && <span className="text-xs text-red-500">{error}</span>}
+        {error && <span className="text-xs text-memphis-orange font-bold">{error}</span>}
       </div>
 
-      <CountrySearchInput token={token} onSelect={onSelect} className="mb-3" />
+      <CountrySearchInput token={token} onSelect={onSelect} className="mb-4" />
 
       {/* Quick picks */}
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-2">
         {POPULAR_COUNTRIES.map(c => (
           <button key={c.code} onClick={() => onSelect(c.code)}
-            className="flex items-center gap-1.5 rounded-[7px] px-2.5 py-1 text-xs cursor-pointer transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer transition-snap border-3 font-bold"
             style={{
-              background:  dataset?.code === c.code ? "#00AAFF18" : "#1e2130",
-              border:      `1px solid ${dataset?.code === c.code ? "#00AAFF66" : "#2d3348"}`,
-              color:       dataset?.code === c.code ? "#00AAFF" : "#94a3b8",
-              fontWeight:  dataset?.code === c.code ? 700 : 500,
+              background:  dataset?.code === c.code ? "#FF006E" : "#FFFFFF",
+              borderColor: "#1A1A2E",
+              color:       dataset?.code === c.code ? "#FFFFFF" : "#1A1A2E",
+              boxShadow:   dataset?.code === c.code ? "4px 4px 0 #1A1A2E" : "none",
             }}>
             <span className="text-sm">{c.flag}</span>{c.name}
           </button>
         ))}
         {extraHistory.map(h => (
           <button key={h.code} onClick={() => onSelect(h.code)}
-            className="flex items-center gap-1.5 bg-[#1e2130] border border-dashed border-[#2d3348] text-slate-600 rounded-[7px] px-2.5 py-1 text-[11px] cursor-pointer">
+            className="flex items-center gap-1.5 bg-memphis-offwhite border-2 border-dashed border-memphis-black text-memphis-black/60 px-3 py-1.5 text-[11px] cursor-pointer font-medium">
             <span className="text-[13px]">{h.flag}</span>{h.name}
           </button>
         ))}
@@ -602,25 +603,30 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       <CountrySelector token={token} dataset={dataset} loading={loading} error={error} onSelect={onSelectCountry} />
 
       {/* ── Algorithm picker ── */}
-      <div className="bg-[#161929] rounded-xl p-4 border border-[#2d3348] mb-4">
-        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.5px] mb-3">
+      <div className="bg-white p-5 border-3 border-memphis-black shadow-hard-lg mb-5">
+        <p className="text-[11px] font-black text-memphis-black/60 uppercase tracking-[0.5px] mb-4">
           Algorithms · {activeAlgos.size}/{ALGOS.length} active
         </p>
-        <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))" }}>
           {ALGOS.map(a => {
             const on = activeAlgos.has(a.id);
             return (
               <button key={a.id} onClick={() => toggleAlgo(a.id)}
-                className="rounded-[9px] px-3 py-2.5 cursor-pointer text-left transition-all"
-                style={{ background: on ? a.color + "18" : "#1e2130", border: `1px solid ${on ? a.color + "55" : "#2d3348"}` }}>
+                className="px-3 py-3 cursor-pointer text-left transition-snap border-3 shadow-hard-sm active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+                style={{ 
+                  background: on ? a.color : "#FFFFFF", 
+                  borderColor: "#1A1A2E",
+                  color: on ? "#FFFFFF" : "#1A1A2E",
+                  boxShadow: on ? "4px 4px 0 #1A1A2E" : "2px 2px 0 #1A1A2E"
+                }}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-bold" style={{ color: on ? a.color : "#94a3b8" }}>{a.name}</span>
-                  <span className="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[9px] text-white font-bold shrink-0"
-                    style={{ background: on ? a.color : "#2d3348" }}>
+                  <span className="text-[11px] font-black uppercase">{a.name}</span>
+                  <span className="w-4 h-4 flex items-center justify-center text-[9px] text-white font-black border-2 border-white shrink-0"
+                    style={{ background: on ? "#FFFFFF" : "#1A1A2E", color: on ? "#1A1A2E" : "#FFFFFF" }}>
                     {on ? "✓" : ""}
                   </span>
                 </div>
-                <p className="text-[10px] leading-snug" style={{ color: on ? "#64748b" : "#475569" }}>{a.desc}</p>
+                <p className="text-[10px] leading-snug font-medium" style={{ opacity: on ? 0.9 : 0.6 }}>{a.desc}</p>
               </button>
             );
           })}
@@ -628,22 +634,32 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       </div>
 
       {/* ── AI query ── */}
-      <div className="bg-[#161929] rounded-xl p-4 border border-[#2d3348] mb-4">
-        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-[0.5px] mb-2.5">AI Economic Query</p>
-        <div className={`flex gap-2 ${isMobile ? "flex-col" : ""}`}>
+      <div className="bg-memphis-yellow p-5 border-3 border-memphis-black shadow-hard-lg mb-5 relative">
+        <div className="absolute -top-2 left-4 right-4 h-2 bg-repeating-linear-gradient"
+          style={{
+            background: `repeating-linear-gradient(
+              90deg,
+              #FF006E 0px,
+              #FF006E 8px,
+              #00D9FF 8px,
+              #00D9FF 16px
+            )`
+          }}
+        />
+        <p className="text-[11px] font-black text-memphis-black uppercase tracking-[0.5px] mb-3 mt-1">AI Economic Query</p>
+        <div className={`flex gap-3 ${isMobile ? "flex-col" : ""}`}>
           <Input value={query} onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runQuery(); } }}
             placeholder={dataset ? `Ask about ${dataset.name}'s economy…` : "Select a country above, then ask a question…"}
             disabled={aiLoading}
-            className="flex-1 focus-visible:ring-[#8B5CF6] focus-visible:border-[#8B5CF6]"
+            className="flex-1 bg-white border-3 border-memphis-black"
           />
-          <Button onClick={runQuery} disabled={aiLoading || !query.trim()}
-            className="bg-[#8B5CF6] hover:bg-[#7C3AED] font-bold shadow-[0_2px_12px_#8B5CF655]">
+          <Button onClick={runQuery} disabled={aiLoading || !query.trim()}>
             {aiLoading ? "Analyzing…" : "Analyze"}
           </Button>
         </div>
         {aiError && (
-          <Alert variant="destructive" className="mt-2">
+          <Alert className="mt-3 border-3 border-memphis-orange bg-memphis-orange/10">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>{aiError}</AlertDescription>
           </Alert>
@@ -651,26 +667,26 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       </div>
 
       {/* ── AI result ── */}
-      {aiResult && <div className="mb-4"><AIResultPanel result={aiResult} /></div>}
+      {aiResult && <div className="mb-5"><AIResultPanel result={aiResult} /></div>}
 
       {/* ── Algorithm results ── */}
       {!dataset && !loading ? (
-        <div className="text-center py-12 px-5 text-slate-600">
+        <div className="text-center py-12 px-5 text-memphis-black/60">
           <div className="text-4xl mb-3">🌍</div>
-          <p className="text-sm font-semibold text-slate-500 mb-1.5">Select a country to run the algorithms</p>
-          <p className="text-xs text-gray-700">Pick from the quick-selects above or search for any country</p>
+          <p className="text-sm font-black text-memphis-black/70 mb-1.5">Select a country to run the algorithms</p>
+          <p className="text-xs text-memphis-black/50">Pick from the quick-selects above or search for any country</p>
         </div>
       ) : loading ? (
         <div className="text-center py-12">
-          <span className="text-sm text-[#00AAFF] inline-flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#00AAFF] inline-block" style={{ animation: "ecPulse 1.2s ease-in-out infinite" }} />
+          <span className="text-sm text-memphis-pink inline-flex items-center gap-2 font-bold">
+            <span className="w-2 h-2 bg-memphis-pink border-2 border-memphis-black inline-block" style={{ animation: "ecPulse 1s steps(1) infinite" }} />
             Fetching country data…
           </span>
         </div>
       ) : dataset && enabledAlgos.length === 0 ? (
-        <div className="text-center py-8 text-slate-600 text-[13px]">No algorithms selected. Toggle some above.</div>
+        <div className="text-center py-8 text-memphis-black/60 text-[13px] font-semibold">No algorithms selected. Toggle some above.</div>
       ) : dataset ? (
-        <div className="grid gap-4" style={{ gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr" }}>
+        <div className="grid gap-5" style={{ gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr" }}>
           {activeAlgos.has("regression")  && <RegressionPanel  dataset={dataset} />}
           {activeAlgos.has("hhi")         && <HHIPanel         dataset={dataset} />}
           {activeAlgos.has("kmeans")      && <KMeansPanel      dataset={dataset} />}
@@ -682,7 +698,7 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
         </div>
       ) : null}
 
-      <p className="text-center text-[11px] text-slate-700 mt-4">
+      <p className="text-center text-[11px] text-memphis-black/50 mt-5 font-medium">
         Algorithms from scratch · OLS Regression · HHI · K-Means++ · Z-Score Anomaly · HP Filter · CAGR · Pearson r · Trade Openness
       </p>
     </div>
