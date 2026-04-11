@@ -5,6 +5,7 @@
 import { useState, useRef } from "react";
 import { analyzeCSVData } from "../../utils/api";
 import { parseCSV } from "../../utils/csv";
+import { useMobile } from "../../utils/useMobile";
 import type { ParsedCSV, AIResponse } from "../../types";
 import { ChartCard } from "../ui";
 import { Button }   from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 
 export default function DataMode() {
+  const isMobile = useMobile();
   const [file,     setFile]     = useState<File | null>(null);
   const [csv,      setCsv]      = useState<ParsedCSV | null>(null);
   const [context,  setContext]  = useState("");
@@ -64,7 +66,7 @@ export default function DataMode() {
   };
 
   return (
-    <div className="max-w-[900px] mx-auto">
+    <div className="max-w-[900px] mx-auto px-1 sm:px-0">
 
       {/* ── Drop zone ── */}
       {!csv && (
@@ -74,13 +76,13 @@ export default function DataMode() {
           onDrop={e => { e.preventDefault(); setDragOver(false); handleFile(e.dataTransfer.files[0]); }}
           onClick={() => fileRef.current?.click()}
             className={cn(
-             "border-4 border-dashed py-14 px-6 text-center cursor-pointer transition-snap mb-5 relative overflow-hidden bg-white shadow-hard min-h-[240px]",
+             "border-4 border-dashed px-4 sm:px-6 text-center cursor-pointer transition-snap mb-5 relative overflow-hidden bg-white shadow-hard min-h-[180px] sm:min-h-[240px] py-9 sm:py-14",
             dragOver ? "border-memphis-orange bg-memphis-orange/5" : "border-memphis-black hover:-translate-y-px hover:shadow-hard-lg"
           )}>
           <input ref={fileRef} type="file" accept=".csv" className="hidden"
             onChange={e => handleFile(e.target.files?.[0])} />
           <div className={cn(
-            "w-14 h-14 border-3 flex items-center justify-center text-2xl mx-auto mb-3.5 transition-snap shadow-hard-sm",
+            "w-12 h-12 sm:w-14 sm:h-14 border-3 flex items-center justify-center text-xl sm:text-2xl mx-auto mb-3.5 transition-snap shadow-hard-sm",
             dragOver ? "bg-memphis-orange/20 border-memphis-orange" : "bg-memphis-offwhite border-memphis-black"
           )}>📂</div>
           <p className={cn("text-base font-black mb-1.5 transition-colors uppercase tracking-wide", dragOver ? "text-memphis-orange" : "text-memphis-black")}>
@@ -103,35 +105,59 @@ export default function DataMode() {
           </div>
 
           {/* Scrollable preview table */}
-          <div className="bg-card border border-border rounded-xl overflow-auto mb-4 max-h-60">
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr>
-                  {csv.headers.map((h, i) => (
-                    <th key={i} className="px-3.5 py-2.5 text-left text-amber-500 font-bold border-b border-border bg-background whitespace-nowrap sticky top-0 uppercase tracking-[0.5px] text-[11px]">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {csv.rows.slice(0, 6).map((row, ri) => (
-                  <tr key={ri} className={cn("border-b border-border/20", ri % 2 !== 0 && "bg-white/[0.02]")}>
-                    {csv.headers.map((h, ci) => (
-                      <td key={ci} className="px-3.5 py-2 text-slate-400 whitespace-nowrap">
-                        {String(row[h]).slice(0, 40)}
-                      </td>
+          {isMobile ? (
+            <div className="mb-4 space-y-2">
+              {csv.rows.slice(0, 6).map((row, ri) => (
+                <div key={ri} className="bg-card border border-border rounded-xl p-3">
+                  <p className="text-[10px] font-black uppercase tracking-[0.6px] text-amber-500 mb-2">Row {ri + 1}</p>
+                  <div className="space-y-1.5">
+                    {csv.headers.slice(0, 5).map((h, ci) => (
+                      <div key={ci} className="flex items-start justify-between gap-2">
+                        <span className="text-[11px] text-muted-foreground font-semibold shrink-0">{h}</span>
+                        <span className="text-[11px] text-slate-400 text-right break-all">{String(row[h]).slice(0, 56)}</span>
+                      </div>
+                    ))}
+                    {csv.headers.length > 5 && (
+                      <p className="text-[10px] text-muted-foreground">+{csv.headers.length - 5} more columns</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {csv.rows.length > 6 && (
+                <p className="px-0.5 py-1 text-[11px] text-muted-foreground">+ {csv.rows.length - 6} more rows not shown</p>
+              )}
+            </div>
+          ) : (
+            <div className="bg-card border border-border rounded-xl overflow-auto mb-4 max-h-60">
+              <table className="w-full border-collapse text-xs">
+                <thead>
+                  <tr>
+                    {csv.headers.map((h, i) => (
+                      <th key={i} className="px-3.5 py-2.5 text-left text-amber-500 font-bold border-b border-border bg-background whitespace-nowrap sticky top-0 uppercase tracking-[0.5px] text-[11px]">
+                        {h}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            {csv.rows.length > 6 && (
-              <p className="px-3.5 py-1.5 text-[11px] text-muted-foreground border-t border-border/20">
-                + {csv.rows.length - 6} more rows not shown
-              </p>
-            )}
-          </div>
+                </thead>
+                <tbody>
+                  {csv.rows.slice(0, 6).map((row, ri) => (
+                    <tr key={ri} className={cn("border-b border-border/20", ri % 2 !== 0 && "bg-white/[0.02]")}>
+                      {csv.headers.map((h, ci) => (
+                        <td key={ci} className="px-3.5 py-2 text-slate-400 whitespace-nowrap">
+                          {String(row[h]).slice(0, 40)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {csv.rows.length > 6 && (
+                <p className="px-3.5 py-1.5 text-[11px] text-muted-foreground border-t border-border/20">
+                  + {csv.rows.length - 6} more rows not shown
+                </p>
+              )}
+            </div>
+          )}
 
           <div className="mb-4">
             <label className="text-xs text-muted-foreground block mb-1.5">
@@ -167,7 +193,7 @@ export default function DataMode() {
         <div className="mt-6">
           <div className="flex items-center gap-2.5 mb-3.5">
             <Badge variant="warning">✨ Generated Analysis</Badge>
-            <Button variant="outline" size="sm" onClick={() => setResult(null)} className="ml-auto text-xs">Regenerate</Button>
+            <Button variant="outline" size="sm" onClick={() => setResult(null)} className="ml-auto text-xs min-h-11">Regenerate</Button>
           </div>
 
           {result.insight && (

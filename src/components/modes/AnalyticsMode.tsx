@@ -335,6 +335,7 @@ function rToColor(r: number): string {
 }
 
 function CorrelationPanel({ dataset }: { dataset: CountryDataset }) {
+  const isMobile = useMobile();
   const result = useMemo(() =>
     buildCorrelationMatrix(dataset.gdpData, dataset.exportData, dataset.importData),
     [dataset]);
@@ -350,12 +351,12 @@ function CorrelationPanel({ dataset }: { dataset: CountryDataset }) {
         </p>
       )}
       <div className="overflow-x-auto">
-        <table className="border-collapse text-[11px] w-full">
+        <table className="border-collapse text-[11px] w-full min-w-[520px]">
           <thead>
             <tr>
               <th className="px-2 py-1 text-slate-600 text-left" />
               {result.variables.map(v => (
-                <th key={v} title={v} className="px-1.5 py-1 text-slate-600 font-semibold text-center max-w-[70px] overflow-hidden text-ellipsis whitespace-nowrap">
+                <th key={v} title={v} className="px-1.5 py-1 text-slate-600 font-semibold text-center max-w-[90px] overflow-hidden text-ellipsis whitespace-nowrap">
                   {v.replace(" ($B)", "").replace(" (%)", "")}
                 </th>
               ))}
@@ -365,7 +366,7 @@ function CorrelationPanel({ dataset }: { dataset: CountryDataset }) {
             {result.variables.map(row => (
               <tr key={row}>
                 <td className="px-2 py-1 text-slate-400 font-semibold whitespace-nowrap">
-                  {row.replace(" ($B)", "").replace(" (%)", "")}
+                  {isMobile ? row.replace(" ($B)", "").replace(" (%)", "").replace("GDP", "G") : row.replace(" ($B)", "").replace(" (%)", "")}
                 </td>
                 {result.variables.map(col => {
                   const cell = result.cells.find(c => c.rowLabel === row && c.colLabel === col);
@@ -608,7 +609,7 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
         <p className="text-[11px] font-black text-memphis-black/60 uppercase tracking-[0.5px] mb-3 sm:mb-4">
           Algorithms · {activeAlgos.size}/{ALGOS.length} active
         </p>
-        <div className="grid gap-2 sm:gap-3" style={{ gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(auto-fill, minmax(190px, 1fr))" }}>
+        <div className="grid gap-2 sm:gap-3" style={{ gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(190px, 1fr))" }}>
           {ALGOS.map(a => {
             const on = activeAlgos.has(a.id);
             return (

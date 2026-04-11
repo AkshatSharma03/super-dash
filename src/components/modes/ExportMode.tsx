@@ -83,7 +83,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white border-4 border-memphis-black px-6 py-5 flex-1 min-w-0 shadow-hard relative">
+    <div className="bg-white border-4 border-memphis-black px-4 sm:px-6 py-4 sm:py-5 flex-1 min-w-0 shadow-hard relative">
       <div className="absolute -top-2 -right-2 w-5 h-5" style={{ background: color, border: "3px solid #1A1A2E" }} />
       <div className="flex items-center gap-3 mb-4">
         <div className="w-8 h-8 flex items-center justify-center text-base shrink-0 border-3 border-memphis-black shadow-hard-sm" style={{ background: color }}>{icon}</div>
@@ -398,7 +398,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
   }
 
   return (
-    <div className="max-w-[1100px] mx-auto">
+    <div className="max-w-[1100px] mx-auto px-1 sm:px-0">
 
       {dashDataset && <HiddenCharts dataset={dashDataset} refs={chartRefs} />}
 
@@ -420,7 +420,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
           {dashDataset ? (
             <>
               <SectionTitle>Raw Data Downloads</SectionTitle>
-              <div className="grid grid-cols-2 gap-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 <ExportBtn icon="📉" label="GDP CSV"           onClick={() => handleDashCSV("gdp")} />
                 <ExportBtn icon="📦" label="Exports CSV"       onClick={() => handleDashCSV("exports")} />
                 <ExportBtn icon="📥" label="Imports CSV"       onClick={() => handleDashCSV("imports")} />
@@ -437,7 +437,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               <p className="text-[11px] text-memphis-black/50 mb-2 font-medium">
                 Generates a standalone .html file with embedded SVG charts, KPI cards, and data tables.
               </p>
-              <div className="flex gap-1.5">
+              <div className="flex flex-col sm:flex-row gap-1.5">
                 <div className="flex-1">
                   <ExportBtn
                     icon={generating === "dash" ? "⏳" : "⬇"}
@@ -520,7 +520,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               <ExportBtn icon="🗂" label="All Algorithm Results → JSON" onClick={handleAlgoJSON} full />
 
               <SectionTitle>Result Summary</SectionTitle>
-              <div className="grid grid-cols-2 gap-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
                 {ALGO_DEFS.map(({ key, name }) => {
                   const csv = algoCsvs[key];
                   const rows = csv ? csv.split("\n").length - 1 : 0;

@@ -68,7 +68,7 @@ export default function SearchMode() {
   };
 
   return (
-    <div className="max-w-[860px] mx-auto">
+    <div className="max-w-[860px] mx-auto px-1 sm:px-0">
 
       {/* ── Search bar with Trie autocomplete ── */}
       <div className="relative mb-4">
@@ -216,7 +216,7 @@ export default function SearchMode() {
                 placeholder="Enter a follow-up or related search…"
                 className="flex-1 focus-visible:ring-emerald-500 focus-visible:border-emerald-500" />
               <Button onClick={() => doSearch(followQuery)} disabled={loading || !followQuery.trim()}
-                className="bg-[#10B981] hover:bg-[#059669] font-bold">
+                className="bg-[#10B981] hover:bg-[#059669] font-bold min-h-11">
                 Search
               </Button>
             </div>

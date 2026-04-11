@@ -19,7 +19,7 @@ import { AlertTriangle } from "lucide-react";
 function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string) => void }) {
   if (msg.role === "user") return (
     <div className="flex justify-end mb-3.5">
-      <div className="text-white px-4 py-2.5 max-w-[72%] text-sm leading-[1.55] border-3 border-memphis-black shadow-hard"
+      <div className="text-white px-4 py-2.5 max-w-[85%] sm:max-w-[72%] text-sm leading-[1.55] border-3 border-memphis-black shadow-hard break-words"
         style={{ background: "#FF006E" }}>
         {msg.content}
       </div>
@@ -231,8 +231,8 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
       <div className={cn(
         "flex flex-col",
         isMobile
-          ? cn("fixed top-0 h-full w-[260px] bg-popover border-r border-muted z-[100] p-3 transition-[left] duration-250 ease-in-out",
-              sidebarOpen ? "left-0" : "left-[-260px]")
+          ? cn("fixed top-0 h-full w-[85vw] max-w-[320px] bg-popover border-r border-muted z-[100] p-3 transition-[left] duration-250 ease-in-out",
+              sidebarOpen ? "left-0" : "left-[-85vw]")
           : "w-[210px] shrink-0 border-r border-muted mr-4"
       )}>
         <div className="flex gap-1.5 mb-2.5">
@@ -297,9 +297,9 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
         <div className="flex-1 overflow-y-auto pb-2">
 
           {isEmpty && !loading ? (
-            <div className="max-w-[640px] mx-auto pt-5" style={{ animation: "fadeInUp .3s ease-out" }}>
+            <div className="max-w-[640px] mx-auto pt-5 px-1 sm:px-0" style={{ animation: "fadeInUp .3s ease-out" }}>
               <div className="text-center mb-7">
-                <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-[26px] mx-auto mb-3.5 shadow-[0_0_24px_#8B5CF644]"
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-[22px] sm:text-[26px] mx-auto mb-3.5 shadow-[0_0_24px_#8B5CF644]"
                   style={{ background: "linear-gradient(135deg,#8B5CF6,#00AAFF)" }}>💬</div>
                 <h2 className="text-lg font-extrabold text-white tracking-[-0.3px] mb-2">Ask anything about any economy</h2>
                 <p className="text-[13px] text-muted-foreground leading-[1.65]">
@@ -317,7 +317,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
               </div>
             </div>
           ) : (
-            <div className="max-w-[820px] mx-auto">
+              <div className="max-w-[820px] mx-auto px-1 sm:px-0">
               {messages.map((m, i) => (
                 <ChatMessage key={i} msg={m} onFollowUp={q => { setInput(q); inputRef.current?.focus(); }} />
               ))}
@@ -331,7 +331,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
 
         {/* ── Input bar ── */}
         <div className="border-t border-muted pt-3 shrink-0">
-          <div className="max-w-[820px] mx-auto flex gap-2">
+          <div className="max-w-[820px] mx-auto flex gap-2 px-1 sm:px-0">
             {isMobile && (
               <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} title="Chat history" className="min-h-11 min-w-11">☰</Button>
             )}
@@ -346,7 +346,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
             <Input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === "Enter" && !e.shiftKey && send(input)}
               placeholder="Ask about GDP, trade flows, inflation, interest rates, any country…"
-              disabled={loading} className="flex-1 h-10 focus-visible:ring-accent" />
+              disabled={loading} className="flex-1 min-h-11 focus-visible:ring-accent" />
             <Button onClick={() => send(input)} disabled={loading || !input.trim()}
               className="whitespace-nowrap bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] shadow-[0_2px_10px_#8B5CF644] font-bold">
               {loading ? "…" : "Send →"}

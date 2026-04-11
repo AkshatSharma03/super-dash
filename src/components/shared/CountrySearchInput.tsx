@@ -44,13 +44,13 @@ export default function CountrySearchInput({ token, onSelect, placeholder = "Sea
         {searching ? "…" : "🔍"}
       </span>
       {open && results.length > 0 && (
-        <div className="absolute top-[calc(100%+4px)] left-0 right-0 bg-[#161929] border border-[#2d3348] rounded-lg z-[100] overflow-hidden">
+        <div className="absolute top-[calc(100%+4px)] left-0 right-0 max-h-[280px] overflow-y-auto bg-white border-3 border-memphis-black z-[100] shadow-hard">
           {results.map(c => (
             <button key={c.code} onMouseDown={() => pick(c.code)}
-              className="flex items-center gap-2 w-full bg-transparent border-0 border-b border-b-[#1e2130] px-3.5 py-2 cursor-pointer text-slate-100 text-[13px] hover:bg-[#1e2130]">
+              className="flex items-center gap-2 w-full min-h-11 bg-transparent border-0 border-b-2 border-b-memphis-black/10 px-3 py-2 cursor-pointer text-memphis-black text-[13px] hover:bg-memphis-cyan/10">
               <span className="text-lg">{c.flag}</span>
               <span className="font-semibold">{c.name}</span>
-              <span className="text-slate-600 text-[11px] ml-auto">{c.region}</span>
+              <span className="text-memphis-black/50 text-[11px] ml-auto">{c.region}</span>
             </button>
           ))}
         </div>

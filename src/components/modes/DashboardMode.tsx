@@ -97,18 +97,18 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         <div className="flex gap-2.5 items-center mb-3.5 flex-wrap">
           <CountrySearchInput token={token} onSelect={onSelectCountry}
             placeholder="Search any country by name…"
-            className="flex-[1_1_260px] max-w-[360px]" />
+            className="flex-[1_1_260px] w-full sm:max-w-[360px]" />
 
           {/* Year range slider — only shown after data loads */}
           {dataset && (
-            <div className="flex items-center gap-3 bg-white border-3 border-memphis-black px-3.5 py-2 shrink-0 shadow-hard-sm">
+            <div className="flex items-center gap-2 sm:gap-3 bg-white border-3 border-memphis-black px-2.5 sm:px-3.5 py-2 shrink-0 shadow-hard-sm w-full sm:w-auto">
               <span className="text-[10px] font-black text-memphis-black/60 uppercase tracking-wide">Years</span>
               <span className="text-xs font-black text-memphis-pink tabular-nums">{yearRange[0]}</span>
               <Slider
                 min={yearMin} max={yearMax}
                 value={yearRange}
                 onValueChange={([a, b]) => setYearRange([a, b])}
-                className="w-28"
+                className="flex-1 sm:flex-none sm:w-32"
               />
               <span className="text-xs font-black text-memphis-pink tabular-nums">{yearRange[1]}</span>
             </div>
@@ -148,7 +148,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
               const isActive = dataset?.code === h.code;
               return (
                 <button key={h.code} onClick={() => onSelectCountry(h.code)} disabled={loading}
-                  className="flex flex-col items-start gap-0.5 px-3.5 py-2 transition-snap min-w-[120px] border-3 shadow-hard-sm"
+                  className="flex flex-col items-start gap-0.5 px-3 py-2 transition-snap min-w-[100px] sm:min-w-[120px] border-3 shadow-hard-sm"
                   style={{
                     background: isActive ? "#FF006E" : "#FFFFFF",
                     borderColor: "#1A1A2E",
@@ -213,9 +213,10 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         </div>
 
         {/* Sub-tab selector */}
-        <div className="flex gap-1 mb-4 bg-memphis-offwhite border-3 border-memphis-black p-1 w-full sm:w-fit overflow-x-auto shadow-hard-sm">
-          {DASH_TABS.map(t => <Btn key={t} onClick={() => setTab(t)} active={tab === t}>{t}</Btn>)}
-        </div>
+          <div className="flex gap-1 mb-1 bg-memphis-offwhite border-3 border-memphis-black p-1 w-full sm:w-fit overflow-x-auto shadow-hard-sm">
+            {DASH_TABS.map(t => <Btn key={t} onClick={() => setTab(t)} active={tab === t}>{t}</Btn>)}
+          </div>
+          {isMobile && <p className="text-[10px] text-memphis-black/50 mb-3">Swipe to switch tab →</p>}
 
         {/* ── GDP tab ── */}
         {tab === "GDP" && <>

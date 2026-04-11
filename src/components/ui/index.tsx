@@ -182,11 +182,11 @@ export function ChartCard({ chart }: { chart: ChartConfig }) {
         </div>
         <div className="flex gap-1 shrink-0">
           <Button variant="outline" size="sm" onClick={handleSVG} title="Download chart as SVG"
-            className="h-6 px-2 text-[10px] hover:text-primary hover:border-primary/50">
+            className="px-2 text-[10px] hover:text-primary hover:border-primary/50">
             ↓ SVG
           </Button>
           <Button variant="outline" size="sm" onClick={handleCSV} title="Download chart data as CSV"
-            className="h-6 px-2 text-[10px] hover:text-emerald-400 hover:border-emerald-400/50">
+            className="px-2 text-[10px] hover:text-emerald-400 hover:border-emerald-400/50">
             ↓ CSV
           </Button>
         </div>
