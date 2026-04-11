@@ -1,13 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // APP SHELL — Memphis Design Edition — Bold colors, thick borders, geometric patterns
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense, type ComponentType } from "react";
 import type { Mode, User, CountryDataset } from "./types";
 import { useMobile } from "./utils/useMobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { fetchMe, getCountryData, refreshCountryData, logoutApi } from "./utils/api";
 import { identifyUser, resetUser, track } from "./analytics";
+import { BarChart3, MessageSquare, Search, Database, LineChart, Download, Menu, X, ChevronDown } from "lucide-react";
 
 const AuthPage = lazy(() => import("./components/auth/AuthPage"));
 const SettingsPanel = lazy(() => import("./components/auth/SettingsPanel"));
@@ -18,13 +19,13 @@ const DataMode = lazy(() => import("./components/modes/DataMode"));
 const AnalyticsMode = lazy(() => import("./components/modes/AnalyticsMode"));
 const ExportMode = lazy(() => import("./components/modes/ExportMode"));
 
-const MODES: [Mode, string][] = [
-  ["chat", "💬 AI Chat"],
-  ["search", "🔍 Search"],
-  ["data", "📁 Data"],
-  ["analytics", "🧮 Analytics"],
-  ["dashboard", "🌍 Country Data"],
-  ["export", "📤 Export"],
+const MODES: { mode: Mode; label: string; Icon: ComponentType<{ className?: string }> }[] = [
+  { mode: "chat", label: "AI Chat", Icon: MessageSquare },
+  { mode: "search", label: "Search", Icon: Search },
+  { mode: "data", label: "Data", Icon: Database },
+  { mode: "analytics", label: "Analytics", Icon: LineChart },
+  { mode: "dashboard", label: "Country Data", Icon: BarChart3 },
+  { mode: "export", label: "Export", Icon: Download },
 ];
 
 /* Unified Memphis Color Palette for all modes */
@@ -136,7 +137,7 @@ export default function App() {
   );
 
   const { label, desc } = MODE_META[mode];
-  const modeIcon = MODES.find(m => m[0] === mode)?.[1].split(" ")[0] ?? "";
+  const ActiveModeIcon = MODES.find(m => m.mode === mode)?.Icon ?? BarChart3;
   const fetchingInBg = countryLoading && mode !== "dashboard";
 
   return (
@@ -165,7 +166,7 @@ export default function App() {
         <div className="flex items-center gap-2 sm:gap-3">
           <div className="w-8 h-8 sm:w-10 sm:h-10 border-2 sm:border-3 border-memphis-black flex items-center justify-center text-base sm:text-lg font-black shadow-hard-sm sm:shadow-hard"
             style={{ background: "#FF006E" }}>
-            📊
+            <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
           <span className="text-base sm:text-lg font-black text-memphis-black tracking-tight uppercase">EconChart</span>
         </div>
@@ -178,15 +179,14 @@ export default function App() {
             onClick={() => setMobileMenuOpen(v => !v)}
             aria-label="Open mobile menu"
           >
-            ☰
+            <Menu className="w-4 h-4" />
           </Button>
         )}
 
         {/* Mode tabs — Memphis Bold Tabs */}
         <nav className={cn("ec-tabs ml-4 flex bg-memphis-offwhite border-3 border-memphis-black shadow-hard p-1 gap-1 flex-nowrap", isMobile && "hidden")}>
-          {MODES.map(([m, lbl]) => {
+          {MODES.map(({ mode: m, label: modeLabel, Icon }) => {
             const isBgFetch = m === "dashboard" && fetchingInBg;
-            const [emoji, ...words] = lbl.split(" ");
             const isActive = mode === m;
             return (
               <button
@@ -199,8 +199,8 @@ export default function App() {
                     : "bg-white text-memphis-black border-memphis-black hover:-translate-x-px hover:-translate-y-px hover:shadow-hard"
                 )}
               >
-                <span className="text-base">{emoji}</span>
-                <span className={cn("ec-tab-text", isMobile ? "hidden" : "")}>{words.join(" ")}</span>
+                <Icon className="w-4 h-4" />
+                <span className={cn("ec-tab-text", isMobile ? "hidden" : "")}>{modeLabel}</span>
                 {isBgFetch && (
                   <span className="w-2 h-2 border-2 border-white inline-block" style={{ animation: "ecPulse 1s steps(1) infinite" }} />
                 )}
@@ -226,7 +226,7 @@ export default function App() {
                   {user.name.charAt(0).toUpperCase()}
                 </div>
                 <span className="ec-user-name max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap font-bold">{user.name}</span>
-                <span className="text-xs">▼</span>
+                <ChevronDown className="w-3.5 h-3.5" />
               </Button>
               <Button variant="outline" size="sm" onClick={logout}>
                 Out
@@ -245,7 +245,7 @@ export default function App() {
         >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-black uppercase tracking-wide">Menu</span>
-            <Button variant="outline" size="icon" onClick={() => setMobileMenuOpen(false)} aria-label="Close mobile menu">✕</Button>
+            <Button variant="outline" size="icon" onClick={() => setMobileMenuOpen(false)} aria-label="Close mobile menu"><X className="w-4 h-4" /></Button>
           </div>
 
           <div className="border-3 border-memphis-black bg-memphis-offwhite p-1 mb-4">
@@ -256,7 +256,7 @@ export default function App() {
                 mode === "export" ? "bg-memphis-black text-white border-memphis-black" : "bg-white text-memphis-black border-memphis-black"
               )}
             >
-              📤 Export Center
+              <span className="inline-flex items-center gap-2"><Download className="w-4 h-4" /> Export Center</span>
             </button>
           </div>
 
@@ -291,7 +291,7 @@ export default function App() {
         />
         <div className="w-1 h-5 sm:h-6 bg-memphis-black mt-1.5 sm:mt-2" />
         <span className="mt-2 text-xs border-3 border-memphis-black px-3 py-1 font-black uppercase tracking-wider bg-white shadow-hard-sm">
-          {modeIcon} {label}
+          <span className="inline-flex items-center gap-2"><ActiveModeIcon className="w-3.5 h-3.5" /> {label}</span>
         </span>
         <span className="ec-mode-desc mt-2 text-xs font-semibold text-memphis-black/70">{desc}</span>
         {fetchingInBg && (
@@ -362,8 +362,8 @@ export default function App() {
         <nav className="fixed bottom-0 left-0 right-0 z-[110] bg-white border-t-3 border-memphis-black px-1 pt-1 pb-[max(8px,env(safe-area-inset-bottom))]">
           <div className="grid grid-cols-5 gap-1">
             {MOBILE_PRIMARY_MODES.map((m) => {
-              const def = MODES.find(([modeKey]) => modeKey === m);
-              const [emoji, ...labelParts] = (def?.[1] ?? "").split(" ");
+              const def = MODES.find((modeDef) => modeDef.mode === m);
+              const Icon = def?.Icon ?? BarChart3;
               const active = m === mode;
               return (
                 <button
@@ -373,10 +373,10 @@ export default function App() {
                     "min-h-11 px-1.5 py-1 border-2 border-memphis-black flex flex-col items-center justify-center text-[10px] font-black uppercase tracking-wide",
                     active ? "bg-memphis-black text-white" : "bg-memphis-offwhite text-memphis-black"
                   )}
-                  aria-label={labelParts.join(" ")}
+                  aria-label={def?.label ?? m}
                 >
-                  <span className="text-sm leading-none">{emoji}</span>
-                  <span className="leading-none mt-1">{labelParts[0]}</span>
+                  <Icon className="w-4 h-4 leading-none" />
+                  <span className="leading-none mt-1">{def?.label.split(" ")[0]}</span>
                 </button>
               );
             })}

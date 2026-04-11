@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge }    from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, FileUp, FileText, WandSparkles, BarChart3 } from "lucide-react";
 
 export default function DataMode() {
   const isMobile = useMobile();
@@ -84,7 +84,7 @@ export default function DataMode() {
           <div className={cn(
             "w-12 h-12 sm:w-14 sm:h-14 border-3 flex items-center justify-center text-xl sm:text-2xl mx-auto mb-3.5 transition-snap shadow-hard-sm",
             dragOver ? "bg-memphis-orange/20 border-memphis-orange" : "bg-memphis-offwhite border-memphis-black"
-          )}>📂</div>
+          )}><FileUp className="w-6 h-6 text-memphis-black" /></div>
           <p className={cn("text-base font-black mb-1.5 transition-colors uppercase tracking-wide", dragOver ? "text-memphis-orange" : "text-memphis-black")}>
             Drop your CSV file here
           </p>
@@ -99,7 +99,7 @@ export default function DataMode() {
       {csv && (
         <>
           <div className="flex items-center gap-2.5 mb-4 flex-wrap">
-            <Badge>📁 {file?.name}</Badge>
+            <Badge><span className="inline-flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> {file?.name}</span></Badge>
             <span className="text-[11px] text-muted-foreground">{csv.rows.length} rows · {csv.headers.length} columns</span>
             <Button variant="outline" size="sm" onClick={reset} className="ml-auto text-xs min-h-11">Remove file</Button>
           </div>
@@ -168,14 +168,14 @@ export default function DataMode() {
               rows={2} className="focus-visible:ring-amber-500 focus-visible:border-amber-500" />
           </div>
 
-          <Button onClick={generate} disabled={loading}
+            <Button onClick={generate} disabled={loading}
             className="bg-[#F59E0B] hover:bg-[#D97706] text-[#0f1117] font-bold shadow-[0_2px_12px_#F59E0B44] gap-2 min-h-11">
             {loading ? (
               <>
                 <span className="w-3.5 h-3.5 rounded-full border-2 border-muted/50 border-t-muted/70 inline-block animate-spin" />
                 Analyzing data…
               </>
-            ) : "✨ Generate Charts"}
+            ) : <span className="inline-flex items-center gap-2"><WandSparkles className="w-4 h-4" /> Generate Charts</span>}
           </Button>
         </>
       )}
@@ -192,14 +192,14 @@ export default function DataMode() {
       {result && (
         <div className="mt-6">
           <div className="flex items-center gap-2.5 mb-3.5">
-            <Badge variant="warning">✨ Generated Analysis</Badge>
+            <Badge variant="warning"><span className="inline-flex items-center gap-1.5"><BarChart3 className="w-3.5 h-3.5" /> Generated Analysis</span></Badge>
             <Button variant="outline" size="sm" onClick={() => setResult(null)} className="ml-auto text-xs min-h-11">Regenerate</Button>
           </div>
 
           {result.insight && (
             <div className="bg-muted border border-border rounded-xl p-4 mb-3.5">
               <div className="flex gap-2 items-center mb-2">
-                <span className="text-sm">📊</span>
+                <BarChart3 className="w-4 h-4 text-amber-500" />
                 <span className="text-[11px] text-amber-500 font-bold uppercase">Analysis</span>
               </div>
               <p className="text-sm text-slate-300 leading-[1.75]">{result.insight}</p>

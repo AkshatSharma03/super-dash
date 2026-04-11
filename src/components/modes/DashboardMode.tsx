@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge }  from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Loader2, Globe2, RefreshCw } from "lucide-react";
 
 
 const DASH_TABS = ["GDP", "Exports", "Imports", "Trade Balance"] as const;
@@ -170,7 +170,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
       {/* ── Loading ───────────────────────────────────────────────────────── */}
       {loading && (
         <div className="text-center py-[60px] text-memphis-black/60">
-          <div className="text-[28px] mb-3 inline-block" style={{ animation: "spin 1.2s linear infinite" }}>⟳</div>
+          <Loader2 className="w-7 h-7 mb-3 mx-auto animate-spin" />
           <div className="text-sm">Fetching data from World Bank…</div>
           <div className="text-xs mt-1.5 text-slate-700">GDP, trade totals + AI-estimated sector breakdown</div>
         </div>
@@ -187,7 +187,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
       {/* ── Empty state ───────────────────────────────────────────────────── */}
       {!loading && !error && !dataset && (
         <div className="text-center py-[60px] text-slate-600">
-          <div className="text-[40px] mb-3">🌍</div>
+          <Globe2 className="w-10 h-10 mb-3 mx-auto text-slate-500" />
           <div className="text-base font-bold text-slate-500 mb-2">Select a country to load its data</div>
           <div className="text-[13px] text-slate-700">Real GDP data from World Bank · Cached locally for 7 days</div>
         </div>
@@ -203,7 +203,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
           <span className="text-[11px] text-slate-600">{dataset._meta?.sources.join(" · ")}</span>
           <span className="ml-auto text-[11px] text-slate-700">Cached {cachedAgo}</span>
           <Button variant="outline" size="sm" onClick={onRefresh} className="text-xs hover:text-primary hover:border-primary/50">
-            ↻ Refresh
+            <span className="inline-flex items-center gap-1.5"><RefreshCw className="w-3.5 h-3.5" /> Refresh</span>
           </Button>
         </div>
 
@@ -216,7 +216,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
           <div className="flex gap-1 mb-1 bg-memphis-offwhite border-3 border-memphis-black p-1 w-full sm:w-fit overflow-x-auto shadow-hard-sm">
             {DASH_TABS.map(t => <Btn key={t} onClick={() => setTab(t)} active={tab === t}>{t}</Btn>)}
           </div>
-          {isMobile && <p className="text-[10px] text-memphis-black/50 mb-3">Swipe to switch tab →</p>}
+          {isMobile && <p className="text-[10px] text-memphis-black/50 mb-3">Swipe to switch tabs</p>}
 
         {/* ── GDP tab ── */}
         {tab === "GDP" && <>

@@ -39,14 +39,14 @@ const LG  = { strokeDasharray: "3 3", stroke: "#e2e8f0" } as const;
 const LP  = ["#3b82f6","#f59e0b","#10b981","#ef4444","#8b5cf6","#f97316","#06b6d4"] as const;
 
 const ALGO_DEFS: { key: string; name: string; icon: string }[] = [
-  { key: "regression",  name: "OLS Regression",     icon: "📈" },
-  { key: "cagr",        name: "CAGR Analysis",       icon: "📊" },
-  { key: "hp_filter",   name: "HP Filter",           icon: "〰️" },
-  { key: "correlation", name: "Correlation Matrix",  icon: "🔗" },
-  { key: "hhi",         name: "HHI Concentration",   icon: "⚖️" },
-  { key: "anomaly",     name: "Anomaly Detection",   icon: "🚨" },
-  { key: "kmeans",      name: "K-Means Clustering",  icon: "🔵" },
-  { key: "openness",    name: "Trade Openness",       icon: "🌐" },
+  { key: "regression",  name: "OLS Regression",     icon: "OLS" },
+  { key: "cagr",        name: "CAGR Analysis",       icon: "CAGR" },
+  { key: "hp_filter",   name: "HP Filter",           icon: "HP" },
+  { key: "correlation", name: "Correlation Matrix",  icon: "CORR" },
+  { key: "hhi",         name: "HHI Concentration",   icon: "HHI" },
+  { key: "anomaly",     name: "Anomaly Detection",   icon: "ANOM" },
+  { key: "kmeans",      name: "K-Means Clustering",  icon: "KM" },
+  { key: "openness",    name: "Trade Openness",       icon: "OPEN" },
 ];
 
 // ── Tiny UI helpers ───────────────────────────────────────────────────────────
@@ -403,9 +403,9 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
       {dashDataset && <HiddenCharts dataset={dashDataset} refs={chartRefs} />}
 
       <div className="mb-6">
-        <h1 className="text-[22px] font-black text-memphis-black tracking-tight mb-1 uppercase">
-          📤 Export &amp; Reports
-        </h1>
+          <h1 className="text-[22px] font-black text-memphis-black tracking-tight mb-1 uppercase">
+          Export &amp; Reports
+          </h1>
         <p className="text-[13px] text-memphis-black/60 font-medium">
           Download country data as CSV / JSON · Generate standalone HTML reports with embedded charts · Print to PDF
         </p>
@@ -413,7 +413,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
 
       <div className={`flex gap-4 items-start ${isMobile ? "flex-col" : ""}`}>
 
-        <Panel title="Country Data" icon="🌍" color="#00AAFF"
+        <Panel title="Country Data" icon="CD" color="#00AAFF"
           dataset={dashDataset}
           empty="No country loaded — open the Country Data tab and select a country first">
 
@@ -421,17 +421,17 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
             <>
               <SectionTitle>Raw Data Downloads</SectionTitle>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                <ExportBtn icon="📉" label="GDP CSV"           onClick={() => handleDashCSV("gdp")} />
-                <ExportBtn icon="📦" label="Exports CSV"       onClick={() => handleDashCSV("exports")} />
-                <ExportBtn icon="📥" label="Imports CSV"       onClick={() => handleDashCSV("imports")} />
-                <ExportBtn icon="⚖️" label="Trade Balance CSV" onClick={() => handleDashCSV("balance")} />
+                <ExportBtn icon="CSV" label="GDP CSV"           onClick={() => handleDashCSV("gdp")} />
+                <ExportBtn icon="CSV" label="Exports CSV"       onClick={() => handleDashCSV("exports")} />
+                <ExportBtn icon="CSV" label="Imports CSV"       onClick={() => handleDashCSV("imports")} />
+                <ExportBtn icon="CSV" label="Trade Balance CSV" onClick={() => handleDashCSV("balance")} />
               </div>
               <div className="mt-1.5">
-                <ExportBtn icon="🗂" label="Full Dataset JSON" onClick={handleDashJSON} full />
+                <ExportBtn icon="JSON" label="Full Dataset JSON" onClick={handleDashJSON} full />
               </div>
 
               <SectionTitle>Clipboard</SectionTitle>
-              <ExportBtn icon="📋" label="Copy summary to clipboard" onClick={() => handleCopySummary(dashDataset)} full />
+              <ExportBtn icon="COPY" label="Copy summary to clipboard" onClick={() => handleCopySummary(dashDataset)} full />
 
               <SectionTitle>Full Report</SectionTitle>
               <p className="text-[11px] text-memphis-black/50 mb-2 font-medium">
@@ -440,7 +440,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               <div className="flex flex-col sm:flex-row gap-1.5">
                 <div className="flex-1">
                   <ExportBtn
-                    icon={generating === "dash" ? "⏳" : "⬇"}
+                    icon={generating === "dash" ? "..." : "HTML"}
                     label={generating === "dash" ? "Generating…" : "Download HTML"}
                     onClick={() => handleDashReport(false)}
                     disabled={generating === "dash"}
@@ -449,7 +449,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
                 </div>
                 <div className="flex-1">
                   <ExportBtn
-                    icon="🖨"
+                    icon="PDF"
                     label="Print / Save PDF"
                     onClick={() => handleDashReport(true)}
                     disabled={generating === "dash"}
@@ -490,13 +490,12 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
             </>
           ) : (
             <div className="text-center py-10 text-memphis-black/60">
-              <div className="text-[40px] mb-2.5">🌍</div>
               <p className="text-[13px] font-medium">Load a country in the <strong className="text-memphis-pink">Country Data</strong> tab first</p>
             </div>
           )}
         </Panel>
 
-        <Panel title="Algorithm Results" icon="🧮" color="#EF4444"
+        <Panel title="Algorithm Results" icon="ALG" color="#EF4444"
           dataset={analyticsDataset}
           empty="No analytics country loaded — open the Analytics tab and select a country first">
 
@@ -517,7 +516,7 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
               </div>
 
               <SectionTitle>Bulk Export</SectionTitle>
-              <ExportBtn icon="🗂" label="All Algorithm Results → JSON" onClick={handleAlgoJSON} full />
+              <ExportBtn icon="JSON" label="All Algorithm Results JSON" onClick={handleAlgoJSON} full />
 
               <SectionTitle>Result Summary</SectionTitle>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
@@ -537,7 +536,6 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
             </>
           ) : (
             <div className="text-center py-10 text-memphis-black/60">
-              <div className="text-[40px] mb-2.5">🧮</div>
               <p className="text-[13px] font-medium">Load a country in the <strong className="text-memphis-orange">Analytics</strong> tab first</p>
             </div>
           )}

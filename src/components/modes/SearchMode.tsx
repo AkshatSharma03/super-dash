@@ -14,7 +14,7 @@ import { Input }   from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge }   from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Globe2, BookOpen } from "lucide-react";
 
 export default function SearchMode() {
   const isMobile = useMobile();
@@ -150,7 +150,7 @@ export default function SearchMode() {
         <div>
           <div className="flex items-center gap-2.5 mb-3.5 flex-wrap">
             <Badge variant={result.webSearchUsed ? "success" : "warning"}>
-              {result.webSearchUsed ? "🌐 Live Web Search" : "📚 Model Knowledge"}
+              {result.webSearchUsed ? "Live Web Search" : "Model Knowledge"}
             </Badge>
             <span className="text-xs text-muted-foreground italic">"{searched}"</span>
             <div className="ml-auto flex gap-2">
@@ -174,7 +174,7 @@ export default function SearchMode() {
             style={{ animation: "fadeInUp .25s ease-out" }}
           >
             <div className="flex gap-2 items-center mb-3.5">
-              <span className="text-sm">{result.webSearchUsed ? "🌐" : "📚"}</span>
+              {result.webSearchUsed ? <Globe2 className="w-4 h-4 text-emerald-500" /> : <BookOpen className="w-4 h-4 text-amber-500" />}
               <span className={cn("text-[10px] font-bold uppercase tracking-[0.7px]", result.webSearchUsed ? "text-emerald-500" : "text-amber-500")}>
                 Research Summary
               </span>
@@ -199,7 +199,7 @@ export default function SearchMode() {
                         <span className="text-muted-foreground shrink-0">↗</span>{s.title}
                       </a>
                     : <span key={i} className="text-xs text-muted-foreground flex items-center gap-1.5">
-                        <span>📚</span>{s.title}
+                        <BookOpen className="w-3.5 h-3.5" />{s.title}
                       </span>
                 )}
               </div>

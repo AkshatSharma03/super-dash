@@ -2,7 +2,7 @@
 // AUTH PAGE  —  landing page shown to unauthenticated visitors.
 // Left: hero explaining the product. Right: login / register form.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ComponentType } from "react";
 import { login, register, guestLogin, requestPasswordReset, resetPassword } from "../../utils/api";
 import type { User } from "../../types";
 import { useMobile } from "../../utils/useMobile";
@@ -10,19 +10,19 @@ import { Button }  from "@/components/ui/button";
 import { Input }   from "@/components/ui/input";
 import { Label }   from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, MessageSquare, Search, Database, LineChart, Globe2, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AuthPageProps {
   onAuth: (token: string, user: User) => void;
 }
 
-const FEATURES = [
-  ["💬", "AI-powered charts", "Ask any economic question in plain language — get publication-ready interactive charts in seconds"],
-  ["🔍", "Live web search",   "Pull current data directly from World Bank, IMF, OECD, and national statistics offices"],
-  ["📁", "Your own data",     "Upload any CSV and get instant AI-powered charts and expert analysis"],
-  ["🧮", "Deep analytics",    "OLS regression, K-Means clustering, HHI concentration, and anomaly detection on real data"],
-  ["🌍", "Global dashboards",  "Instant dashboards for any country — US, China, EU, Japan and more — 15+ years of GDP, trade, and sector data"],
+const FEATURES: [ComponentType<{ className?: string }>, string, string][] = [
+  [MessageSquare, "AI-powered charts", "Ask any economic question in plain language — get publication-ready interactive charts in seconds"],
+  [Search, "Live web search",   "Pull current data directly from World Bank, IMF, OECD, and national statistics offices"],
+  [Database, "Your own data",     "Upload any CSV and get instant AI-powered charts and expert analysis"],
+  [LineChart, "Deep analytics",    "OLS regression, K-Means clustering, HHI concentration, and anomaly detection on real data"],
+  [Globe2, "Global dashboards",  "Instant dashboards for any country — US, China, EU, Japan and more — 15+ years of GDP, trade, and sector data"],
 ];
 
 type View = "login" | "register" | "forgot" | "reset";
@@ -316,7 +316,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
       <nav className="px-4 sm:px-8 py-3 border-b-3 border-memphis-black flex items-center gap-3 bg-white">
         <div className="w-8 h-8 border-3 border-memphis-black flex items-center justify-center text-base shadow-hard-sm"
           style={{ background: "#FF006E" }}>
-          📊
+          <BarChart3 className="w-4 h-4 text-white" />
         </div>
         <span className="text-[15px] font-black text-memphis-black tracking-tight uppercase">EconChart</span>
         <div className="ml-auto flex gap-2">
@@ -344,10 +344,10 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
               Ask questions in plain language. Get interactive, publication-ready charts backed by World Bank, IMF, UN Comtrade, and OECD data — for any country or region in the world.
             </p>
             <div className="flex flex-col gap-3.5">
-              {visibleFeatures.map(([icon, title, desc]) => (
+              {visibleFeatures.map(([Icon, title, desc]) => (
                 <div key={title} className="flex gap-3 items-start">
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 border-2 border-memphis-black bg-white flex items-center justify-center text-[14px] sm:text-[15px] shrink-0 shadow-hard-sm">
-                    {icon}
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 border-2 border-memphis-black bg-white flex items-center justify-center shrink-0 shadow-hard-sm">
+                    <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-memphis-black" />
                   </div>
                   <div>
                     <div className="text-[13px] font-semibold text-memphis-black mb-0.5">{title}</div>

@@ -26,7 +26,7 @@ import CountrySearchInput from "../shared/CountrySearchInput";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Globe2 } from "lucide-react";
 
 // ── Algorithms ────────────────────────────────────────────────────────────────
 import { buildForecast }               from "../../algorithms/regression";
@@ -674,7 +674,7 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
       {/* ── Algorithm results ── */}
       {!dataset && !loading ? (
         <div className="text-center py-12 px-5 text-memphis-black/60">
-          <div className="text-4xl mb-3">🌍</div>
+          <Globe2 className="w-10 h-10 mx-auto mb-3 text-memphis-black/50" />
           <p className="text-sm font-black text-memphis-black/70 mb-1.5">Select a country to run the algorithms</p>
           <p className="text-xs text-memphis-black/50">Pick from the quick-selects above or search for any country</p>
         </div>

@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Sparkles, MessageSquare, Menu, X, Plus } from "lucide-react";
 
 // ── ChatMessage sub-component ─────────────────────────────────────────────────
 
@@ -33,8 +33,8 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
         <div className="bg-white border-3 border-memphis-black border-l-[6px] border-l-memphis-pink p-4 mb-3.5 shadow-hard relative">
           <div className="absolute -top-3 -right-3 w-4 h-4 bg-memphis-cyan border-3 border-memphis-black" />
           <div className="flex gap-2 items-center mb-2">
-            <div className="w-5 h-5 flex items-center justify-center text-[10px] shrink-0 font-black text-white border-2 border-memphis-black"
-              style={{ background: "#FF006E" }}>✦</div>
+              <div className="w-5 h-5 flex items-center justify-center text-[10px] shrink-0 font-black text-white border-2 border-memphis-black"
+                style={{ background: "#FF006E" }}><Sparkles className="w-3 h-3" /></div>
             <span className="text-[10px] text-memphis-pink font-black uppercase tracking-[0.8px]">Analysis</span>
           </div>
           <p className="text-sm text-memphis-black leading-[1.75]">{insight}</p>
@@ -73,7 +73,7 @@ function StreamingMessage({ statusText, insightSoFar }: { statusText: string; in
           <div className="absolute -top-3 -right-3 w-4 h-4 bg-memphis-cyan border-3 border-memphis-black" />
           <div className="flex gap-2 items-center mb-2">
             <div className="w-5 h-5 flex items-center justify-center text-[10px] shrink-0 font-black text-white border-2 border-memphis-black"
-              style={{ background: "#FF006E" }}>✦</div>
+              style={{ background: "#FF006E" }}><Sparkles className="w-3 h-3" /></div>
             <span className="text-[10px] text-memphis-pink font-black uppercase tracking-[0.8px]">Analysis</span>
           </div>
           <p className="text-sm text-memphis-black leading-[1.75]">
@@ -88,7 +88,7 @@ function StreamingMessage({ statusText, insightSoFar }: { statusText: string; in
       {!insightSoFar && (
         <div className="bg-white border-3 border-memphis-black border-l-[6px] border-l-memphis-cyan px-4 py-3 inline-flex gap-2.5 items-center mb-4 shadow-hard-sm">
           <div className="w-5 h-5 flex items-center justify-center text-[10px] shrink-0 font-black text-white border-2 border-memphis-black"
-            style={{ background: "#00D9FF" }}>✦</div>
+            style={{ background: "#00D9FF" }}><Sparkles className="w-3 h-3" /></div>
           <span className="text-[13px] text-memphis-black/70 font-medium">
             {statusText || "Generating charts and analysis"}
           </span>
@@ -237,10 +237,10 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
       )}>
         <div className="flex gap-1.5 mb-2.5">
           <Button variant="outline" size="sm" onClick={newChat} className="flex-1 justify-start gap-1.5 text-xs">
-            <span>✦</span> New chat
+            <Plus className="w-3.5 h-3.5" /> New chat
           </Button>
           {isMobile && (
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="text-muted-foreground text-base">✕</Button>
+            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="text-muted-foreground text-base"><X className="w-4 h-4" /></Button>
           )}
         </div>
 
@@ -250,10 +250,10 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
               <p className="text-xs text-slate-400 leading-[1.55] mb-2">
                 You're in guest mode. Chats are not saved between sessions.
               </p>
-              <a href="#" onClick={e => { e.preventDefault(); window.location.reload(); }}
-                className="text-[11px] font-bold text-primary no-underline">
-                Sign up free to save history →
-              </a>
+                <a href="#" onClick={e => { e.preventDefault(); window.location.reload(); }}
+                  className="text-[11px] font-bold text-primary no-underline">
+                  Sign up free to save history
+                </a>
             </div>
           ) : sessionsLoading ? (
             <p className="text-[11px] text-border px-0.5 py-1">Loading…</p>
@@ -299,8 +299,8 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
           {isEmpty && !loading ? (
             <div className="max-w-[640px] mx-auto pt-5 px-1 sm:px-0" style={{ animation: "fadeInUp .3s ease-out" }}>
               <div className="text-center mb-7">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-[22px] sm:text-[26px] mx-auto mb-3.5 shadow-[0_0_24px_#8B5CF644]"
-                  style={{ background: "linear-gradient(135deg,#8B5CF6,#00AAFF)" }}>💬</div>
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center mx-auto mb-3.5 shadow-[0_0_24px_#8B5CF644]"
+                  style={{ background: "linear-gradient(135deg,#8B5CF6,#00AAFF)" }}><MessageSquare className="w-6 h-6 sm:w-7 sm:h-7 text-white" /></div>
                 <h2 className="text-lg font-extrabold text-white tracking-[-0.3px] mb-2">Ask anything about any economy</h2>
                 <p className="text-[13px] text-muted-foreground leading-[1.65]">
                   Generate interactive charts and expert analysis from World Bank, IMF, UN Comtrade, and OECD data.<br />
@@ -333,7 +333,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
         <div className="border-t border-muted pt-3 shrink-0">
           <div className="max-w-[820px] mx-auto flex gap-2 px-1 sm:px-0">
             {isMobile && (
-              <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} title="Chat history" className="min-h-11 min-w-11">☰</Button>
+              <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} title="Chat history" className="min-h-11 min-w-11"><Menu className="w-4 h-4" /></Button>
             )}
             {messages.length > 0 && (
               <>
@@ -349,7 +349,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
               disabled={loading} className="flex-1 min-h-11 focus-visible:ring-accent" />
             <Button onClick={() => send(input)} disabled={loading || !input.trim()}
               className="whitespace-nowrap bg-gradient-to-br from-[#8B5CF6] to-[#6D28D9] shadow-[0_2px_10px_#8B5CF644] font-bold">
-              {loading ? "…" : "Send →"}
+              {loading ? "…" : "Send"}
             </Button>
           </div>
           <p className="text-center text-[10px] text-border mt-2">

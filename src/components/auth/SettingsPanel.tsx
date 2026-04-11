@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Button }  from "@/components/ui/button";
 import { Input }   from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Settings, MessageSquare, Send } from "lucide-react";
 
 interface Props {
   user:     User;
@@ -86,7 +86,7 @@ export default function SettingsPanel({ user, token, onClose, onLogout }: Props)
 
         {/* Header */}
         <SheetHeader className="px-5 py-3.5 border-b-4 border-memphis-black bg-memphis-offwhite flex-row items-center gap-2.5 space-y-0">
-          <div className="w-8 h-8 flex items-center justify-center text-[13px] font-black text-white border-3 border-memphis-black shadow-hard-sm" style={{ background: "#FF006E" }}>⚙</div>
+          <div className="w-8 h-8 flex items-center justify-center text-[13px] font-black text-white border-3 border-memphis-black shadow-hard-sm" style={{ background: "#FF006E" }}><Settings className="w-4 h-4" /></div>
           <SheetTitle className="text-sm font-black flex-1 uppercase tracking-wide">Account Settings</SheetTitle>
         </SheetHeader>
 
@@ -116,9 +116,12 @@ export default function SettingsPanel({ user, token, onClose, onLogout }: Props)
               <p className="text-xs text-muted-foreground/50">Loading…</p>
             ) : (
               <div className="grid grid-cols-2 gap-2.5">
-                {[["💬", "Conversations", usage.sessionCount.toString()], ["✉️", "Messages sent", usage.messageCount.toString()]].map(([icon, label, value]) => (
+                {[
+                  { Icon: MessageSquare, label: "Conversations", value: usage.sessionCount.toString() },
+                  { Icon: Send, label: "Messages sent", value: usage.messageCount.toString() },
+                ].map(({ Icon, label, value }) => (
                   <div key={label} className="bg-[#1e2130] border border-[#2d3348] rounded-lg px-3.5 py-3">
-                    <div className="text-lg mb-1">{icon}</div>
+                    <div className="mb-1"><Icon className="w-4 h-4 text-slate-300" /></div>
                     <div className="text-xl font-extrabold text-slate-100">{value}</div>
                     <div className="text-[11px] text-slate-500">{label}</div>
                   </div>

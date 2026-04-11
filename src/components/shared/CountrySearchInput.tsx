@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import type { CountrySearchResult } from "../../types";
 import { searchCountries } from "../../utils/api";
 import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
 
 interface Props {
   token:       string;
@@ -41,7 +42,7 @@ export default function CountrySearchInput({ token, onSelect, placeholder = "Sea
         placeholder={searching ? "Searching…" : placeholder}
         className="pl-9" />
       <span className="absolute left-[11px] top-1/2 -translate-y-1/2 text-sm pointer-events-none">
-        {searching ? "…" : "🔍"}
+        {searching ? "…" : <Search className="w-4 h-4 text-memphis-black/60" />}
       </span>
       {open && results.length > 0 && (
         <div className="absolute top-[calc(100%+4px)] left-0 right-0 max-h-[280px] overflow-y-auto bg-white border-3 border-memphis-black z-[100] shadow-hard">
