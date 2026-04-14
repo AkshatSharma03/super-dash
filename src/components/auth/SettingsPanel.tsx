@@ -8,7 +8,9 @@ import { getUsage } from "../../utils/api";
 import type { User } from "../../types";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Settings, MessageSquare, Send } from "lucide-react";
+import { Settings, MessageSquare, Send, CreditCard, KeyRound } from "lucide-react";
+import BillingPanel from "./BillingPanel";
+import DeveloperPanel from "./DeveloperPanel";
 
 interface Props {
   user:     User;
@@ -33,6 +35,8 @@ export default function SettingsPanel({ user, token, onClose }: Props) {
   const clerk = useClerk();
   const [usage,         setUsage]        = useState<{ sessionCount: number; messageCount: number; memberSince: string } | null>(null);
   const [usageError,    setUsageError]   = useState(false);
+  const [billingOpen,   setBillingOpen]  = useState(false);
+  const [developerOpen, setDeveloperOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,8 +123,44 @@ export default function SettingsPanel({ user, token, onClose }: Props) {
             </div>
           </Section>
 
+          <Section title="Billing">
+            <div className="border-3 border-memphis-black bg-white p-3.5 shadow-hard-sm">
+              <p className="text-xs text-memphis-black/70 mb-3">
+                Manage your subscription, upgrade or downgrade your plan, and view billing history.
+              </p>
+              <Button
+                onClick={() => setBillingOpen(true)}
+                className="w-full sm:w-auto min-h-11 gap-2"
+              >
+                <CreditCard className="w-4 h-4" />
+                Manage Plan & Billing
+              </Button>
+            </div>
+          </Section>
+
+          <Section title="Developer API">
+            <div className="border-3 border-memphis-black bg-white p-3.5 shadow-hard-sm">
+              <p className="text-xs text-memphis-black/70 mb-3">
+                Create API keys and monitor request usage for programmatic access.
+              </p>
+              <Button
+                onClick={() => setDeveloperOpen(true)}
+                className="w-full sm:w-auto min-h-11 gap-2"
+              >
+                <KeyRound className="w-4 h-4" />
+                Manage API keys
+              </Button>
+            </div>
+          </Section>
+
         </div>
       </SheetContent>
+      {billingOpen && (
+        <BillingPanel token={token} onClose={() => setBillingOpen(false)} />
+      )}
+      {developerOpen && (
+        <DeveloperPanel token={token} onClose={() => setDeveloperOpen(false)} />
+      )}
     </Sheet>
   );
 }

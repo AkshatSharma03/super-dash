@@ -3,7 +3,26 @@
 // The Express server (server.js) holds the ANTHROPIC_API_KEY; the client
 // bundle never sees it. All requests go to /api/*.
 // ─────────────────────────────────────────────────────────────────────────────
-import type { AIResponse, SearchResult, SearchHistoryEntry, SearchContextTurn, SearchSession, SearchSessionTurn, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../types";
+import type {
+  AIResponse,
+  SearchResult,
+  SearchHistoryEntry,
+  SearchContextTurn,
+  SearchSession,
+  SearchSessionTurn,
+  ParsedCSV,
+  User,
+  ChatSession,
+  ChatSessionFull,
+  CountryDataset,
+  CountrySearchResult,
+  CountryHistoryEntry,
+  DeveloperKeysResponse,
+  CreateDeveloperApiKeyResponse,
+  PublicApiCountriesResponse,
+  PublicApiCountryPayload,
+  PublicApiSeriesResponse,
+} from "../types";
 
 let authTokenGetter: null | (() => Promise<string | null>) = null;
 const API_TIMEOUT_MS = 30_000;
@@ -74,6 +93,51 @@ async function requestJSON<T>(
 
   return res.json() as Promise<T>;
  }
+
+async function requestText(
+  path: string,
+  options: {
+    method?: "GET" | "POST" | "PATCH" | "DELETE";
+    token?: string;
+    body?: unknown;
+    timeoutMs?: number;
+  } = {},
+): Promise<string> {
+  const method = options.method ?? "GET";
+  const headers: Record<string, string> = {};
+
+  if (options.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const authToken = await resolveAuthToken(options.token);
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    signal: AbortSignal.timeout(options.timeoutMs ?? API_TIMEOUT_MS),
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res));
+  }
+
+  return res.text();
+}
+
+function stringifyApiParams(params: Record<string, string | number | undefined | null>): string {
+  const entries = Object.entries(params).filter(([, value]) => value !== undefined && value !== null && `${value}`.length > 0);
+  if (!entries.length) return "";
+  const search = new URLSearchParams();
+  for (const [key, value] of entries) {
+    search.append(key, String(value));
+  }
+  return `?${search.toString()}`;
+}
 
 /** Helper: POST to an endpoint, throw on non-2xx, return typed JSON. */
 async function post<T>(path: string, body: unknown, token?: string, timeoutMs?: number): Promise<T> {
@@ -356,4 +420,147 @@ export function refreshCountryData(code: string, token: string): Promise<Country
  */
 export function getCountryHistory(token: string): Promise<CountryHistoryEntry[]> {
   return get<CountryHistoryEntry[]>("/api/country/history", token);
+}
+
+// ── Developer API key management ─────────────────────────────────────────────
+
+export interface ApiRequestParams {
+  format?: "json" | "csv";
+  search?: string;
+  countries?: string;
+  indicators?: string;
+  startYear?: number;
+  endYear?: number;
+  years?: string;
+}
+
+export function getDeveloperKeys(token: string): Promise<DeveloperKeysResponse> {
+  return get<DeveloperKeysResponse>("/api/developer/keys", token);
+}
+
+export function createDeveloperKey(token: string, name?: string): Promise<CreateDeveloperApiKeyResponse> {
+  return post<CreateDeveloperApiKeyResponse>("/api/developer/keys", { name }, token);
+}
+
+export function deleteDeveloperKey(token: string, id: string): Promise<{ ok: boolean }> {
+  return del<{ ok: boolean }>(`/api/developer/keys/${id}`, token);
+}
+
+// ── Public data API client helpers ───────────────────────────────────────────
+
+export function getApiDataCountries(token: string, options: ApiRequestParams = {}): Promise<PublicApiCountriesResponse> {
+  const q = stringifyApiParams({
+    search: options.search,
+    format: options.format,
+  });
+  return get<PublicApiCountriesResponse>(`/api/data/countries${q}`, token);
+}
+
+export function getApiDataCountriesCsv(token: string, options: ApiRequestParams = {}): Promise<string> {
+  const q = stringifyApiParams({
+    search: options.search,
+    format: "csv",
+  });
+  return requestText(`/api/data/countries${q}`, { token });
+}
+
+export function getApiDataByCountry(
+  token: string,
+  code: string,
+  options: ApiRequestParams = {},
+): Promise<PublicApiCountryPayload | string> {
+  const q = stringifyApiParams({
+    indicators: options.indicators,
+    startYear: options.startYear,
+    endYear: options.endYear,
+    years: options.years,
+    format: options.format,
+  });
+  const path = `/api/data/${code}${q}`;
+  if (options.format === "csv") {
+    return requestText(path, { token });
+  }
+  return get<PublicApiCountryPayload>(path, token);
+}
+
+export function getApiDataBatch(
+  token: string,
+  options: ApiRequestParams = {},
+): Promise<PublicApiSeriesResponse | string> {
+  const q = stringifyApiParams({
+    countries: options.countries,
+    indicators: options.indicators,
+    startYear: options.startYear,
+    endYear: options.endYear,
+    years: options.years,
+    format: options.format,
+  });
+  const path = `/api/data/batch${q}`;
+  if (options.format === "csv") {
+    return requestText(path, { token });
+  }
+  return get<PublicApiSeriesResponse>(path, token);
+}
+
+export interface SessionShare {
+  id: string;
+  shareToken: string;
+  url: string;
+  createdAt: string;
+}
+
+export interface ShareView {
+  id: string;
+  share_token: string;
+  created_at: string;
+  view_count: number;
+}
+
+export interface SharedSession {
+  title: string;
+  messages: unknown[];
+  createdAt: string;
+  updatedAt: string;
+  viewCount: number;
+}
+
+export function createSessionShare(token: string, sessionId: string): Promise<SessionShare> {
+  return post<SessionShare>(`/api/sessions/${sessionId}/share`, {}, token);
+}
+
+export function getSessionShares(token: string, sessionId: string): Promise<ShareView[]> {
+  return get<ShareView[]>(`/api/sessions/${sessionId}/shares`, token);
+}
+
+export function deleteSessionShare(token: string, sessionId: string, shareId: string): Promise<{ ok: boolean }> {
+  return requestJSON<{ ok: boolean }>(`/api/sessions/${sessionId}/shares/${shareId}`, { method: "DELETE", token });
+}
+
+export function getSharedSession(shareToken: string): Promise<SharedSession> {
+  return get<SharedSession>(`/api/share/${shareToken}`);
+}
+
+export interface CustomMetric {
+  id: string;
+  name: string;
+  expression: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function getCustomMetrics(token: string): Promise<CustomMetric[]> {
+  return get<CustomMetric[]>("/api/metrics", token);
+}
+
+export function createCustomMetric(token: string, name: string, expression: string, description?: string): Promise<CustomMetric> {
+  return post<CustomMetric>("/api/metrics", { name, expression, description }, token);
+}
+
+export function updateCustomMetric(token: string, id: string, data: Partial<{ name: string; expression: string; description: string }>): Promise<CustomMetric> {
+  return requestJSON<CustomMetric>(`/api/metrics/${id}`, { method: "PATCH", token, body: data });
+}
+
+export function deleteCustomMetric(token: string, id: string): Promise<{ ok: boolean }> {
+  return requestJSON<{ ok: boolean }>(`/api/metrics/${id}`, { method: "DELETE", token });
 }

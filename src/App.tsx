@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { getCountryData, refreshCountryData, logoutApi, setAuthTokenGetter } from "./utils/api";
 import { identifyUser, resetUser, track } from "./analytics";
-import { BarChart3, MessageSquare, Search, Database, LineChart, Download, Menu, X, ChevronDown } from "lucide-react";
+import { BarChart3, MessageSquare, Search, Database, LineChart, Download, Menu, X, ChevronDown, BookOpen } from "lucide-react";
 
 const AuthPage = lazy(() => import("./components/auth/AuthPage"));
 const SettingsPanel = lazy(() => import("./components/auth/SettingsPanel"));
@@ -19,6 +19,7 @@ const SearchMode = lazy(() => import("./components/modes/SearchMode"));
 const DataMode = lazy(() => import("./components/modes/DataMode"));
 const AnalyticsMode = lazy(() => import("./components/modes/AnalyticsMode"));
 const ExportMode = lazy(() => import("./components/modes/ExportMode"));
+const MethodologyMode = lazy(() => import("./components/modes/MethodologyMode"));
 
 const MODES: { mode: Mode; label: string; Icon: ComponentType<{ className?: string }> }[] = [
   { mode: "chat", label: "AI Chat", Icon: MessageSquare },
@@ -26,6 +27,7 @@ const MODES: { mode: Mode; label: string; Icon: ComponentType<{ className?: stri
   { mode: "data", label: "Data", Icon: Database },
   { mode: "analytics", label: "Analytics", Icon: LineChart },
   { mode: "dashboard", label: "Country Data", Icon: BarChart3 },
+  { mode: "methodology", label: "Methodology", Icon: BookOpen },
   { mode: "export", label: "Export", Icon: Download },
 ];
 
@@ -36,6 +38,7 @@ const MODE_META: Record<Mode, { label: string; desc: string; color: string; bg: 
   data:      { label: "Data Upload",   color: "#FB5607", bg: "#FB5607", desc: "Upload a CSV file · Claude analyses your data and creates charts automatically" },
   analytics: { label: "Analytics",     color: "#FFBE0B", bg: "#FFBE0B", desc: "Algorithms from scratch: OLS Regression · HHI Concentration · K-Means Clustering · Z-Score Anomaly Detection" },
   dashboard: { label: "Country Data",  color: "#8338EC", bg: "#8338EC", desc: "Select any country — real GDP & trade data from World Bank, cached locally · sector breakdown AI-estimated" },
+  methodology: { label: "Methodology",  color: "#10B981", bg: "#10B981", desc: "Explore how each algorithm works — formulas, parameters, assumptions, and references" },
   export:    { label: "Export",        color: "#00F5D4", bg: "#00F5D4", desc: "Download data as CSV / JSON · Generate standalone HTML reports with embedded SVG charts · Print to PDF" },
 };
 
@@ -52,7 +55,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isMobile = useMobile();
 
-  const MOBILE_PRIMARY_MODES: Mode[] = ["chat", "search", "data", "analytics", "dashboard"];
+  const MOBILE_PRIMARY_MODES: Mode[] = ["chat", "search", "data", "analytics", "dashboard", "methodology"];
 
   const switchMode = (nextMode: Mode) => {
     setMode(nextMode);
@@ -434,13 +437,18 @@ export default function App() {
                 <ExportMode dashDataset={countryData} analyticsDataset={analyticsData} />
               </div>
             )}
+            {mode === "methodology" && (
+              <div className="max-w-[1100px] mx-auto">
+                <MethodologyMode />
+              </div>
+            )}
           </Suspense>
         </div>
       </main>
 
       {isMobile && (
         <nav className="fixed bottom-0 left-0 right-0 z-[110] bg-white border-t-3 border-memphis-black px-1 pt-1 pb-[max(8px,env(safe-area-inset-bottom))]">
-          <div className="grid grid-cols-5 gap-1">
+          <div className="grid grid-cols-3 gap-1">
             {MOBILE_PRIMARY_MODES.map((m) => {
               const def = MODES.find((modeDef) => modeDef.mode === m);
               const Icon = def?.Icon ?? BarChart3;

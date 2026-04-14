@@ -129,3 +129,22 @@ export const UpdateSearchSessionSchema = z.object({
 export const CountrySearchQuerySchema = z.object({
   q: z.string().min(2, 'q must be at least 2 characters').max(100),
 });
+
+export const DataApiSchema = z.object({
+  search: z.string().trim().min(2, 'search must be at least 2 characters').max(100).optional(),
+  code: z.string().trim().min(2, 'code is required').max(3).optional(),
+  indicators: z.string().trim().max(120).optional(),
+  start_year: z.coerce.number().int().min(1960).max(2500).optional(),
+  end_year: z.coerce.number().int().min(1960).max(2500).optional(),
+  years: z.string().trim().min(5, 'years must be like 2020:2024').max(15).regex(/^\d{4}\s*:\s*\d{4}$/, 'years must be yyyy:yyyy').optional(),
+  countries: z.string().trim().max(120).optional(),
+  format: z.enum(['json', 'csv']).optional(),
+});
+
+export const ApiKeyCreateSchema = z.object({
+  name: z.string().min(1, 'name is required').max(60).optional(),
+});
+
+export const ApiKeyDeleteSchema = z.object({
+  id: z.string().min(1, 'id is required'),
+});

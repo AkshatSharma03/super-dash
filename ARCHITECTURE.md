@@ -54,22 +54,28 @@ super-dash/
 │   │   ├── hhi.ts              # Herfindahl-Hirschman Index
 │   │   ├── anomaly.ts          # Z-score anomaly detection
 │   │   ├── kmeans.ts           # K-Means++ clustering
-│   │   └── trie.ts             # Trie autocomplete (O(m) prefix search)
+│   │   ├── trie.ts             # Trie autocomplete (O(m) prefix search)
+│   │   └── expressionEvaluator.ts # Custom metric expression parser & evaluator
 │   ├── components/
 │   │   ├── auth/
 │   │   │   ├── AuthPage.tsx        # Login/register landing page
-│   │   │   └── SettingsPanel.tsx   # Account settings slide-in drawer
+│   │   │   ├── SettingsPanel.tsx   # Account settings + billing slide-in drawer
+│   │   │   └── BillingPanel.tsx    # Free/Pro/Enterprise pricing + Stripe checkout
 │   │   ├── shared/
 │   │   │   └── CountrySearchInput.tsx  # Debounced search input with dropdown
-│   │   ├── modes/              # 6 main feature modes
+│   │   ├── modes/              # Feature modes
 │   │   │   ├── ChatMode.tsx
 │   │   │   ├── SearchMode.tsx
 │   │   │   ├── DataMode.tsx
 │   │   │   ├── DashboardMode.tsx
 │   │   │   ├── AnalyticsMode.tsx
-│   │   │   └── ExportMode.tsx
+│   │   │   ├── ExportMode.tsx
+│   │   │   └── MethodologyMode.tsx    # Algorithm documentation (formulas, assumptions, references)
 │   │   └── ui/
 │   │       ├── index.tsx       # Custom primitives: Btn, KPI, Card, AnalyticsCard, Stat, DynChart, MarkdownText, SourceList, ChartCard
+│   │       ├── DataQualityHeatmap.tsx # Years-vs-indicators data coverage grid
+│   │       ├── ShareButton.tsx  # Create/copy shareable session links
+│   │       ├── MetricBuilder.tsx # Custom metric expression builder with live preview
 │   │       ├── alert.tsx       # shadcn Alert (destructive / success / warning variants)
 │   │       ├── badge.tsx       # shadcn Badge
 │   │       ├── button.tsx      # shadcn Button
@@ -208,7 +214,7 @@ The CSV parser in `src/utils/csv.ts` is a hand-written state machine that handle
 **Why**: Most JS CSV libraries add unnecessary weight; this is ~100 lines, fully tested, and precisely scoped to what the app needs.
 
 ### 8. Mode-Based State Architecture
-`App.tsx` holds the selected country dataset in top-level state. All six modes read from this shared state. When you fetch a country in Dashboard mode and switch to Analytics mode, the data is already there.
+`App.tsx` holds the selected country dataset in top-level state. All modes read from this shared state. When you fetch a country in Dashboard mode and switch to Analytics mode, the data is already there.
 
 **Why**: Avoids redundant API calls. Country data is expensive to fetch; fetching it once and sharing it is the right tradeoff.
 
@@ -287,6 +293,26 @@ If `KIMI_API_KEY` is not set, or if the Kimi call fails (network error, timeout,
 - CI: GitHub Actions runs typecheck + tests + build on every push (Node 20 & 22)
 
 ---
+
+## Implemented Features (Post-v2.0)
+
+### Phase 1: MVP + Monetization — SHIPPED
+
+- **Methodology Mode** (`MethodologyMode.tsx`): Full documentation for all 8 algorithms — LaTeX formulas, parameters, assumptions, data quality notes, and paper references. Uses `react-katex`.
+- **Data Quality Heatmap** (`DataQualityHeatmap.tsx`): Years-vs-indicators grid in Dashboard Mode showing data completeness (complete/partial/estimated/missing) with tooltips and stats.
+- **Shareable Session Links**: `session_shares` table, `POST/GET/DELETE /api/sessions/:id/share`, `GET /api/share/:token` (public), `ShareButton.tsx` component in ChatMode.
+- **Stripe Billing**: `subscriptions` table, checkout/portal/cancel/webhook endpoints, `BillingPanel.tsx` with Free/Pro/Enterprise pricing cards. `SettingsPanel.tsx` has "Manage Plan & Billing" button. Graceful fallback if Stripe is not configured. Plan limit enforcement via `checkPlanLimit()`.
+
+### Phase 2.1: Custom Metric Builder — SHIPPED
+
+- **Expression Evaluator** (`expressionEvaluator.ts`): Tokenizer, shunting-yard parser, and evaluator supporting `(A - B) / C * 100` style expressions. Validates parentheses, unknown variables, division by zero.
+- **Custom Metrics API**: `custom_metrics` table, CRUD endpoints (`GET/POST/PATCH/DELETE /api/metrics`), plan-limited (free=0, pro=5).
+- **MetricBuilder UI** (`MetricBuilder.tsx`): Variable keyboard, live Recharts preview, saved metrics list, load/delete. Integrated into AnalyticsMode.
+- **Known Variables**: gdp, gdp_growth, gdp_per_capita, exports, imports, trade_balance, trade_openness.
+
+### Remaining Roadmap
+
+See `ROADMAP.md` for the full feature backlog and implementation status.
 
 ## Scopes for Improvement
 

@@ -8,6 +8,7 @@ import { useMobile } from "../../utils/useMobile";
 import { askClaudeStream, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
 import type { Message, AIResponse, ChatSession } from "../../types";
 import { ChartCard, SourceList, MarkdownText } from "../ui";
+import ShareButton from "../ui/ShareButton";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -353,6 +354,9 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
                 <Button variant="outline" size="sm" onClick={exportConversation} className="whitespace-nowrap" title="Export conversation as PDF/HTML report with charts and citations">
                   Export ↓
                 </Button>
+                {!isGuest && activeSessionId && (
+                  <ShareButton token={token} sessionId={activeSessionId} />
+                )}
               </>
             )}
             <Input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}

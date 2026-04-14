@@ -53,10 +53,95 @@ export interface AIResponse {
   error?: string;
 }
 
+/** API key row returned from /api/developer/keys. */
+export interface DeveloperApiKey {
+  id: string;
+  name: string;
+  keyPreview: string;
+  rateLimit: number | null;
+  callsThisMonth: number;
+  callsRemaining: number | null;
+  monthKey: string;
+  lastUsedAt: string | null;
+  createdAt: string;
+}
+
+/** API key management response from /api/developer/keys. */
+export interface DeveloperKeysResponse {
+  planLimit: number | null;
+  keys: DeveloperApiKey[];
+}
+
+/** Response from POST /api/developer/keys (includes one-time secret key). */
+export interface CreateDeveloperApiKeyResponse extends DeveloperApiKey {
+  key: string;
+}
+
 // Chat message union — user sends plain text; assistant responds with AIResponse.
 export interface UserMessage      { role: "user";      content: string; }
 export interface AssistantMessage { role: "assistant"; content: AIResponse; }
 export type Message = UserMessage | AssistantMessage;
+
+/** Public API list endpoint response shape. */
+export interface PublicApiCountry {
+  code: string;
+  alpha3: string;
+  name: string;
+  flag: string;
+  region: string;
+}
+
+export interface PublicApiCountriesResponse {
+  query: string | null;
+  count: number;
+  countries: PublicApiCountry[];
+}
+
+/** Public API country payload used by /api/data/:code and /api/data/batch. */
+export interface PublicApiDataPoint {
+  year: number;
+  value: number;
+}
+
+export interface PublicApiIndicatorSeries {
+  label: string;
+  unit: string;
+  data: PublicApiDataPoint[];
+}
+
+export interface PublicApiCountryData {
+  code: string;
+  alpha3: string;
+  name: string;
+  flag: string;
+  region: string;
+}
+
+export interface PublicApiCountryPayload {
+  country: PublicApiCountryData;
+  period: {
+    startYear: number;
+    endYear: number;
+  };
+  indicators: Record<string, PublicApiIndicatorSeries>;
+}
+
+export interface PublicApiBatchFailure {
+  code: string;
+  error: string;
+}
+
+export interface PublicApiSeriesResponse {
+  period: {
+    startYear: number;
+    endYear: number;
+  };
+  requestedIndicators: string[];
+  requestedCountries: string[];
+  countries: PublicApiCountryPayload[];
+  failed: PublicApiBatchFailure[];
+  invalid: string[];
+}
 
 /** A single source returned by /api/search. url is null for model-knowledge results. */
 export interface SearchSource { title: string; url: string | null; }
@@ -133,6 +218,16 @@ export interface CountryGDPEntry {
 export interface CountryPieEntry { name: string; value: number; }
 export interface CountryKPIEntry { label: string; value: string; sub: string; trend: string | null; color: string; }
 
+export type DataQualityStatus = "complete" | "partial" | "missing" | "estimated";
+
+export interface DataQualityCell {
+  year: number;
+  indicator: string;
+  indicatorLabel: string;
+  status: DataQualityStatus;
+  value: string;
+}
+
 /** Full dataset for one country — consumed by DashboardMode. */
 export interface CountryDataset {
   code: string;
@@ -158,8 +253,8 @@ export interface CountryHistoryEntry { code: string; name: string; flag: string;
 
 // ── App types ─────────────────────────────────────────────────────────────────
 
-/** The six top-level navigation modes. */
-export type Mode = "dashboard" | "chat" | "search" | "data" | "analytics" | "export";
+/** The top-level navigation modes. */
+export type Mode = "dashboard" | "chat" | "search" | "data" | "analytics" | "export" | "methodology";
 
 /** Header strip metadata for the currently active mode. */
 export interface ModeMeta { label: string; desc: string; color: string; }

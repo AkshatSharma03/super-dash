@@ -23,6 +23,7 @@ import { Badge }  from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2, Globe2, RefreshCw } from "lucide-react";
+import DataQualityHeatmap from "../ui/DataQualityHeatmap";
 
 
 const DASH_TABS = ["GDP", "Exports", "Imports", "Trade Balance"] as const;
@@ -43,6 +44,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
   const [tab,       setTab]       = useState<DashTab>("GDP");
   const [yearRange, setYearRange] = useState<[number, number]>([2010, 2024]);
   const [history,   setHistory]   = useState<CountryHistoryEntry[]>([]);
+  const [showQuality, setShowQuality] = useState(false);
 
   // ── Load fetch history on mount and whenever the loaded country changes ──────
   useEffect(() => {
@@ -233,10 +235,19 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
           {dataset._meta?.stale && <Badge variant="warning">⚠ Stale cache</Badge>}
           <span className="text-[11px] text-slate-600">{dataset._meta?.sources.join(" · ")}</span>
           <span className="ml-auto text-[11px] text-slate-700">Cached {cachedAgo}</span>
+          <Button variant="outline" size="sm" onClick={() => setShowQuality(v => !v)} className="text-xs">
+            <span className="inline-flex items-center gap-1.5">📋 Data Quality</span>
+          </Button>
           <Button variant="outline" size="sm" onClick={onRefresh} className="text-xs hover:text-primary hover:border-primary/50">
             <span className="inline-flex items-center gap-1.5"><RefreshCw className="w-3.5 h-3.5" /> Refresh</span>
           </Button>
         </div>
+
+        {showQuality && (
+          <div className="mb-4">
+            <DataQualityHeatmap dataset={dataset} />
+          </div>
+        )}
 
         {/* KPI row */}
         <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(auto-fit,minmax(140px,1fr))" }}>

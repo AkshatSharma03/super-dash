@@ -26,6 +26,9 @@ import {
   CreateSessionSchema, UpdateSessionSchema,
   CreateSearchSessionSchema, UpdateSearchSessionSchema,
   CountrySearchQuerySchema,
+  DataApiSchema,
+  ApiKeyCreateSchema,
+  ApiKeyDeleteSchema,
 } from './schemas.js';
 
 countries.registerLocale(enLocale);
@@ -252,11 +255,75 @@ db.exec(`
     used       INTEGER NOT NULL DEFAULT 0
   );
 
-  CREATE TABLE IF NOT EXISTS revoked_tokens (
+CREATE TABLE IF NOT EXISTS revoked_tokens (
     jti        TEXT PRIMARY KEY,
     expires_at INTEGER NOT NULL
   );
-`);
+
+  CREATE TABLE IF NOT EXISTS session_shares (
+    id         TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    share_token TEXT UNIQUE NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT,
+    view_count INTEGER NOT NULL DEFAULT 0
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_shares_token ON session_shares(share_token);
+
+  CREATE TABLE IF NOT EXISTS subscriptions (
+    id                     TEXT PRIMARY KEY,
+    user_id                TEXT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    stripe_customer_id     TEXT UNIQUE NOT NULL,
+    stripe_subscription_id TEXT,
+    plan                   TEXT NOT NULL DEFAULT 'free',
+    status                 TEXT NOT NULL DEFAULT 'active',
+    current_period_end     INTEGER,
+    created_at             TEXT NOT NULL,
+    updated_at             TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
+
+  CREATE TABLE IF NOT EXISTS custom_metrics (
+    id          TEXT PRIMARY KEY,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    expression  TEXT NOT NULL,
+    description TEXT,
+    created_at  TEXT NOT NULL,
+    updated_at  TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_custom_metrics_user ON custom_metrics(user_id);
+
+  CREATE TABLE IF NOT EXISTS api_keys (
+    id           TEXT PRIMARY KEY,
+    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key_hash     TEXT NOT NULL UNIQUE,
+    key_preview  TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    rate_limit   INTEGER NOT NULL,
+    calls_this_month INTEGER NOT NULL DEFAULT 0,
+    month_key    TEXT,
+    last_used_at INTEGER,
+    created_at   TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
+ `);
+
+function ensureApiKeyColumns() {
+  const cols = db.prepare('PRAGMA table_info(api_keys)').all().map((row) => row.name);
+  if (!cols.includes('calls_this_month')) {
+    db.exec('ALTER TABLE api_keys ADD COLUMN calls_this_month INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!cols.includes('month_key')) {
+    db.exec('ALTER TABLE api_keys ADD COLUMN month_key TEXT');
+  }
+}
+
+ensureApiKeyColumns();
 
 // ── Prepared statements ──────────────────────────────────────────────────────
 const stmtCountry = {
@@ -274,6 +341,31 @@ const stmt = {
   insertSession:   db.prepare('INSERT INTO chat_sessions (id, user_id, title, messages, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
   updateSession:   db.prepare('UPDATE chat_sessions SET messages = ?, title = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
   deleteSession:   db.prepare('DELETE FROM chat_sessions WHERE id = ? AND user_id = ?'),
+
+  shareByToken:      db.prepare('SELECT * FROM session_shares WHERE share_token = ?'),
+  sharesBySession:   db.prepare('SELECT id, share_token, created_at, view_count FROM session_shares WHERE session_id = ?'),
+  insertShare:       db.prepare('INSERT INTO session_shares (id, session_id, share_token, created_at, expires_at, view_count) VALUES (?, ?, ?, ?, ?, 0)'),
+  deleteShare:       db.prepare('DELETE FROM session_shares WHERE id = ? AND session_id IN (SELECT id FROM chat_sessions WHERE user_id = ?)'),
+  incrementViewCount: db.prepare('UPDATE session_shares SET view_count = view_count + 1 WHERE share_token = ?'),
+
+  subscriptionByUser:       db.prepare('SELECT * FROM subscriptions WHERE user_id = ?'),
+  subscriptionByCustomerId: db.prepare('SELECT * FROM subscriptions WHERE stripe_customer_id = ?'),
+  subscriptionBySubId:      db.prepare('SELECT * FROM subscriptions WHERE stripe_subscription_id = ?'),
+  insertSubscription:       db.prepare('INSERT INTO subscriptions (id, user_id, stripe_customer_id, stripe_subscription_id, plan, status, current_period_end, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'),
+  updateSubscription:       db.prepare('UPDATE subscriptions SET plan = ?, status = ?, stripe_subscription_id = ?, current_period_end = ?, updated_at = ? WHERE user_id = ?'),
+  deleteSubscription:       db.prepare('DELETE FROM subscriptions WHERE user_id = ?'),
+
+  metricsByUser:    db.prepare('SELECT * FROM custom_metrics WHERE user_id = ? ORDER BY created_at DESC'),
+  metricById:       db.prepare('SELECT * FROM custom_metrics WHERE id = ? AND user_id = ?'),
+  insertMetric:     db.prepare('INSERT INTO custom_metrics (id, user_id, name, expression, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+  updateMetric:     db.prepare('UPDATE custom_metrics SET name = ?, expression = ?, description = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
+  deleteMetric:     db.prepare('DELETE FROM custom_metrics WHERE id = ? AND user_id = ?'),
+  apiKeysByUser:        db.prepare('SELECT id, name, key_preview, rate_limit, calls_this_month, month_key, last_used_at, created_at FROM api_keys WHERE user_id = ? ORDER BY created_at DESC'),
+  apiKeyByIdAndUser:    db.prepare('SELECT * FROM api_keys WHERE id = ? AND user_id = ?'),
+  apiKeyByHash:         db.prepare('SELECT * FROM api_keys WHERE key_hash = ?'),
+  insertApiKey:         db.prepare('INSERT INTO api_keys (id, user_id, key_hash, key_preview, name, rate_limit, calls_this_month, month_key, last_used_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
+  updateApiKeyUsage:    db.prepare('UPDATE api_keys SET calls_this_month = ?, month_key = ?, last_used_at = ? WHERE id = ?'),
+  deleteApiKey:         db.prepare('DELETE FROM api_keys WHERE id = ? AND user_id = ?'),
   searchHistoryByUser: db.prepare('SELECT id, query, created_at AS createdAt, updated_at AS updatedAt FROM search_history WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?'),
   searchHistoryByQuery: db.prepare('SELECT * FROM search_history WHERE user_id = ? AND lower(query) = lower(?) LIMIT 1'),
   insertSearchHistory: db.prepare('INSERT INTO search_history (id, user_id, query, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'),
@@ -333,6 +425,102 @@ function validateAIResponse(parsed) {
     sources,
     followUps: Array.isArray(parsed.followUps)        ? parsed.followUps : [],
   };
+}
+
+const API_INDICATORS = {
+  gdp: 'NY.GDP.MKTP.CD',
+  gdp_growth: 'NY.GDP.MKTP.KD.ZG',
+  gdppercapita: 'NY.GDP.PCAP.CD',
+  gdp_per_capita: 'NY.GDP.PCAP.CD',
+  exports: 'NE.EXP.GNFS.CD',
+  imports: 'NE.IMP.GNFS.CD',
+  trade_openness: 'custom:trade_openness',
+};
+
+const API_INDICATOR_LABELS = {
+  gdp: 'GDP (current USD)',
+  gdp_growth: 'GDP growth (%)',
+  gdp_per_capita: 'GDP per capita (USD)',
+  exports: 'Exports (current USD)',
+  imports: 'Imports (current USD)',
+  trade_openness: 'Trade openness (%)',
+};
+
+function normalizeIndicatorKey(input) {
+  return String(input || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+}
+
+function normalizeApiCountries(raw) {
+  return (raw || '').split(',')
+    .map((item) => item.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''))
+    .filter(Boolean);
+}
+
+function isISO3(code) {
+  return /^[A-Z]{3}$/.test(code);
+}
+
+function toISO2(code) {
+  if (isISO3(code)) {
+    const alpha2 = countries.alpha3ToAlpha2(code);
+    return alpha2 || code;
+  }
+  return code;
+}
+
+function monthBucket(date = new Date()) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+}
+
+function getApiMonthlyLimitForUser(userId) {
+  const plan = getPlanForUser(userId);
+  const planLimits = {
+    free: 500,
+    pro: 5000,
+    enterprise: Number.POSITIVE_INFINITY,
+  };
+  return planLimits[plan] ?? 500;
+}
+
+async function authenticateApiKey(req, res, nextMiddleware) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!token || !token.startsWith('ec_')) return res.status(401).json({ error: 'Invalid or missing API key' });
+
+  const hashed = createHash('sha256').update(token).digest('hex');
+  const row = stmt.apiKeyByHash.get(hashed);
+  if (!row) return res.status(401).json({ error: 'Invalid or missing API key' });
+
+  const userPlanLimit = getApiMonthlyLimitForUser(row.user_id);
+  const configuredLimit = Number.isFinite(row.rate_limit) ? row.rate_limit : 0;
+  const effectiveLimit = Number.isFinite(configuredLimit) && configuredLimit > 0
+    ? configuredLimit
+    : userPlanLimit;
+
+  const nowBucket = monthBucket();
+  const monthBucketForKey = row.month_key === nowBucket ? nowBucket : nowBucket;
+  const previousMonthKey = row.month_key || nowBucket;
+  const callsUsed = previousMonthKey === nowBucket ? (row.calls_this_month || 0) : 0;
+
+  const limit = Math.min(userPlanLimit, effectiveLimit);
+
+  if (limit !== Number.POSITIVE_INFINITY && callsUsed >= limit) {
+    return res.status(429).json({ error: `API rate limit exceeded for this month (${limit} calls).` });
+  }
+
+  const nextUsageCount = callsUsed + 1;
+  stmt.updateApiKeyUsage.run(nextUsageCount, monthBucketForKey, Date.now(), row.id);
+
+  const remaining = limit === Number.POSITIVE_INFINITY ? Number.POSITIVE_INFINITY : Math.max(limit - nextUsageCount, 0);
+  req.apiKey = row;
+  req.apiKey.callsRemaining = remaining;
+  req.apiKey.callsThisMonth = nextUsageCount;
+  req.apiKey.month_key = monthBucketForKey;
+  req.apiKey.monthlyLimit = limit;
+  return nextMiddleware();
 }
 
 // ── Semantic query normalisation for cache keys ───────────────────────────────
@@ -1406,6 +1594,215 @@ async function fetchWorldBankIndicator(countryCodes, indicator, startYear, endYe
   return result;
 }
 
+function parseYears(rawStart, rawEnd) {
+  const now = new Date();
+  const endYear = Math.min(now.getUTCFullYear(), Number.parseInt(rawEnd, 10) || now.getUTCFullYear());
+  const startYear = Number.parseInt(rawStart, 10) || 2010;
+  const finalStart = Math.max(1960, Math.min(startYear, endYear));
+  return { startYear: finalStart, endYear };
+}
+
+function parseApiYears(rawStart, rawEnd, rawYears) {
+  if (typeof rawYears === 'string') {
+    const normalized = rawYears.replace(/\s+/g, '');
+    const match = /^([0-9]{4}):([0-9]{4})$/.exec(normalized);
+    if (match) {
+      return parseYears(match[1], match[2]);
+    }
+  }
+
+  return parseYears(rawStart, rawEnd);
+}
+
+function formatRateLimit(limit) {
+  return Number.isFinite(limit) ? String(limit) : 'unlimited';
+}
+
+function normalizedRateValue(value) {
+  return Number.isFinite(value) ? value : null;
+}
+
+function csvEscape(value) {
+  const s = value === null || value === undefined ? '' : String(value);
+  if (/[",\n]/.test(s)) {
+    return `"${s.replace(/"/g, '""')}"`;
+  }
+  return s;
+}
+
+function toCsvString(rows) {
+  if (!rows.length) return '';
+  const headers = Object.keys(rows[0]);
+  const headerLine = headers.map(csvEscape).join(',');
+  const lines = rows.map((row) => headers.map(h => csvEscape(row[h])).join(','));
+  return `${headerLine}\n${lines.join('\n')}`;
+}
+
+function buildApiCountrySeriesRows(countryPayload) {
+  const { meta, series } = countryPayload;
+  const rows = [];
+  const indicators = Object.keys(series || {});
+
+  for (const indicatorKey of indicators) {
+    const label = API_INDICATOR_LABELS[indicatorKey] || indicatorKey;
+    for (const point of series[indicatorKey] || []) {
+      if (!Number.isFinite(point.year) || !Number.isFinite(point.value)) continue;
+      rows.push({
+        country_code: meta.code,
+        country_name: meta.name,
+        country_alpha3: meta.alpha3,
+        indicator: indicatorKey,
+        indicator_name: label,
+        year: point.year,
+        value: point.value,
+      });
+    }
+  }
+
+  return rows;
+}
+
+function parseIndicatorKeys(raw) {
+  const parsed = String(raw || 'gdp,exports,imports,gdp_growth,gdp_per_capita')
+    .split(',')
+    .map(normalizeIndicatorKey)
+    .filter(Boolean);
+  const keys = [];
+  for (const k of parsed) {
+    const key = k === 'tradeopenness' ? 'trade_openness' : k;
+    if (API_INDICATORS[key] && !keys.includes(key)) keys.push(key);
+  }
+  return keys;
+}
+
+function normalizeCountryCode(raw) {
+  const candidate = raw.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!candidate) return '';
+  if (countries.isValid(candidate)) return candidate;
+  const alpha2 = countries.getAlpha2Code?.(candidate, 'en');
+  if (alpha2) return alpha2;
+  return candidate;
+}
+
+function buildCountryMeta(code) {
+  const alpha2 = normalizeCountryCode(code);
+  const alpha3 = countries.alpha2ToAlpha3(alpha2) || alpha2;
+  const name = countries.getName(alpha2, 'en') || alpha2;
+  const region = 'Unknown';
+  return {
+    code: alpha2,
+    alpha3,
+    name,
+    flag: iso2ToFlag(alpha2),
+    region,
+  };
+}
+
+async function buildApiSeriesForCountry(code, indicatorKeys, startYear, endYear) {
+  const meta = buildCountryMeta(code);
+  const iso2 = meta.code;
+  const wbCodes = [iso2];
+  const rowsByIndicator = {};
+
+  const sourceRows = await Promise.all(indicatorKeys.map(async (indicatorKey) => {
+    const mapTo = API_INDICATORS[indicatorKey];
+    if (!mapTo) return { indicatorKey, rows: [] };
+
+    if (mapTo.startsWith('custom:')) {
+      return { indicatorKey, rows: [] };
+    }
+
+    const rows = await fetchWorldBankIndicator(wbCodes, mapTo, startYear, endYear);
+    return { indicatorKey, rows };
+  }));
+
+  const yearSet = new Set();
+  for (const item of sourceRows) {
+    for (const row of item.rows) yearSet.add(row.year);
+  }
+
+  const hasDerived = indicatorKeys.includes('trade_openness');
+  if (hasDerived) {
+    const importsRows = rowsByKey(sourceRows, 'imports');
+    const exportsRows = rowsByKey(sourceRows, 'exports');
+    const gdpRows = rowsByKey(sourceRows, 'gdp');
+    for (const r of [...importsRows, ...exportsRows, ...gdpRows]) yearSet.add(r.year);
+    const importMap = rowsToMap(importsRows);
+    const exportMap = rowsToMap(exportsRows);
+    const gdpMap = rowsToMap(gdpRows);
+    for (const year of yearSet) {
+      const imports = importMap.get(year);
+      const exports = exportMap.get(year);
+      const gdp = gdpMap.get(year);
+      if (imports != null && exports != null && gdp && gdp !== 0) {
+        sourceRows.push({
+          indicatorKey: 'trade_openness',
+          rows: [{
+            country: meta.name,
+            countryCode: meta.code,
+            year,
+            value: ((exports + imports) / gdp) * 100,
+            indicator: 'trade_openness',
+            indicatorName: API_INDICATOR_LABELS.trade_openness,
+          }],
+        });
+      }
+    }
+  }
+
+  const series = {};
+  for (const { indicatorKey, rows } of sourceRows) {
+    if (!rows.length) continue;
+    rowsByIndicator[indicatorKey] = rows
+      .map((row) => ({ year: row.year, value: Number(row.value) }))
+      .filter((row) => Number.isFinite(row.year) && Number.isFinite(row.value))
+      .sort((a, b) => a.year - b.year);
+    if (!rowsByIndicator[indicatorKey].length) continue;
+    series[indicatorKey] = rowsByIndicator[indicatorKey];
+  }
+
+  return { meta, series };
+}
+
+function rowsByKey(sourceRows, key) {
+  const match = sourceRows.find(item => item.indicatorKey === key);
+  return match?.rows ?? [];
+}
+
+function rowsToMap(rows) {
+  const m = new Map();
+  for (const row of rows) {
+    m.set(row.year, Number(row.value));
+  }
+  return m;
+}
+
+async function fetchWorldBankCountryCatalog() {
+  const ck = 'wb_country_catalog_v1';
+  const cached = rawDataCache.get(ck);
+  if (cached) return cached;
+
+  const res = await fetch('https://api.worldbank.org/v2/country?format=json&per_page=500', { signal: AbortSignal.timeout(12_000) });
+  if (!res.ok) {
+    throw new Error(`World Bank country list HTTP ${res.status}`);
+  }
+
+  const json = await res.json();
+  const countriesPayload = Array.isArray(json) ? json[1] : [];
+  const rows = (countriesPayload || [])
+    .filter(c => typeof c === 'object' && c.region?.id !== 'NA' && typeof c.iso2Code === 'string' && c.iso2Code.length === 2)
+    .map(c => ({
+      code: c.iso2Code,
+      alpha3: c.iso3Code || c.iso2Code,
+      name: c.name,
+      flag: iso2ToFlag(c.iso2Code),
+      region: c.region?.value || 'Unknown',
+    }));
+
+  rawDataCache.put(ck, rows, RAW_DATA_TTL_MS);
+  return rows;
+}
+
 /**
  * Fetch cross-country indicator data from the IMF DataMapper API.
  * Returns sorted array of { countryCode, year, value }.
@@ -1450,6 +1847,90 @@ async function fetchFREDSeries(seriesId, startYear, endYear) {
     .filter(o => o.value !== '.' && o.value !== null)
     .map(o => ({ year: parseInt(o.date, 10), value: parseFloat(o.value) }))
     .sort((a, b) => a.year - b.year);
+}
+
+function applyApiRateHeaders(res, apiKey) {
+  if (!apiKey) return;
+  res.setHeader('X-RateLimit-Limit', formatRateLimit(apiKey.monthlyLimit));
+  res.setHeader('X-RateLimit-Remaining', formatRateLimit(apiKey.callsRemaining));
+  res.setHeader('X-RateLimit-Period', `month:${apiKey.month_key || monthBucket()}`);
+}
+
+function sendApiDataResponse(res, req, payload, format) {
+  const requestedFormat = format === 'csv' ? 'csv' : 'json';
+  applyApiRateHeaders(res, req.apiKey);
+
+  if (requestedFormat === 'csv') {
+    const filename = `econchart_data_${Date.now()}.csv`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    return res.send(payload);
+  }
+
+  const wrapped = payload && typeof payload === 'object'
+    ? {
+      ...payload,
+      _meta: {
+        ...(payload._meta || {}),
+        apiKeyCallsRemaining: normalizedRateValue(req.apiKey?.callsRemaining),
+        apiKeyMonthlyLimit: normalizedRateValue(req.apiKey?.monthlyLimit),
+        apiKeyMonth: req.apiKey?.month_key,
+      },
+    }
+    : payload;
+
+  res.json(wrapped);
+}
+
+function buildApiIndicatorRows(indicatorKeys, series) {
+  const rows = {};
+  for (const key of indicatorKeys) {
+    const data = series[key] || [];
+    rows[key] = {
+      label: API_INDICATOR_LABELS[key] || key,
+      unit: 'value',
+      data,
+    };
+  }
+  return rows;
+}
+
+function buildApiCountryPayload(seriesResult, indicatorKeys, startYear, endYear) {
+  const { meta, series } = seriesResult;
+  return {
+    country: {
+      code: meta.code,
+      alpha3: meta.alpha3,
+      name: meta.name,
+      flag: meta.flag,
+      region: meta.region,
+    },
+    period: { startYear, endYear },
+    indicators: buildApiIndicatorRows(indicatorKeys, series),
+  };
+}
+
+function buildApiBatchCsvPayload(countryPayloads) {
+  const rows = [];
+  for (const payload of countryPayloads) {
+    const indicators = payload.indicators || {};
+    for (const [key, values] of Object.entries(indicators)) {
+      const indicatorName = values.label || key;
+      for (const point of values.data || []) {
+        rows.push({
+          country_code: payload.country.code,
+          country_alpha3: payload.country.alpha3,
+          country_name: payload.country.name,
+          region: payload.country.region,
+          indicator: key,
+          indicator_name: indicatorName,
+          year: point.year,
+          value: point.value,
+        });
+      }
+    }
+  }
+  return rows;
 }
 
 // ── Cross-source indicator mapping (World Bank ↔ IMF DataMapper) ──────────────
@@ -2407,6 +2888,355 @@ app.delete('/api/sessions/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Session sharing ───────────────────────────────────────────────────────────
+
+app.post('/api/sessions/:id/share', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot share sessions' });
+
+  const session = stmt.sessionById.get(req.params.id, req.user.id);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+
+  const shareToken = randomBytes(16).toString('hex');
+  const id = `sh_${Date.now()}_${randomBytes(4).toString('hex')}`;
+  const now = new Date().toISOString();
+  const expiresAt = null;
+
+  stmt.insertShare.run(id, req.params.id, shareToken, now, expiresAt);
+
+  res.json({ id, shareToken, url: `${req.protocol}://${req.get('host')}/share/${shareToken}`, createdAt: now });
+});
+
+app.get('/api/sessions/:id/shares', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.json([]);
+  const session = stmt.sessionById.get(req.params.id, req.user.id);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+  res.json(stmt.sharesBySession.all(req.params.id));
+});
+
+app.delete('/api/sessions/:id/shares/:shareId', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot manage shares' });
+  stmt.deleteShare.run(req.params.shareId, req.user.id);
+  res.json({ ok: true });
+});
+
+app.get('/api/share/:token', (req, res) => {
+  const share = stmt.shareByToken.get(req.params.token);
+  if (!share) return res.status(404).json({ error: 'Share not found' });
+
+  if (share.expires_at && new Date(share.expires_at) < new Date()) {
+    return res.status(410).json({ error: 'Share link has expired' });
+  }
+
+  const session = db.prepare('SELECT id, title, messages, created_at, updated_at FROM chat_sessions WHERE id = ?').get(share.session_id);
+  if (!session) return res.status(404).json({ error: 'Session not found' });
+
+  stmt.incrementViewCount.run(req.params.token);
+
+  let messages = [];
+  try { messages = JSON.parse(session.messages); } catch { messages = []; }
+
+  res.json({
+    title: session.title,
+    messages: Array.isArray(messages) ? messages : [],
+    createdAt: session.created_at,
+    updatedAt: session.updated_at,
+    viewCount: share.view_count + 1,
+  });
+});
+
+// ── Billing / Subscription routes ─────────────────────────────────────────────
+
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const STRIPE_PRICE_PRO   = process.env.STRIPE_PRICE_PRO || '';
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || '';
+
+let stripe;
+if (STRIPE_SECRET_KEY) {
+  const Stripe = (await import('stripe')).default;
+  stripe = new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2024-12-18.acacia' });
+}
+
+function getPlanForUser(userId) {
+  const sub = stmt.subscriptionByUser.get(userId);
+  if (!sub) return 'free';
+  if (sub.status !== 'active') return 'free';
+  return sub.plan || 'free';
+}
+
+app.get('/api/billing/subscription', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.json({ plan: 'free', status: 'active' });
+  const sub = stmt.subscriptionByUser.get(req.user.id);
+  if (!sub) return res.json({ plan: 'free', status: 'active' });
+  res.json({
+    plan: sub.plan,
+    status: sub.status,
+    currentPeriodEnd: sub.current_period_end,
+    stripeCustomerId: sub.stripe_customer_id,
+  });
+});
+
+app.post('/api/billing/create-checkout', requireAuth, async (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Please sign up to upgrade' });
+  if (!stripe) return res.status(503).json({ error: 'Billing is not configured' });
+  if (!STRIPE_PRICE_PRO) return res.status(503).json({ error: 'No Pro plan configured' });
+
+  try {
+    let customerId;
+    const existing = stmt.subscriptionByUser.get(req.user.id);
+    if (existing?.stripe_customer_id) {
+      customerId = existing.stripe_customer_id;
+    } else {
+      const customer = await stripe.customers.create({
+        email: req.user.email,
+        name: req.user.name,
+        metadata: { userId: req.user.id },
+      });
+      customerId = customer.id;
+
+      if (existing) {
+        stmt.updateSubscription.run(existing.plan, existing.status, existing.stripe_subscription_id, existing.current_period_end, new Date().toISOString(), req.user.id);
+      } else {
+        const id = `sub_${Date.now()}_${randomBytes(4).toString('hex')}`;
+        stmt.insertSubscription.run(id, req.user.id, customerId, null, 'free', 'active', null, new Date().toISOString(), new Date().toISOString());
+      }
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ['card'],
+      line_items: [{ price: STRIPE_PRICE_PRO, quantity: 1 }],
+      mode: 'subscription',
+      success_url: `${req.protocol}://${req.get('host')}/?upgraded=true`,
+      cancel_url: `${req.protocol}://${req.get('host')}/?canceled=true`,
+    });
+
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('Stripe checkout error:', err.message);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+app.post('/api/billing/portal', requireAuth, async (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Please sign up first' });
+  if (!stripe) return res.status(503).json({ error: 'Billing is not configured' });
+
+  const sub = stmt.subscriptionByUser.get(req.user.id);
+  if (!sub?.stripe_customer_id) return res.status(400).json({ error: 'No billing account found' });
+
+  try {
+    const session = await stripe.billingPortal.sessions.create({
+      customer: sub.stripe_customer_id,
+      return_url: `${req.protocol}://${req.get('host')}/`,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    console.error('Stripe portal error:', err.message);
+    res.status(500).json({ error: 'Failed to open billing portal' });
+  }
+});
+
+app.post('/api/billing/cancel', requireAuth, async (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Please sign up first' });
+  if (!stripe) return res.status(503).json({ error: 'Billing is not configured' });
+
+  const sub = stmt.subscriptionByUser.get(req.user.id);
+  if (!sub?.stripe_subscription_id) return res.status(400).json({ error: 'No active subscription' });
+
+  try {
+    await stripe.subscriptions.update(sub.stripe_subscription_id, { cancel_at_period_end: true });
+    stmt.updateSubscription.run(sub.plan, 'canceling', sub.stripe_subscription_id, sub.current_period_end, new Date().toISOString(), req.user.id);
+    res.json({ status: 'canceling' });
+  } catch (err) {
+    console.error('Stripe cancel error:', err.message);
+    res.status(500).json({ error: 'Failed to cancel subscription' });
+  }
+});
+
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!stripe || !STRIPE_WEBHOOK_SECRET) return res.status(503).json({ error: 'Webhook not configured' });
+
+  const sig = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).json({ error: 'Invalid signature' });
+  }
+
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        const customerId = session.customer;
+        const subscriptionId = session.subscription;
+        const customer = await stripe.customers.retrieve(customerId);
+        const userId = customer.metadata?.userId;
+        if (!userId) break;
+        stmt.updateSubscription.run('pro', 'active', subscriptionId, null, new Date().toISOString(), userId);
+        break;
+      }
+      case 'customer.subscription.updated': {
+        const sub = event.data.object;
+        const existing = stmt.subscriptionBySubId.get(sub.id);
+        if (existing) {
+          const periodEnd = sub.current_period_end ? Math.floor(sub.current_period_end) : null;
+          stmt.updateSubscription.run(sub.status === 'active' ? existing.plan : 'free', sub.status === 'active' ? 'active' : sub.cancel_at_period_end ? 'canceling' : sub.status, sub.id, periodEnd, new Date().toISOString(), existing.user_id);
+        }
+        break;
+      }
+      case 'customer.subscription.deleted': {
+        const sub = event.data.object;
+        const existing = stmt.subscriptionBySubId.get(sub.id);
+        if (existing) {
+          stmt.updateSubscription.run('free', 'active', null, null, new Date().toISOString(), existing.user_id);
+        }
+        break;
+      }
+    }
+  } catch (err) {
+    console.error('Webhook handler error:', err.message);
+  }
+
+  res.json({ received: true });
+});
+
+function checkPlanLimit(userId, feature) {
+  const plan = getPlanForUser(userId);
+  const limits = {
+    countries: { free: 5, pro: Infinity, enterprise: Infinity },
+    customMetrics: { free: 0, pro: 5, enterprise: 50 },
+    sessions: { free: 3, pro: 50, enterprise: Infinity },
+    snapshots: { free: 2, pro: 50, enterprise: Infinity },
+    apiCalls: { free: 500, pro: 5000, enterprise: Infinity },
+  };
+  return { plan, limit: limits[feature]?.[plan] ?? 0 };
+}
+
+function mapApiKeyRow(row, userPlanLimit) {
+  const configuredLimit = Number.isFinite(row.rate_limit) && row.rate_limit > 0 ? row.rate_limit : userPlanLimit;
+  const effectiveLimit = Math.min(userPlanLimit, configuredLimit);
+  const monthKey = row.month_key || monthBucket();
+  const callsThisMonth = row.month_key === monthKey ? row.calls_this_month || 0 : 0;
+
+  return {
+    id: row.id,
+    name: row.name,
+    keyPreview: row.key_preview,
+    rateLimit: Number.isFinite(effectiveLimit) ? effectiveLimit : null,
+    callsThisMonth,
+    callsRemaining: Number.isFinite(effectiveLimit) ? Math.max(effectiveLimit - callsThisMonth, 0) : null,
+    monthKey,
+    lastUsedAt: row.last_used_at ? new Date(row.last_used_at).toISOString() : null,
+    createdAt: row.created_at,
+  };
+}
+
+app.get('/api/developer/keys', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot manage API keys' });
+
+  const userLimit = getApiMonthlyLimitForUser(req.user.id);
+  const rows = stmt.apiKeysByUser.all(req.user.id).map(row => mapApiKeyRow(row, userLimit));
+
+  res.json({
+    planLimit: Number.isFinite(userLimit) ? userLimit : null,
+    keys: rows,
+  });
+});
+
+app.post('/api/developer/keys', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot create API keys' });
+
+  const body = validate(ApiKeyCreateSchema, req.body, res);
+  if (!body) return;
+
+  const userLimit = getApiMonthlyLimitForUser(req.user.id);
+  const name = (body.name || '').trim() || `API Key ${Date.now()}`;
+  const storedLimit = Number.isFinite(userLimit) && userLimit > 0 ? userLimit : 0;
+  const raw = `ec_${randomBytes(24).toString('hex')}`;
+  const hash = createHash('sha256').update(raw).digest('hex');
+  const preview = `${raw.slice(0, 6)}...${raw.slice(-4)}`;
+  const id = `key_${Date.now()}_${randomBytes(4).toString('hex')}`;
+  const now = new Date().toISOString();
+  const monthKey = monthBucket();
+
+  stmt.insertApiKey.run(id, req.user.id, hash, preview, name, storedLimit, 0, monthKey, null, now);
+
+  res.status(201).json({
+    id,
+    name,
+    key: raw,
+    keyPreview: preview,
+    rateLimit: userLimit,
+    callsThisMonth: 0,
+    callsRemaining: userLimit,
+    createdAt: now,
+  });
+});
+
+app.delete('/api/developer/keys/:id', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot delete API keys' });
+
+  const params = validate(ApiKeyDeleteSchema, { id: req.params.id }, res);
+  if (!params) return;
+
+  const existing = stmt.apiKeyByIdAndUser.get(params.id, req.user.id);
+  if (!existing) return res.status(404).json({ error: 'API key not found' });
+
+  stmt.deleteApiKey.run(params.id, req.user.id);
+  res.json({ ok: true });
+});
+
+// ── Custom metrics routes ─────────────────────────────────────────────────────
+
+app.get('/api/metrics', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.json([]);
+  res.json(stmt.metricsByUser.all(req.user.id).map(m => ({
+    id: m.id, name: m.name, expression: m.expression, description: m.description,
+    createdAt: m.created_at, updatedAt: m.updated_at,
+  })));
+});
+
+app.post('/api/metrics', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot create custom metrics' });
+  const { name, expression, description } = req.body;
+  if (!name || !expression) return res.status(400).json({ error: 'Name and expression are required' });
+  if (expression.length > 200) return res.status(400).json({ error: 'Expression too long (max 200 chars)' });
+
+  const limit = checkPlanLimit(req.user.id, 'customMetrics');
+  const currentCount = stmt.metricsByUser.all(req.user.id).length;
+  if (currentCount >= limit.limit) {
+    return res.status(402).json({ error: `Custom metric limit reached (${limit.limit}). Upgrade your plan for more.` });
+  }
+
+  const id = `metric_${Date.now()}_${randomBytes(4).toString('hex')}`;
+  const now = new Date().toISOString();
+  stmt.insertMetric.run(id, req.user.id, name.trim(), expression.trim(), (description || '').trim(), now, now);
+  res.status(201).json({ id, name, expression, description: description || '', createdAt: now, updatedAt: now });
+});
+
+app.patch('/api/metrics/:id', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot modify custom metrics' });
+  const { name, expression, description } = req.body;
+  const existing = stmt.metricById.get(req.params.id, req.user.id);
+  if (!existing) return res.status(404).json({ error: 'Metric not found' });
+  const now = new Date().toISOString();
+  stmt.updateMetric.run(
+    name?.trim() ?? existing.name,
+    expression?.trim() ?? existing.expression,
+    description?.trim() ?? existing.description,
+    now, req.params.id, req.user.id,
+  );
+  res.json({ id: existing.id, name: name?.trim() ?? existing.name, expression: expression?.trim() ?? existing.expression, updatedAt: now });
+});
+
+app.delete('/api/metrics/:id', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot delete custom metrics' });
+  stmt.deleteMetric.run(req.params.id, req.user.id);
+  res.json({ ok: true });
+});
+
 // ── Country data routes ───────────────────────────────────────────────────────
 
 app.get('/api/country/history', requireAuth, (req, res) => {
@@ -2529,6 +3359,162 @@ app.post('/api/country/:code/refresh', requireAuth, apiLimiter, async (req, res)
   } catch (e) {
     const message = errorMessage(e, 'Failed to refresh country dataset');
     console.error(`/api/country/${code}/refresh:`, message);
+    res.status(502).json({ error: message });
+  }
+});
+
+// ── Public API data routes ───────────────────────────────────────────────────
+
+app.get('/api/data/countries', authenticateApiKey, async (req, res) => {
+  const query = validate(DataApiSchema, req.query, res);
+  if (!query) return;
+
+  const search = (query.search || '').trim().toLowerCase();
+  const requestedFormat = query.format || 'json';
+
+  try {
+    const countriesCatalog = await fetchWorldBankCountryCatalog();
+    const items = countriesCatalog
+      .filter((item) => {
+        if (!search) return true;
+        const name = String(item.name || '').toLowerCase();
+        return name.includes(search);
+      })
+      .slice(0, 500);
+
+    const payload = {
+      query: search || null,
+      count: items.length,
+      countries: items,
+    };
+
+    if (requestedFormat === 'csv') {
+      const csvRows = toCsvString(items.map((item) => ({
+        code: item.code,
+        alpha3: item.alpha3,
+        name: item.name,
+        flag: item.flag,
+        region: item.region,
+      })));
+      return sendApiDataResponse(res, req, csvRows, requestedFormat);
+    }
+
+    sendApiDataResponse(res, req, payload, requestedFormat);
+  } catch (err) {
+    const message = errorMessage(err, 'Failed to load country list');
+    console.error('/api/data/countries:', message);
+    res.status(502).json({ error: message });
+  }
+});
+
+app.get('/api/data/batch', authenticateApiKey, async (req, res) => {
+  const query = validate(DataApiSchema, req.query, res);
+  if (!query) return;
+
+  const requestedIndicators = parseIndicatorKeys(query.indicators);
+  const requestedFormat = query.format || 'json';
+  const rawCountries = query.countries || '';
+
+  const normalizedCountries = normalizeApiCountries(rawCountries)
+    .map(c => normalizeCountryCode(c))
+    .filter(Boolean)
+    .filter((value, index, all) => all.indexOf(value) === index);
+
+  const { startYear, endYear } = parseApiYears(query.start_year, query.end_year, query.years);
+
+  if (!normalizedCountries.length) {
+    return res.status(400).json({ error: 'Invalid countries list. Use ISO-2 or ISO-3 codes, e.g. countries=US,CN,IN.' });
+  }
+
+  const invalid = [];
+  const requestedCountryMap = normalizedCountries.filter((code) => {
+    const valid = countries.isValid(code);
+    if (!valid) invalid.push(code);
+    return valid;
+  });
+
+  if (!requestedCountryMap.length) {
+    return res.status(400).json({ error: `Invalid country codes: ${invalid.join(', ')}` });
+  }
+
+  const settled = await Promise.allSettled(
+    requestedCountryMap.map(async (code) => {
+      return buildApiCountryPayload(
+        await buildApiSeriesForCountry(code, requestedIndicators, startYear, endYear),
+        requestedIndicators,
+        startYear,
+        endYear,
+      );
+    }),
+  );
+
+  const countriesPayload = [];
+  const fetchErrors = [];
+
+  settled.forEach((result, idx) => {
+    const code = requestedCountryMap[idx];
+    if (result.status === 'fulfilled') {
+      countriesPayload.push(result.value);
+      return;
+    }
+    fetchErrors.push({ code, error: result.reason?.message || 'Failed to fetch data' });
+  });
+
+  if (!countriesPayload.length) {
+    return res.status(502).json({
+      error: 'Failed to fetch data for requested countries',
+      errors: fetchErrors,
+    });
+  }
+
+  const payload = {
+    period: { startYear, endYear },
+    requestedIndicators,
+    requestedCountries: requestedCountryMap,
+    countries: countriesPayload,
+    failed: fetchErrors,
+    invalid,
+  };
+
+  if (requestedFormat === 'csv') {
+    const csvRows = buildApiBatchCsvPayload(countriesPayload);
+    return sendApiDataResponse(res, req, toCsvString(csvRows), requestedFormat);
+  }
+
+  sendApiDataResponse(res, req, payload, requestedFormat);
+});
+
+app.get('/api/data/:code', authenticateApiKey, async (req, res) => {
+  const query = validate(DataApiSchema, req.query, res);
+  if (!query) return;
+
+  const requestedFormat = query.format || 'json';
+  const requestedIndicators = parseIndicatorKeys(query.indicators);
+  const countryCode = normalizeCountryCode(req.params.code);
+
+  if (!countryCode || !countries.isValid(countryCode)) {
+    return res.status(400).json({ error: `Invalid country code: ${req.params.code}` });
+  }
+
+  const { startYear, endYear } = parseApiYears(query.start_year, query.end_year, query.years);
+
+  try {
+    const payload = buildApiCountryPayload(
+      await buildApiSeriesForCountry(countryCode, requestedIndicators, startYear, endYear),
+      requestedIndicators,
+      startYear,
+      endYear,
+    );
+
+    if (requestedFormat === 'csv') {
+      const rows = buildApiCountrySeriesRows(payload);
+      return sendApiDataResponse(res, req, toCsvString(rows), requestedFormat);
+    }
+
+    sendApiDataResponse(res, req, payload, requestedFormat);
+  } catch (err) {
+    const message = errorMessage(err, `Failed to build API data for ${req.params.code}`);
+    console.error(`/api/data/${req.params.code}:`, message);
     res.status(502).json({ error: message });
   }
 });

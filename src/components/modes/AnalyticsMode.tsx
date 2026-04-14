@@ -19,8 +19,10 @@ import {
 } from "recharts";
 import type { CountryDataset, CountrySearchResult, AIResponse } from "../../types";
 import { getCountryHistory, queryAnalytics } from "../../utils/api";
+import { getCustomMetrics, createCustomMetric, deleteCustomMetric as deleteCustomMetricApi } from "../../utils/api";
 import { TT, GRID, AX, LEG } from "../../config/styles";
 import { AnalyticsCard, Stat, DynChart, SourceList } from "../ui";
+import MetricBuilder from "../ui/MetricBuilder";
 import { POPULAR_COUNTRIES } from "../../data/suggestions";
 import CountrySearchInput from "../shared/CountrySearchInput";
 import { Button } from "@/components/ui/button";
@@ -576,6 +578,12 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
   const [aiResult,    setAIResult]    = useState<AIResponse | null>(null);
   const [aiLoading,   setAILoading]   = useState(false);
   const [aiError,     setAIError]     = useState<string | null>(null);
+  const [savedMetrics, setSavedMetrics] = useState<Array<{ id: string; name: string; expression: string }>>([]);
+
+  useEffect(() => {
+    if (!token || token === "guest") return;
+    getCustomMetrics(token).then(setSavedMetrics).catch(() => {});
+  }, [token]);
 
   useEffect(() => {
     setAIResult(null);
@@ -700,6 +708,26 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
 
       {/* ── AI result ── */}
       {aiResult && <div className="mb-5"><AIResultPanel result={aiResult} /></div>}
+
+      {/* ── Custom Metrics ── */}
+      {dataset && (
+        <div className="mb-5">
+          <MetricBuilder
+            token={token}
+            dataset={dataset}
+            savedMetrics={savedMetrics}
+            onSave={async (name, expression) => {
+              const m = await createCustomMetric(token, name, expression);
+              setSavedMetrics(prev => [...prev, { id: m.id, name: m.name, expression: m.expression }]);
+            }}
+            onDelete={async (id) => {
+              await deleteCustomMetricApi(token, id);
+              setSavedMetrics(prev => prev.filter(m => m.id !== id));
+            }}
+            isGuest={!token || token === "guest"}
+          />
+        </div>
+      )}
 
       {/* ── Algorithm results ── */}
       {!dataset && !loading ? (
