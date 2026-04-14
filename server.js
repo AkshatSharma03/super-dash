@@ -257,6 +257,25 @@ const stmt = {
   pruneRevokedTokens:      db.prepare('DELETE FROM revoked_tokens WHERE expires_at < ?'),
 };
 
+const CLERK_PLACEHOLDER_HASH = bcrypt.hashSync(randomBytes(24).toString('hex'), BCRYPT_ROUNDS);
+
+function ensureClerkUserRecord(user) {
+  const existing = stmt.userByIdFull.get(user.id);
+  if (existing) return;
+
+  const baseEmail = (user.email || '').toLowerCase().trim();
+  let email = baseEmail || `${user.id}@clerk.local`;
+  const sameEmailUser = stmt.userByEmail.get(email);
+  if (sameEmailUser && sameEmailUser.id !== user.id) {
+    email = `${user.id}@clerk.local`;
+  }
+
+  const name = (user.name || 'User').slice(0, 80).trim() || 'User';
+  const createdAt = user.iat ? new Date(user.iat * 1000).toISOString() : new Date().toISOString();
+
+  stmt.insertUser.run(user.id, email, name, CLERK_PLACEHOLDER_HASH, createdAt);
+}
+
 // ── Validation and utilities ─────────────────────────────────────────────────
 
 
@@ -552,6 +571,13 @@ async function requireAuth(req, res, next) {
         exp: verified.exp,
         isClerkUser: true,
       };
+
+      try {
+        ensureClerkUserRecord(req.user);
+      } catch (e) {
+        console.error('Failed to provision Clerk user record:', e.message);
+        return res.status(500).json({ error: 'Unable to initialize user profile' });
+      }
 
       return next();
     } catch {
