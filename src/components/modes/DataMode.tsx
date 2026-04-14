@@ -162,12 +162,13 @@ export default function DataMode() {
           )}
 
           <div className="mb-4">
-            <label className="text-xs text-muted-foreground block mb-1.5">
+            <label className="text-xs font-bold text-memphis-black/70 block mb-1.5">
               Context (optional) — describe what this data represents:
             </label>
             <Textarea value={context} onChange={e => setContext(e.target.value)}
               placeholder="e.g. Monthly US trade data 2020–2024, showing exports and imports by sector in USD millions…"
-              rows={2} className="focus-visible:ring-amber-500 focus-visible:border-amber-500" />
+              rows={2}
+              className="min-h-[78px] rounded-none border-3 border-memphis-black bg-white text-memphis-black placeholder:text-memphis-black/45 shadow-hard-sm resize-none focus-visible:ring-0 focus-visible:border-memphis-orange" />
           </div>
 
             <Button onClick={generate} disabled={loading}
