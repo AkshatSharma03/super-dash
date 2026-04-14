@@ -2,11 +2,12 @@
 // APP SHELL — Memphis Design Edition — Bold colors, thick borders, geometric patterns
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useCallback, lazy, Suspense, type ComponentType } from "react";
+import { useAuth, useClerk, useUser } from "@clerk/clerk-react";
 import type { Mode, User, CountryDataset } from "./types";
 import { useMobile } from "./utils/useMobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { fetchMe, getCountryData, refreshCountryData, logoutApi } from "./utils/api";
+import { getCountryData, refreshCountryData, logoutApi, setAuthTokenGetter } from "./utils/api";
 import { identifyUser, resetUser, track } from "./analytics";
 import { BarChart3, MessageSquare, Search, Database, LineChart, Download, Menu, X, ChevronDown } from "lucide-react";
 
@@ -39,8 +40,12 @@ const MODE_META: Record<Mode, { label: string; desc: string; color: string; bg: 
 };
 
 export default function App() {
+  const { isLoaded: clerkLoaded, isSignedIn, getToken } = useAuth();
+  const { user: clerkUser } = useUser();
+  const { signOut } = useClerk();
+
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [token, setToken] = useState<string>("");
   const [authReady, setAuthReady] = useState(false);
   const [mode, setMode] = useState<Mode>("chat");
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -103,36 +108,85 @@ export default function App() {
     }
   }, []);
 
-  // On mount: restore session from localStorage and validate the token
+  // Restore guest session on mount
   useEffect(() => {
-    const stored = localStorage.getItem("ec_token");
-    if (!stored) { setAuthReady(true); return; }
-    fetchMe(stored)
-      .then(u => { setToken(stored); setUser(u); if (!u.isGuest) identifyUser(u.id, u.email, u.name); })
-      .catch(() => { localStorage.removeItem("ec_token"); })
-      .finally(() => setAuthReady(true));
+    const guestToken = localStorage.getItem("ec_guest_token");
+    const guestUserRaw = localStorage.getItem("ec_guest_user");
+    if (!guestToken || !guestUserRaw) return;
+    try {
+      const parsed = JSON.parse(guestUserRaw) as User;
+      setToken(guestToken);
+      setUser(parsed);
+    } catch {
+      localStorage.removeItem("ec_guest_token");
+      localStorage.removeItem("ec_guest_user");
+    }
   }, []);
 
-  const handleAuth = (t: string, u: User) => {
-    localStorage.setItem("ec_token", t);
+  useEffect(() => {
+    setAuthTokenGetter(async () => {
+      if (token) return token;
+      if (!isSignedIn) return null;
+      return await getToken();
+    });
+
+    return () => {
+      setAuthTokenGetter(null);
+    };
+  }, [token, isSignedIn, getToken]);
+
+  useEffect(() => {
+    if (!clerkLoaded) return;
+
+    if (token) {
+      setAuthReady(true);
+      return;
+    }
+
+    if (isSignedIn && clerkUser) {
+      const primaryEmail = clerkUser.primaryEmailAddress?.emailAddress ?? "";
+      const fullName = clerkUser.fullName || clerkUser.firstName || primaryEmail || "User";
+      const mappedUser: User = {
+        id: clerkUser.id,
+        email: primaryEmail,
+        name: fullName,
+      };
+      setUser(mappedUser);
+      identifyUser(mappedUser.id, mappedUser.email, mappedUser.name);
+    } else {
+      setUser(null);
+      resetUser();
+    }
+
+    setAuthReady(true);
+  }, [clerkLoaded, isSignedIn, clerkUser, token]);
+
+  const handleGuestAuth = (t: string, u: User) => {
+    localStorage.setItem("ec_guest_token", t);
+    localStorage.setItem("ec_guest_user", JSON.stringify(u));
     setToken(t);
     setUser(u);
-    if (!u.isGuest) identifyUser(u.id, u.email, u.name);
   };
 
-  const logout = () => {
-    if (token) logoutApi(token).catch(() => {});
-    localStorage.removeItem("ec_token");
-    resetUser();
-    setToken(null);
+  const logout = async () => {
+    if (user?.isGuest && token) {
+      await logoutApi(token).catch(() => {});
+    }
+    localStorage.removeItem("ec_guest_token");
+    localStorage.removeItem("ec_guest_user");
+    if (!user?.isGuest && isSignedIn) {
+      await signOut();
+    }
+    setToken("");
     setUser(null);
+    resetUser();
     setCountryData(null);
   };
 
   if (!authReady) return null;
-  if (!user || !token) return (
+  if (!user) return (
     <Suspense fallback={null}>
-      <AuthPage onAuth={handleAuth} />
+      <AuthPage onGuestAuth={handleGuestAuth} />
     </Suspense>
   );
 
@@ -392,7 +446,6 @@ export default function App() {
             user={user}
             token={token}
             onClose={() => setSettingsOpen(false)}
-            onLogout={logout}
           />
         </Suspense>
       )}

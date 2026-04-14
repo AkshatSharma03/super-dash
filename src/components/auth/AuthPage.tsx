@@ -2,19 +2,18 @@
 // AUTH PAGE  —  landing page shown to unauthenticated visitors.
 // Left: hero explaining the product. Right: login / register form.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, type ComponentType } from "react";
-import { login, register, guestLogin, requestPasswordReset, resetPassword } from "../../utils/api";
+import { useState, type ComponentType } from "react";
+import { SignIn, SignUp } from "@clerk/clerk-react";
+import { guestLogin } from "../../utils/api";
 import type { User } from "../../types";
 import { useMobile } from "../../utils/useMobile";
 import { Button }  from "@/components/ui/button";
-import { Input }   from "@/components/ui/input";
-import { Label }   from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle, CheckCircle2, MessageSquare, Search, Database, LineChart, Globe2, BarChart3 } from "lucide-react";
+import { AlertTriangle, MessageSquare, Search, Database, LineChart, Globe2, BarChart3 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface AuthPageProps {
-  onAuth: (token: string, user: User) => void;
+  onGuestAuth: (token: string, user: User) => void;
 }
 
 const FEATURES: [ComponentType<{ className?: string }>, string, string][] = [
@@ -25,39 +24,46 @@ const FEATURES: [ComponentType<{ className?: string }>, string, string][] = [
   [Globe2, "Global dashboards",  "Instant dashboards for any country — US, China, EU, Japan and more — 15+ years of GDP, trade, and sector data"],
 ];
 
-type View = "login" | "register" | "forgot" | "reset";
+type View = "login" | "register";
 
-export default function AuthPage({ onAuth }: AuthPageProps) {
+const clerkAppearance = {
+  variables: {
+    colorPrimary: "#FF006E",
+    colorText: "#1A1A2E",
+    colorBackground: "#FFFFFF",
+    colorInputBackground: "#FFFFFF",
+    colorInputText: "#1A1A2E",
+    colorDanger: "#FB5607",
+  },
+  elements: {
+    card: "shadow-none border-0 p-0 bg-transparent",
+    rootBox: "w-full",
+    headerTitle: "hidden",
+    headerSubtitle: "hidden",
+    socialButtonsBlockButton: "border-3 border-memphis-black rounded-none shadow-hard text-memphis-black font-black",
+    socialButtonsBlockButtonText: "font-black",
+    formFieldLabel: "text-[11px] uppercase tracking-wide font-black text-memphis-black",
+    formFieldInput:
+      "h-11 border-3 border-memphis-black/20 rounded-none text-memphis-black placeholder:text-memphis-black/40 focus:border-memphis-pink focus:ring-0",
+    formButtonPrimary:
+      "h-10 rounded-none border-3 border-memphis-black bg-memphis-pink text-white font-black uppercase tracking-wide shadow-hard hover:bg-memphis-pink",
+    footerActionLink: "text-memphis-pink font-black",
+    identityPreviewText: "text-memphis-black",
+    formResendCodeLink: "text-memphis-pink font-black",
+    otpCodeFieldInput: "border-3 border-memphis-black/20 rounded-none",
+    alertText: "text-memphis-black",
+  },
+} as const;
+
+export default function AuthPage({ onGuestAuth }: AuthPageProps) {
   const isMobile = useMobile();
   const [view,         setView]        = useState<View>("login");
-  const [name,         setName]        = useState("");
-  const [email,        setEmail]       = useState("");
-  const [password,     setPassword]    = useState("");
-  const [newPassword,  setNewPassword] = useState("");
-  const [confirmPw,    setConfirmPw]   = useState("");
-  const [loading,      setLoading]     = useState(false);
   const [guestLoading, setGuestLoading] = useState(false);
   const [error,        setError]       = useState<string | null>(null);
-  const [success,      setSuccess]     = useState<string | null>(null);
-  const [resetToken,   setResetToken]  = useState<string | null>(null);
-  // Dev-mode: server returns reset URL when SMTP is not configured
-  const [devResetUrl,  setDevResetUrl] = useState<string | null>(null);
   const visibleFeatures = isMobile ? FEATURES.slice(0, 3) : FEATURES;
 
-  // Detect ?reset=TOKEN in the URL and switch to reset view
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const token  = params.get("reset");
-    if (token) {
-      setResetToken(token);
-      setView("reset");
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
-
-  const switchToLogin    = () => { setView("login");    setError(null); setSuccess(null); };
-  const switchToRegister = () => { setView("register"); setError(null); setSuccess(null); };
-  const switchToForgot   = () => { setView("forgot");   setError(null); setSuccess(null); setDevResetUrl(null); };
+  const switchToLogin = () => { setView("login"); setError(null); };
+  const switchToRegister = () => { setView("register"); setError(null); };
 
   const continueAsGuest = async () => {
     if (guestLoading) return;
@@ -65,167 +71,13 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
     setError(null);
     try {
       const result = await guestLogin();
-      onAuth(result.token, result.user);
+      onGuestAuth(result.token, result.user);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not start guest session");
     } finally {
       setGuestLoading(false);
     }
   };
-
-  const submit = async () => {
-    if (loading) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = view === "login"
-        ? await login(email, password)
-        : await register(email, password, name);
-      onAuth(result.token, result.user);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong";
-      try { setError(JSON.parse(msg).error ?? msg); } catch { setError(msg); }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const submitForgot = async () => {
-    if (loading) return;
-    setLoading(true);
-    setError(null);
-    setDevResetUrl(null);
-    try {
-      const res = await requestPasswordReset(email);
-      setSuccess("If an account with that email exists, a reset link has been sent.");
-      if (res.resetUrl) setDevResetUrl(res.resetUrl);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong";
-      try { setError(JSON.parse(msg).error ?? msg); } catch { setError(msg); }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const submitReset = async () => {
-    if (loading) return;
-    if (newPassword !== confirmPw) { setError("Passwords do not match"); return; }
-    if (!resetToken) { setError("Missing reset token"); return; }
-    setLoading(true);
-    setError(null);
-    try {
-      await resetPassword(resetToken, newPassword);
-      setSuccess("Password updated! You can now sign in with your new password.");
-      setResetToken(null);
-      setTimeout(() => { setSuccess(null); setView("login"); }, 2500);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong";
-      try { setError(JSON.parse(msg).error ?? msg); } catch { setError(msg); }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // ── Render helpers ──────────────────────────────────────────────────────────
-
-  const renderForgotForm = () => (
-    <>
-      <div className="mb-5">
-        <h2 className="text-xl font-extrabold text-memphis-black tracking-[-0.3px] mb-1.5">Reset your password</h2>
-        <p className="text-xs text-muted-foreground">Enter your email and we'll send a reset link</p>
-      </div>
-
-      <div className="flex flex-col gap-3.5">
-        <div>
-          <Label htmlFor="forgot-email">Email Address</Label>
-          <Input id="forgot-email" type="email" value={email}
-            onChange={e => setEmail(e.target.value)}
-            placeholder="you@example.com"
-            onKeyDown={e => e.key === "Enter" && submitForgot()} />
-        </div>
-      </div>
-
-      {error && (
-        <Alert variant="destructive" className="mt-3.5">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {success && (
-        <Alert className="mt-3.5 border-emerald-800 bg-emerald-950 text-emerald-300">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          <AlertDescription>{success}</AlertDescription>
-        </Alert>
-      )}
-
-      {devResetUrl && (
-        <div className="mt-3 p-3 bg-[#1a1f2e] border border-[#2d3860] rounded-lg">
-          <p className="text-[11px] text-muted-foreground font-semibold mb-1.5">
-            DEV MODE — no SMTP configured. Use this link to reset:
-          </p>
-          <a href={devResetUrl} className="text-[11px] text-primary break-all">{devResetUrl}</a>
-        </div>
-      )}
-
-      <Button onClick={submitForgot} disabled={loading || !!success}
-        className="mt-4 w-full bg-gradient-to-r from-[#00AAFF] to-[#0088DD] shadow-[0_4px_14px_#00AAFF44] font-bold">
-        {loading ? "Sending…" : "Send reset link →"}
-      </Button>
-
-      <p className="text-center text-[11px] text-border mt-4">
-        Remembered it?{" "}
-        <Button variant="link" size="sm" onClick={switchToLogin} className="h-auto p-0 text-xs text-primary">
-          Back to sign in
-        </Button>
-      </p>
-    </>
-  );
-
-  const renderResetForm = () => (
-    <>
-      <div className="mb-5">
-        <h2 className="text-xl font-extrabold text-memphis-black tracking-[-0.3px] mb-1.5">Choose a new password</h2>
-        <p className="text-xs text-muted-foreground">Must be at least 8 characters</p>
-      </div>
-
-      <div className="flex flex-col gap-3.5">
-        <div>
-          <Label htmlFor="new-password">New Password</Label>
-          <Input id="new-password" type="password" value={newPassword}
-            onChange={e => setNewPassword(e.target.value)}
-            placeholder="Min. 8 characters" />
-        </div>
-        <div>
-          <Label htmlFor="confirm-password">Confirm Password</Label>
-          <Input id="confirm-password" type="password" value={confirmPw}
-            onChange={e => setConfirmPw(e.target.value)}
-            placeholder="Repeat your new password"
-            onKeyDown={e => e.key === "Enter" && submitReset()} />
-        </div>
-      </div>
-
-      {error && (
-        <Alert variant="destructive" className="mt-3.5">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {success && (
-        <Alert className="mt-3.5 border-emerald-800 bg-emerald-950 text-emerald-300">
-          <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-          <AlertDescription>{success}</AlertDescription>
-        </Alert>
-      )}
-
-      <Button onClick={submitReset} disabled={loading || !!success}
-        className="mt-4 w-full bg-gradient-to-r from-[#00AAFF] to-[#0088DD] shadow-[0_4px_14px_#00AAFF44] font-bold">
-        {loading ? "Updating…" : "Set new password →"}
-      </Button>
-    </>
-  );
-
   const renderAuthForm = () => (
     <>
       <div className="mb-5">
@@ -235,7 +87,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
         <p className="text-xs text-muted-foreground">
           {view === "login"
             ? "Sign in to access your dashboard and chat history"
-            : "Start generating economic charts — it's free"}
+            : "Create your account and start generating charts"}
         </p>
       </div>
 
@@ -252,30 +104,22 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
         ))}
       </div>
 
-      <div className="flex flex-col gap-3.5">
-        {view === "register" && (
-          <div>
-            <Label htmlFor="name">Full Name</Label>
-            <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="Your name" />
-          </div>
+      <div className="border-3 border-memphis-black bg-white p-3 shadow-hard">
+        {view === "login" ? (
+          <SignIn
+            routing="hash"
+            signUpUrl="#register"
+            forceRedirectUrl="/"
+            appearance={clerkAppearance}
+          />
+        ) : (
+          <SignUp
+            routing="hash"
+            signInUrl="#login"
+            forceRedirectUrl="/"
+            appearance={clerkAppearance}
+          />
         )}
-        <div>
-          <Label htmlFor="email">Email Address</Label>
-          <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
-        </div>
-        <div>
-          <div className="flex justify-between items-center mb-1.5">
-            <Label htmlFor="password">Password</Label>
-            {view === "login" && (
-              <button onClick={switchToForgot}
-                className="bg-transparent border-none p-0 text-[11px] text-primary cursor-pointer leading-none">
-                Forgot password?
-              </button>
-            )}
-          </div>
-          <Input id="password" type="password" value={password} onChange={e => setPassword(e.target.value)}
-            placeholder="Min. 8 characters" onKeyDown={e => e.key === "Enter" && submit()} />
-        </div>
       </div>
 
       {error && (
@@ -284,18 +128,6 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-
-      <Button onClick={submit} disabled={loading} className="mt-4 w-full bg-gradient-to-r from-[#00AAFF] to-[#0088DD] shadow-[0_4px_14px_#00AAFF44] font-bold">
-        {loading ? "Please wait…" : view === "login" ? "Sign in →" : "Create account →"}
-      </Button>
-
-      <p className="text-center text-[11px] text-border mt-4">
-        {view === "login" ? "Don't have an account? " : "Already have an account? "}
-        <Button variant="link" size="sm" onClick={() => view === "login" ? switchToRegister() : switchToLogin()}
-          className="h-auto p-0 text-xs text-primary">
-          {view === "login" ? "Register free" : "Sign in"}
-        </Button>
-      </p>
 
       <div className="flex items-center gap-2.5 mt-4">
         <div className="flex-1 h-1 bg-memphis-black" />
@@ -370,9 +202,7 @@ export default function AuthPage({ onAuth }: AuthPageProps) {
 
         {/* Right: auth form */}
         <div className="order-1 lg:order-2 w-full lg:w-[420px] shrink-0 px-5 sm:px-8 lg:px-11 py-6 sm:py-10 lg:py-[60px] border-b-3 lg:border-b-0 lg:border-l-3 border-memphis-black flex flex-col justify-center bg-white">
-          {view === "forgot" && renderForgotForm()}
-          {view === "reset"  && renderResetForm()}
-          {(view === "login" || view === "register") && renderAuthForm()}
+          {renderAuthForm()}
         </div>
       </div>
     </div>

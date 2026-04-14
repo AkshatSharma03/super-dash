@@ -91,7 +91,7 @@ Every algorithm is written from first principles with **zero ML libraries**.
 - **LLM Query Canonicalization** — Kimi 2.5 (`moonshot-v1-8k`) converts any user query to a structured JSON canonical form `{countries, indicators, timeframe, question_type}` before hashing it into a cache key, so semantically identical but differently-worded queries always share the same cache entry. Falls back to a built-in keyword normaliser if `KIMI_API_KEY` is not set.
 - **World Bank API proxy** — fetches GDP, growth, trade, and per-capita data for any ISO country code; merges into a unified `CountryDataset`
 - **Agentic tool-use loop** — up to 8 turns of `web_search_20250305` calls before returning a single response
-- **Auth** — bcrypt password hashing, JWT tokens, SQLite-backed user and session storage
+- **Auth** — Clerk-managed authentication (email/OAuth/session tokens) plus optional guest JWT access for try-without-signup flows
 - **Rate limiting** — `express-rate-limit` at 20 requests / 15 minutes per IP
 - **Security** — `helmet()` middleware; API key is server-side only, never in the client bundle
 
@@ -184,7 +184,7 @@ npm install
 
 # 2. Configure environment
 cp .env.example .env
-# Required: ANTHROPIC_API_KEY
+# Required: ANTHROPIC_API_KEY, CLERK_SECRET_KEY, VITE_CLERK_PUBLISHABLE_KEY
 # Optional: KIMI_API_KEY (enables LLM-based query canonicalization for better cache hit rates)
 
 # 3. Development (two terminals)
@@ -214,7 +214,7 @@ Open [http://localhost:5173](http://localhost:5173) in development or [http://lo
 | Backend | Express 5 · Node ≥ 20 |
 | Database | better-sqlite3 |
 | AI | Anthropic Claude API (tool-use agentic loop) · Kimi 2.5 (query canonicalization) |
-| Security | Helmet.js · express-rate-limit · bcryptjs · jsonwebtoken |
+| Security | Helmet.js · express-rate-limit · Clerk auth |
 
 ---
 

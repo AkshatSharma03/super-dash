@@ -7,6 +7,7 @@ import helmet from 'helmet';
 import { createHash, randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { verifyToken as verifyClerkToken } from '@clerk/backend';
 import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import countries from 'i18n-iso-countries';
@@ -34,6 +35,9 @@ const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const IS_DEV            = process.env.NODE_ENV !== 'production';
+const CLERK_SECRET_KEY  = process.env.CLERK_SECRET_KEY;
+const CLERK_JWT_KEY     = process.env.CLERK_JWT_KEY;
+const CLERK_AUTH_ENABLED = Boolean(CLERK_SECRET_KEY || CLERK_JWT_KEY);
 const NEWS_API_KEY      = process.env.NEWS_API_KEY;
 const TRUSTED_NEWS_DOMAINS = 'reuters.com,bloomberg.com,ft.com,wsj.com,economist.com,apnews.com';
 
@@ -516,19 +520,43 @@ async function cacheKey(endpoint, messages) {
   return createHash('sha256').update(endpoint + JSON.stringify(normalized)).digest('hex');
 }
 
-function requireAuth(req, res, next) {
+async function requireAuth(req, res, next) {
   const auth  = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
   if (!token) return res.status(401).json({ error: 'Authentication required' });
+
   try {
     const payload = jwt.verify(token, JWT_SECRET);
     if (payload.jti && stmt.isTokenRevoked.get(payload.jti)) {
       return res.status(401).json({ error: 'Token has been revoked' });
     }
     req.user = payload;
-    next();
+    return next();
   } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
+    if (!CLERK_AUTH_ENABLED) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+
+    try {
+      const verified = await verifyClerkToken(token, {
+        ...(CLERK_SECRET_KEY ? { secretKey: CLERK_SECRET_KEY } : {}),
+        ...(CLERK_JWT_KEY ? { jwtKey: CLERK_JWT_KEY } : {}),
+      });
+
+      req.user = {
+        id: verified.sub,
+        email: verified.email || '',
+        name: verified.name || 'User',
+        isGuest: false,
+        iat: verified.iat,
+        exp: verified.exp,
+        isClerkUser: true,
+      };
+
+      return next();
+    } catch {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
   }
 }
 
@@ -1829,24 +1857,38 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
 });
 
 app.get('/api/auth/me', requireAuth, (req, res) => {
+  if (req.user?.isGuest) {
+    return res.json({ id: 'guest', name: 'Guest', email: '', isGuest: true });
+  }
+
+  if (req.user?.isClerkUser) {
+    return res.json({ id: req.user.id, email: req.user.email || '', name: req.user.name || 'User' });
+  }
+
   const user = stmt.userById.get(req.user.id);
   if (!user) return res.status(401).json({ error: 'User not found' });
-  res.json(user);
+  return res.json(user);
 });
 
 app.get('/api/auth/usage', requireAuth, (req, res) => {
-  const user     = stmt.userById.get(req.user.id);
-  if (!user) return res.status(401).json({ error: 'User not found' });
+  const user = stmt.userById.get(req.user.id);
   const rows     = stmt.sessionMessages.all(req.user.id);
   const sessionCount = rows.length;
   const messageCount = rows.reduce((sum, r) => {
     const msgs = JSON.parse(r.messages);
     return sum + msgs.filter(m => m.role === 'user').length;
   }, 0);
-  res.json({ sessionCount, messageCount, memberSince: user.created_at });
+  const memberSince = user?.created_at
+    || (req.user?.iat ? new Date(req.user.iat * 1000).toISOString() : new Date().toISOString());
+
+  return res.json({ sessionCount, messageCount, memberSince });
 });
 
 app.patch('/api/auth/password', requireAuth, authLimiter, async (req, res) => {
+  if (req.user?.isClerkUser) {
+    return res.status(400).json({ error: 'Password is managed by Clerk. Update it from account settings.' });
+  }
+
   const body = validate(ChangePasswordSchema, req.body, res);
   if (!body) return;
   const { currentPassword, newPassword } = body;
@@ -1861,6 +1903,10 @@ app.patch('/api/auth/password', requireAuth, authLimiter, async (req, res) => {
 });
 
 app.delete('/api/auth/account', requireAuth, authLimiter, async (req, res) => {
+  if (req.user?.isClerkUser) {
+    return res.status(400).json({ error: 'Account deletion is managed by Clerk. Use account settings.' });
+  }
+
   const body = validate(DeleteAccountSchema, req.body, res);
   if (!body) return;
   const { password } = body;

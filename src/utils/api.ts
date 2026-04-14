@@ -5,10 +5,24 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import type { AIResponse, SearchResult, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../types";
 
+let authTokenGetter: null | (() => Promise<string | null>) = null;
+
+export function setAuthTokenGetter(getter: (() => Promise<string | null>) | null) {
+  authTokenGetter = getter;
+}
+
+async function resolveAuthToken(token?: string): Promise<string | undefined> {
+  if (token) return token;
+  if (!authTokenGetter) return undefined;
+  const dynamicToken = await authTokenGetter();
+  return dynamicToken ?? undefined;
+}
+
 /** Helper: POST to an endpoint, throw on non-2xx, return typed JSON. */
 async function post<T>(path: string, body: unknown, token?: string): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const authToken = await resolveAuthToken(token);
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
   const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(`${await res.text()}`);
   return res.json() as Promise<T>;
@@ -17,7 +31,8 @@ async function post<T>(path: string, body: unknown, token?: string): Promise<T> 
 /** Helper: GET from an endpoint with optional auth. */
 async function get<T>(path: string, token?: string): Promise<T> {
   const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const authToken = await resolveAuthToken(token);
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
   const res = await fetch(path, { headers });
   if (!res.ok) throw new Error(`${await res.text()}`);
   return res.json() as Promise<T>;
@@ -26,7 +41,8 @@ async function get<T>(path: string, token?: string): Promise<T> {
 /** Helper: PATCH an endpoint with optional auth. */
 async function patch<T>(path: string, body: unknown, token?: string): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const authToken = await resolveAuthToken(token);
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
   const res = await fetch(path, { method: "PATCH", headers, body: JSON.stringify(body) });
   if (!res.ok) throw new Error(`${await res.text()}`);
   return res.json() as Promise<T>;
@@ -35,7 +51,8 @@ async function patch<T>(path: string, body: unknown, token?: string): Promise<T>
 /** Helper: DELETE an endpoint with optional auth and optional body. */
 async function del<T>(path: string, token?: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const authToken = await resolveAuthToken(token);
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
   const res = await fetch(path, {
     method: "DELETE", headers,
@@ -143,7 +160,8 @@ export async function askClaudeStream(
   token?: string,
 ): Promise<void> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const authToken = await resolveAuthToken(token);
+  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
 
   const res = await fetch("/api/chat", {
     method: "POST",
