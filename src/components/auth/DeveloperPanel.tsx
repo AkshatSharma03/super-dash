@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Plus, Loader2, KeyRound, Copy, Trash2, AlertTriangle, Sparkles } from "lucide-react";
 import {
@@ -103,7 +104,7 @@ export default function DeveloperPanel({ token, onClose }: Props) {
     setTimeout(() => setCopySuccess(false), 1500);
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[130] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white border-3 border-memphis-black shadow-hard-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
         <div className="px-5 py-4 border-b-3 border-memphis-black flex items-center justify-between">
@@ -235,6 +236,7 @@ export default function DeveloperPanel({ token, onClose }: Props) {
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

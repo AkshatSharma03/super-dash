@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Check, Loader2, Star, Zap, Building2 } from "lucide-react";
@@ -134,7 +135,7 @@ export default function BillingPanel({ token, onClose }: Props) {
 
   const currentPlan = subscription?.plan || "free";
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[130] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white border-3 border-memphis-black shadow-hard-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="px-6 py-4 border-b-3 border-memphis-black flex items-center justify-between">
@@ -239,6 +240,7 @@ export default function BillingPanel({ token, onClose }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
