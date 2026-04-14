@@ -85,6 +85,16 @@ describe("kmeans", () => {
     expect(r.assignments).toHaveLength(6);
     expect(r.centroids).toHaveLength(2);
   });
+
+  it("throws for invalid k values", () => {
+    expect(() => kmeans(separated, 0)).toThrow(/positive integer/i);
+    expect(() => kmeans(separated, 999)).toThrow(/cannot exceed/i);
+  });
+
+  it("throws on ragged or non-finite input", () => {
+    expect(() => kmeans([[1, 2], [3]], 1)).toThrow(/same dimensionality/i);
+    expect(() => kmeans([[1, 2], [3, Number.NaN]], 1)).toThrow(/non-finite/i);
+  });
 });
 
 // ── labelClusters ─────────────────────────────────────────────────────────────

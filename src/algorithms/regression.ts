@@ -26,7 +26,13 @@ export function fitLinearRegression(
   ys: number[],
 ): RegressionModel {
   const n = xs.length;
+  if (n !== ys.length) {
+    throw new Error("x and y series must have the same length");
+  }
   if (n < 3) throw new Error("Need at least 3 points for regression");
+  if (!xs.every(Number.isFinite) || !ys.every(Number.isFinite)) {
+    throw new Error("Regression input contains non-finite values");
+  }
 
   // Compute means
   const xBar = xs.reduce((a, b) => a + b, 0) / n;
@@ -40,6 +46,10 @@ export function fitLinearRegression(
     Sxx += dx * dx;
     Sxy += dx * dy;
     Syy += dy * dy;
+  }
+
+  if (Sxx < 1e-12) {
+    throw new Error("Regression requires variability in x values");
   }
 
   const slope     = Sxy / Sxx;

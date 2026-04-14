@@ -26,6 +26,13 @@ function euclidean(a: number[], b: number[]): number {
   return Math.sqrt(a.reduce((acc, ai, i) => acc + (ai - b[i]) ** 2, 0));
 }
 
+function euclideanSquared(a: number[], b: number[]): number {
+  return a.reduce((acc, ai, i) => {
+    const d = ai - b[i];
+    return acc + d * d;
+  }, 0);
+}
+
 function zNormalize(data: number[][]): { normalized: number[][]; means: number[]; stds: number[] } {
   const dims = data[0].length;
   const means = Array.from({ length: dims }, (_, j) => {
@@ -82,6 +89,26 @@ export function kmeans(
   maxIterations = 200,
   seed = 42,
 ): KMeansResult {
+  if (!Number.isInteger(k) || k < 1) {
+    throw new Error("k must be a positive integer");
+  }
+  if (data.length === 0) {
+    throw new Error("kmeans requires at least one data point");
+  }
+  if (k > data.length) {
+    throw new Error("k cannot exceed number of data points");
+  }
+  const dims = data[0].length;
+  if (dims === 0) {
+    throw new Error("kmeans requires points with at least one feature");
+  }
+  if (data.some(row => row.length !== dims)) {
+    throw new Error("All points must have the same dimensionality");
+  }
+  if (data.some(row => row.some(v => !Number.isFinite(v)))) {
+    throw new Error("kmeans input contains non-finite values");
+  }
+
   const { normalized } = zNormalize(data);
   const n = normalized.length;
   const rand = makeLCG(seed);
@@ -93,20 +120,24 @@ export function kmeans(
 
   for (iterations = 0; iterations < maxIterations; iterations++) {
     // Assignment step: assign each point to nearest centroid
-    const newAssignments = normalized.map(p =>
-      centroids.reduce(
-        (bestIdx, c, ci) =>
-          euclidean(p, c) < euclidean(p, centroids[bestIdx]) ? ci : bestIdx,
-        0,
-      ),
-    );
+    const newAssignments = normalized.map(p => {
+      let bestIdx = 0;
+      let bestDist = euclideanSquared(p, centroids[0]);
+      for (let ci = 1; ci < centroids.length; ci++) {
+        const d2 = euclideanSquared(p, centroids[ci]);
+        if (d2 < bestDist) {
+          bestDist = d2;
+          bestIdx = ci;
+        }
+      }
+      return bestIdx;
+    });
 
     converged = newAssignments.every((a, i) => a === assignments[i]);
     assignments = newAssignments;
     if (converged) break;
 
     // Update step: recompute centroids as mean of assigned points
-    const dims = centroids[0].length;
     for (let c = 0; c < k; c++) {
       const members = normalized.filter((_, i) => assignments[i] === c);
       if (members.length === 0) continue; // empty cluster — keep old centroid

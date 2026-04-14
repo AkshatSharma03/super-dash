@@ -23,7 +23,9 @@ export interface CorrelationResult {
 /** Pearson r between two equal-length numeric arrays. Returns 0 if degenerate. */
 export function pearsonR(x: number[], y: number[]): number {
   const n = x.length;
+  if (n !== y.length) return 0;
   if (n < 3) return 0;
+  if (!x.every(Number.isFinite) || !y.every(Number.isFinite)) return 0;
 
   const xBar = x.reduce((a, b) => a + b, 0) / n;
   const yBar = y.reduce((a, b) => a + b, 0) / n;
@@ -52,16 +54,15 @@ export function buildCorrelationMatrix(
   exportData: Array<{ year: number; total: number }>,
   importData: Array<{ year: number; total: number }>,
 ): CorrelationResult {
-  // Align all series on the intersection of available years
-  const yearSet = new Set(gdpData.map(d => d.year));
-  for (const d of exportData) if (!yearSet.has(d.year)) yearSet.delete(d.year);
-  for (const d of importData) if (!yearSet.has(d.year)) yearSet.delete(d.year);
-
-  const years = [...yearSet].sort((a, b) => a - b);
-
   const gdpMap  = new Map(gdpData.map(d => [d.year, d]));
   const expMap  = new Map(exportData.map(d => [d.year, d.total]));
   const impMap  = new Map(importData.map(d => [d.year, d.total]));
+
+  // Align all series on the true intersection of available years
+  const years = gdpData
+    .map(d => d.year)
+    .filter(year => expMap.has(year) && impMap.has(year))
+    .sort((a, b) => a - b);
 
   // Build series vectors aligned by year
   const gdpBn:    number[] = [];
@@ -73,9 +74,10 @@ export function buildCorrelationMatrix(
 
   for (const y of years) {
     const g = gdpMap.get(y);
-    const ex = expMap.get(y) ?? 0;
-    const im = impMap.get(y) ?? 0;
+    const ex = expMap.get(y);
+    const im = impMap.get(y);
     if (!g) continue;
+    if (ex === undefined || im === undefined) continue;
     gdpBn.push(g.gdp_bn);
     gdpGr.push(g.gdp_growth);
     gdpPc.push(g.gdp_per_capita);

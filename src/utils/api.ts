@@ -39,62 +39,71 @@ async function resolveAuthToken(token?: string): Promise<string | undefined> {
   return dynamicToken ?? undefined;
 }
 
+async function requestJSON<T>(
+  path: string,
+  options: {
+    method?: "GET" | "POST" | "PATCH" | "DELETE";
+    token?: string;
+    body?: unknown;
+    timeoutMs?: number;
+  } = {},
+): Promise<T> {
+  const method = options.method ?? "GET";
+  const headers: Record<string, string> = {};
+
+  if (options.body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const authToken = await resolveAuthToken(options.token);
+  if (authToken) {
+    headers["Authorization"] = `Bearer ${authToken}`;
+  }
+
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    signal: AbortSignal.timeout(options.timeoutMs ?? API_TIMEOUT_MS),
+  });
+
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res));
+  }
+
+  return res.json() as Promise<T>;
+ }
+
 /** Helper: POST to an endpoint, throw on non-2xx, return typed JSON. */
 async function post<T>(path: string, body: unknown, token?: string): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const authToken = await resolveAuthToken(token);
-  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  const res = await fetch(path, {
+  return requestJSON<T>(path, {
     method: "POST",
-    headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    body,
+    token,
   });
-  if (!res.ok) throw new Error(await parseErrorMessage(res));
-  return res.json() as Promise<T>;
 }
 
 /** Helper: GET from an endpoint with optional auth. */
 async function get<T>(path: string, token?: string): Promise<T> {
-  const headers: Record<string, string> = {};
-  const authToken = await resolveAuthToken(token);
-  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  const res = await fetch(path, {
-    headers,
-    signal: AbortSignal.timeout(API_TIMEOUT_MS),
-  });
-  if (!res.ok) throw new Error(await parseErrorMessage(res));
-  return res.json() as Promise<T>;
+  return requestJSON<T>(path, { token });
 }
 
 /** Helper: PATCH an endpoint with optional auth. */
 async function patch<T>(path: string, body: unknown, token?: string): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const authToken = await resolveAuthToken(token);
-  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  const res = await fetch(path, {
+  return requestJSON<T>(path, {
     method: "PATCH",
-    headers,
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+    body,
+    token,
   });
-  if (!res.ok) throw new Error(await parseErrorMessage(res));
-  return res.json() as Promise<T>;
 }
 
 /** Helper: DELETE an endpoint with optional auth and optional body. */
 async function del<T>(path: string, token?: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {};
-  const authToken = await resolveAuthToken(token);
-  if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  if (body !== undefined) headers["Content-Type"] = "application/json";
-  const res = await fetch(path, {
-    method: "DELETE", headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  return requestJSON<T>(path, {
+    method: "DELETE",
+    token,
+    body,
   });
-  if (!res.ok) throw new Error(await parseErrorMessage(res));
-  return res.json() as Promise<T>;
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────

@@ -27,6 +27,14 @@ describe("fitLinearRegression", () => {
     );
   });
 
+  it("throws on mismatched series lengths", () => {
+    expect(() => fitLinearRegression([1, 2, 3], [2, 4])).toThrow(/same length/i);
+  });
+
+  it("throws when x has zero variance", () => {
+    expect(() => fitLinearRegression([1, 1, 1], [2, 3, 4])).toThrow(/variability in x/i);
+  });
+
   it("R² is between 0 and 1 for noisy data", () => {
     const xs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
     const ys = [2.1, 3.9, 6.2, 7.8, 10.1, 12.3, 13.9, 16.2, 18.1, 19.8];

@@ -44,6 +44,10 @@ describe("pearsonR", () => {
     expect(pearsonR([], [])).toBe(0);
   });
 
+  it("returns 0 when x and y lengths are mismatched", () => {
+    expect(pearsonR([1, 2, 3], [2, 4])).toBe(0);
+  });
+
   it("returns 0 for a constant series (zero variance → degenerate)", () => {
     expect(pearsonR([5, 5, 5, 5], [1, 2, 3, 4])).toBe(0);
   });
@@ -158,5 +162,23 @@ describe("buildCorrelationMatrix", () => {
     expect(names.some(n => n.includes("GDP"))).toBe(true);
     expect(names.some(n => n.includes("Export"))).toBe(true);
     expect(names.some(n => n.includes("Import"))).toBe(true);
+  });
+
+  it("uses only years present across all 3 datasets", () => {
+    const partialExports = EXPORT_DATA.filter(d => d.year >= 2012);
+    const partialImports = IMPORT_DATA.filter(d => d.year <= 2022);
+    const partialResult = buildCorrelationMatrix(GDP_DATA, partialExports, partialImports);
+
+    const gdpExports = partialResult.cells.find(c =>
+      c.rowLabel === "GDP ($B)" && c.colLabel === "Exports ($B)",
+    );
+
+    const expectedYears = years.filter(y => y >= 2012 && y <= 2022);
+    const expectedR = pearsonR(
+      GDP_DATA.filter(d => expectedYears.includes(d.year)).map(d => d.gdp_bn),
+      partialExports.filter(d => expectedYears.includes(d.year)).map(d => d.total),
+    );
+
+    expect(gdpExports?.r).toBeCloseTo(expectedR, 3);
   });
 });
