@@ -202,17 +202,20 @@ export default function SearchMode() {
                 Sources ({result.sources.length})
               </p>
               <div className="flex flex-col gap-1.5">
-                {result.sources.slice(0, 8).map((s, i) =>
+                {result.sources.slice(0, 12).map((s, i) =>
                   s.url
                     ? <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
-                        className="text-xs text-primary no-underline flex items-start gap-1.5 hover:underline">
-                        <span className="text-muted-foreground shrink-0">↗</span>{s.title}
+                        className="text-[13px] text-memphis-black no-underline flex items-start gap-1.5 hover:underline">
+                        <span className="text-memphis-black/50 shrink-0">↗</span>{s.title}
                       </a>
-                    : <span key={i} className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    : <span key={i} className="text-[13px] text-memphis-black/70 flex items-center gap-1.5">
                         <BookOpen className="w-3.5 h-3.5" />{s.title}
                       </span>
                 )}
               </div>
+              {result.sources.length > 12 && (
+                <p className="mt-2 text-[11px] text-memphis-black/60">+ {result.sources.length - 12} more sources available in export</p>
+              )}
             </div>
           )}
 

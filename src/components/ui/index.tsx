@@ -116,12 +116,12 @@ export function MarkdownText({ text }: { text?: string }) {
     <Markdown
       remarkPlugins={[remarkGfm]}
       components={{
-        h2: ({ children }) => <h4 className="text-sm font-bold text-foreground mt-4 mb-2">{children}</h4>,
-        h3: ({ children }) => <h4 className="text-sm font-bold text-foreground mt-3.5 mb-1.5">{children}</h4>,
-        p: ({ children }) => <p className="text-sm text-slate-300 leading-[1.75] mb-2.5">{children}</p>,
-        ul: ({ children }) => <ul className="list-disc pl-5 mb-2.5">{children}</ul>,
-        ol: ({ children }) => <ol className="list-decimal pl-5 mb-2.5">{children}</ol>,
-        li: ({ children }) => <li className="text-sm text-slate-300 leading-[1.7] mb-0.5">{children}</li>,
+        h2: ({ children }) => <h4 className="text-base font-black text-memphis-black mt-4 mb-2">{children}</h4>,
+        h3: ({ children }) => <h4 className="text-sm font-bold text-memphis-black mt-3.5 mb-1.5">{children}</h4>,
+        p: ({ children }) => <p className="text-[14px] text-memphis-black/85 leading-[1.8] mb-3">{children}</p>,
+        ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>,
+        ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>,
+        li: ({ children }) => <li className="text-[14px] text-memphis-black/85 leading-[1.75]">{children}</li>,
         strong: ({ children }) => <strong className="text-foreground font-semibold">{children}</strong>,
       }}
     >

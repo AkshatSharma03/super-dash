@@ -1152,6 +1152,30 @@ async function callKagi(path, { method = 'GET', body = null, timeoutMs = KAGI_TI
   return payload;
 }
 
+function buildKagiSearchPrompt(query, searchNewsSources = []) {
+  const newsContext = searchNewsSources.length > 0
+    ? `\n\nRecent context (verify before use):\n${searchNewsSources
+        .slice(0, 6)
+        .map((s, i) => `${i + 1}. ${s.title}`)
+        .join('\n')}`
+    : '';
+
+  return [
+    `Research question: ${query}`,
+    '',
+    'Return comprehensive markdown brief with these sections:',
+    '1) Bottom line (2-3 bullets)',
+    '2) What happened (timeline + current state)',
+    '3) Market impact (oil, shipping, inflation, growth) with numbers/ranges where available',
+    '4) Scenario analysis (base/upside/downside with probabilities if possible)',
+    '5) 30/90-day watchlist (specific indicators/events to monitor)',
+    '6) Risks and unknowns (what could invalidate this view)',
+    '',
+    'Rules: concise but deep, avoid fluff, include concrete figures and assumptions, clearly mark uncertainty.',
+    newsContext,
+  ].join('\n');
+}
+
 // ── SSE + streaming helpers ────────────────────────────────────────────────────
 
 /** Write a named SSE event with JSON payload. */
@@ -1774,9 +1798,10 @@ app.post('/api/search', apiLimiter, async (req, res) => {
 
   if (KAGI_API_KEY) {
     try {
+      const kagiPrompt = buildKagiSearchPrompt(query, searchNewsSources);
       const kagi = await callKagi('/fastgpt', {
         method: 'POST',
-        body: { query, cache: true },
+        body: { query: kagiPrompt, cache: true },
       });
 
       text = kagi?.data?.output?.trim?.() || '';
