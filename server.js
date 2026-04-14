@@ -992,11 +992,12 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc:     ["'self'"],
-        scriptSrc:      ["'self'"],
+        scriptSrc:      ["'self'", 'https://*.clerk.com', 'https://*.clerk.accounts.dev', 'https://*.clerk.dev'],
         styleSrc:       ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
         fontSrc:        ["'self'", 'https://fonts.gstatic.com'],
-        connectSrc:     ["'self'", 'https://*.i.posthog.com', 'https://*.posthog.com'],
-        imgSrc:         ["'self'", 'data:'],
+        connectSrc:     ["'self'", 'https://*.i.posthog.com', 'https://*.posthog.com', 'https://*.clerk.com', 'https://*.clerk.accounts.dev', 'https://*.clerk.dev'],
+        imgSrc:         ["'self'", 'data:', 'blob:', 'https://*.clerk.com', 'https://*.clerk.accounts.dev', 'https://*.clerk.dev'],
+        frameSrc:       ["'self'", 'https://*.clerk.com', 'https://*.clerk.accounts.dev', 'https://*.clerk.dev', 'https://challenges.cloudflare.com', 'https://*.hcaptcha.com', 'https://*.google.com', 'https://*.gstatic.com'],
         frameAncestors: ["'none'"],
       },
     },
