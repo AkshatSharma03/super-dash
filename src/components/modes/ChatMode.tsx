@@ -363,7 +363,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
             </Button>
           </div>
           <p className="text-center text-[10px] text-border mt-2">
-            Powered by Claude · World Bank · IMF · UN Comtrade · OECD · Enter to send
+            Powered by Kagi FastGPT · World Bank · IMF · UN Comtrade · OECD · Enter to send
           </p>
         </div>
       </div>

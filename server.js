@@ -1232,6 +1232,48 @@ function buildKagiSearchPrompt(query, searchNewsSources = [], searchContext = []
   ].join('\n');
 }
 
+function buildKagiChatPrompt(messages = [], newsSources = []) {
+  const turns = Array.isArray(messages)
+    ? messages.slice(-10).map((m) => {
+        const role = m?.role === 'assistant' ? 'Assistant' : 'User';
+        const content = typeof m?.content === 'string'
+          ? m.content
+          : JSON.stringify(m?.content ?? '');
+        return `${role}: ${content}`;
+      }).join('\n\n')
+    : '';
+
+  const newsContext = Array.isArray(newsSources) && newsSources.length > 0
+    ? `\n\nRecent news context (verify before use):\n${newsSources
+        .slice(0, 6)
+        .map((s, i) => `${i + 1}. ${s.title}`)
+        .join('\n')}`
+    : '';
+
+  return [
+    'You are EconChart, an economics research and analysis assistant.',
+    'Answer latest user request using conversation context.',
+    'Provide clear narrative analysis with concrete figures, years, and assumptions where available.',
+    'If data is uncertain or unavailable, state uncertainty explicitly.',
+    'Keep answer structured with short section headers and bullet points where useful.',
+    'Do not output JSON or code fences.',
+    newsContext,
+    '',
+    'Conversation:',
+    turns,
+    '',
+    'Now respond to latest user message.',
+  ].join('\n');
+}
+
+function defaultChatFollowUps() {
+  return [
+    'Compare this with peers or regional averages',
+    'Show key drivers behind this trend',
+    'What could change this outlook in next 12 months?',
+  ];
+}
+
 // ── SSE + streaming helpers ────────────────────────────────────────────────────
 
 /** Write a named SSE event with JSON payload. */
@@ -1667,6 +1709,68 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
   let loopMessages = [...messages];
   let finalText = '';
   const verifiedIndicators = new Set();
+
+  if (!KAGI_API_KEY) {
+    sseWrite(res, 'error', { message: 'AI chat is configured for Kagi only. Set KAGI_API_KEY on the server.' });
+    res.end();
+    return;
+  }
+
+  try {
+    sseWrite(res, 'status', { text: 'Researching with Kagi FastGPT…' });
+    const kagiPrompt = buildKagiChatPrompt(messages, fetchedNewsSources);
+    const kagi = await callKagi('/fastgpt', {
+      method: 'POST',
+      body: { query: kagiPrompt, cache: true },
+    });
+
+    const insight = kagi?.data?.output?.trim?.() || '';
+    if (!insight) {
+      sseWrite(res, 'error', { message: 'Kagi chat returned no output.' });
+      res.end();
+      return;
+    }
+
+    const sources = [];
+    const refs = Array.isArray(kagi?.data?.references) ? kagi.data.references : [];
+    for (const ref of refs) {
+      if (!ref?.url) continue;
+      if (!sources.find(s => s.url === ref.url)) {
+        sources.push({ title: ref.title || ref.url, url: ref.url });
+      }
+    }
+
+    const parsed = validateAIResponse({
+      insight,
+      charts: [],
+      sources,
+      followUps: defaultChatFollowUps(),
+    }) ?? { insight, charts: [], sources, followUps: defaultChatFollowUps() };
+
+    const existingUrls = new Set((parsed.sources || []).map(s => s.url).filter(Boolean));
+    for (const ns of fetchedNewsSources) {
+      if (ns.url && !existingUrls.has(ns.url)) {
+        parsed.sources = [...(parsed.sources || []), ns];
+        existingUrls.add(ns.url);
+      }
+    }
+
+    if (parsed.insight) sseWrite(res, 'text', { delta: parsed.insight });
+    apiCache.put(ck, parsed, chatCacheTtlMs());
+    track(req.user?.id || 'guest', 'chat_sent', {
+      message_count: messages.length,
+      charts_returned: 0,
+      has_news_context: fetchedNewsSources.length > 0,
+    });
+    sseWrite(res, 'done', { result: parsed });
+    res.end();
+    return;
+  } catch (e) {
+    console.error('/api/chat Kagi error:', e.message);
+    sseWrite(res, 'error', { message: 'Kagi chat failed. Claude fallback is disabled.' });
+    res.end();
+    return;
+  }
 
   try {
     for (let turn = 0; turn < MAX_DATA_TURNS; turn++) {

@@ -482,7 +482,7 @@ export function buildChatReportHTML(messages: Message[], sessionTitle = "AI Chat
 
 <div style="padding-bottom:24px;border-bottom:3px solid #8b5cf6;margin-bottom:28px">
   <h1 style="font-size:24px;font-weight:800;color:#0f172a;letter-spacing:-0.3px">💬 ${sessionTitle}</h1>
-  <p style="font-size:12px;color:#64748b;margin-top:6px">📅 Generated: ${generated} · Powered by Claude · World Bank · IMF · OECD</p>
+  <p style="font-size:12px;color:#64748b;margin-top:6px">📅 Generated: ${generated} · Powered by Kagi FastGPT · World Bank · IMF · OECD</p>
 </div>
 
 <h2>Conversation</h2>
@@ -533,7 +533,7 @@ export function buildSearchReportHTML(query: string, result: SearchResult): stri
 <div style="padding-bottom:24px;border-bottom:3px solid ${accentColor};margin-bottom:28px">
   <h1 style="font-size:22px;font-weight:800;color:#0f172a;letter-spacing:-0.3px">🔍 ${query}</h1>
   <span style="display:inline-block;margin-top:8px;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;background:${badgeBg};color:${badgeColor};border:1px solid ${badgeBorder}">${badgeLabel}</span>
-  <p style="font-size:11px;color:#94a3b8;margin-top:8px">📅 Generated: ${generated} · Powered by Claude · Anthropic Web Search</p>
+  <p style="font-size:11px;color:#94a3b8;margin-top:8px">📅 Generated: ${generated} · Powered by Kagi FastGPT Web Search</p>
 </div>
 
 <h2>Research Summary</h2>
