@@ -1709,67 +1709,24 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
   let loopMessages = [...messages];
   let finalText = '';
   const verifiedIndicators = new Set();
-
-  if (!KAGI_API_KEY) {
-    sseWrite(res, 'error', { message: 'AI chat is configured for Kagi only. Set KAGI_API_KEY on the server.' });
-    res.end();
-    return;
-  }
-
-  try {
-    sseWrite(res, 'status', { text: 'Researching with Kagi FastGPT…' });
-    const kagiPrompt = buildKagiChatPrompt(messages, fetchedNewsSources);
-    const kagi = await callKagi('/fastgpt', {
-      method: 'POST',
-      body: { query: kagiPrompt, cache: true },
-    });
-
-    const insight = kagi?.data?.output?.trim?.() || '';
-    if (!insight) {
-      sseWrite(res, 'error', { message: 'Kagi chat returned no output.' });
-      res.end();
-      return;
-    }
-
-    const sources = [];
-    const refs = Array.isArray(kagi?.data?.references) ? kagi.data.references : [];
-    for (const ref of refs) {
-      if (!ref?.url) continue;
-      if (!sources.find(s => s.url === ref.url)) {
-        sources.push({ title: ref.title || ref.url, url: ref.url });
+  const kagiSources = [];
+  if (KAGI_API_KEY) {
+    try {
+      const kagiPrompt = buildKagiChatPrompt(messages, fetchedNewsSources);
+      const kagi = await callKagi('/fastgpt', {
+        method: 'POST',
+        body: { query: kagiPrompt, cache: true },
+      });
+      const refs = Array.isArray(kagi?.data?.references) ? kagi.data.references : [];
+      for (const ref of refs) {
+        if (!ref?.url) continue;
+        if (!kagiSources.find(s => s.url === ref.url)) {
+          kagiSources.push({ title: ref.title || ref.url, url: ref.url });
+        }
       }
+    } catch (e) {
+      console.error('/api/chat Kagi enrichment error:', e.message);
     }
-
-    const parsed = validateAIResponse({
-      insight,
-      charts: [],
-      sources,
-      followUps: defaultChatFollowUps(),
-    }) ?? { insight, charts: [], sources, followUps: defaultChatFollowUps() };
-
-    const existingUrls = new Set((parsed.sources || []).map(s => s.url).filter(Boolean));
-    for (const ns of fetchedNewsSources) {
-      if (ns.url && !existingUrls.has(ns.url)) {
-        parsed.sources = [...(parsed.sources || []), ns];
-        existingUrls.add(ns.url);
-      }
-    }
-
-    if (parsed.insight) sseWrite(res, 'text', { delta: parsed.insight });
-    apiCache.put(ck, parsed, chatCacheTtlMs());
-    track(req.user?.id || 'guest', 'chat_sent', {
-      message_count: messages.length,
-      charts_returned: 0,
-      has_news_context: fetchedNewsSources.length > 0,
-    });
-    sseWrite(res, 'done', { result: parsed });
-    res.end();
-    return;
-  } catch (e) {
-    console.error('/api/chat Kagi error:', e.message);
-    sseWrite(res, 'error', { message: 'Kagi chat failed. Claude fallback is disabled.' });
-    res.end();
-    return;
   }
 
   try {
@@ -1907,8 +1864,14 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
       parsed.insight += ' ⚠ Charts are not shown because no data could be fetched from the official APIs (World Bank, IMF). Check that the APIs are reachable, or add a FRED_API_KEY environment variable for US data.';
     }
 
-    // Merge news source citations
+    // Merge Kagi + news source citations
     const existingUrls = new Set((parsed.sources || []).map(s => s.url).filter(Boolean));
+    for (const ks of kagiSources) {
+      if (ks.url && !existingUrls.has(ks.url)) {
+        parsed.sources = [...(parsed.sources || []), ks];
+        existingUrls.add(ks.url);
+      }
+    }
     for (const ns of fetchedNewsSources) {
       if (ns.url && !existingUrls.has(ns.url)) {
         parsed.sources = [...(parsed.sources || []), ns];

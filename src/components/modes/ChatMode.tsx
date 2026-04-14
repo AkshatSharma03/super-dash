@@ -7,7 +7,7 @@ import { CHAT_SUGGESTIONS } from "../../data/suggestions";
 import { useMobile } from "../../utils/useMobile";
 import { askClaudeStream, getSessions, getSession, createSession, updateSession, deleteSession } from "../../utils/api";
 import type { Message, AIResponse, ChatSession } from "../../types";
-import { ChartCard, SourceList } from "../ui";
+import { ChartCard, SourceList, MarkdownText } from "../ui";
 import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -38,7 +38,9 @@ function ChatMessage({ msg, onFollowUp }: { msg: Message; onFollowUp: (q: string
                 style={{ background: "#FF006E" }}><Sparkles className="w-3 h-3" /></div>
             <span className="text-[10px] text-memphis-pink font-black uppercase tracking-[0.8px]">Analysis</span>
           </div>
-          <p className="text-sm text-memphis-black leading-[1.75]">{insight}</p>
+          <div className="text-sm text-memphis-black leading-[1.75]">
+            <MarkdownText text={insight} />
+          </div>
         </div>
       )}
       {error && (
