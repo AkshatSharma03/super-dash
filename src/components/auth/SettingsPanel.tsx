@@ -36,12 +36,16 @@ const clerkAppearance = {
     colorInputBackground: "#FFFFFF",
     colorInputText: "#1A1A2E",
     colorDanger: "#FB5607",
+    borderRadius: "0px",
+    fontFamily: "Inter, sans-serif",
   },
   elements: {
     rootBox: "w-full",
+    cardBox: "w-full",
     card: "shadow-none border-0 rounded-none bg-transparent",
     navbar: "hidden",
     pageScrollBox: "p-0",
+    page: "space-y-3",
     profileSectionPrimaryButton:
       "rounded-none border-3 border-memphis-black bg-memphis-pink text-white font-black uppercase tracking-wide shadow-hard hover:bg-memphis-pink",
     profileSectionSecondaryButton:
@@ -51,12 +55,17 @@ const clerkAppearance = {
     formFieldInput:
       "h-11 border-3 border-memphis-black/20 rounded-none text-memphis-black placeholder:text-memphis-black/40 focus:border-memphis-pink focus:ring-0",
     formFieldLabel: "text-[11px] uppercase tracking-wide font-black text-memphis-black",
+    formFieldInputShowPasswordButton: "text-memphis-black",
     accordionTriggerButton:
       "rounded-none border-3 border-memphis-black bg-white text-memphis-black font-black uppercase tracking-wide",
     dangerSection: "border-3 border-destructive/50 bg-destructive/5",
     badge: "rounded-none border-2 border-memphis-black",
+    footerActionLink: "text-memphis-pink font-black",
+    formResendCodeLink: "text-memphis-pink font-black",
+    dividerLine: "bg-memphis-black/20",
+    dividerText: "text-[10px] uppercase tracking-wide font-black text-memphis-black/50",
     breadcrumbs: "hidden",
-    profileSection: "border-3 border-memphis-black bg-white p-4 shadow-hard-sm",
+    profileSection: "border-3 border-memphis-black bg-white p-3 sm:p-4 shadow-hard-sm",
   },
 } as const;
 

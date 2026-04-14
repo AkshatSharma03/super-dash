@@ -34,23 +34,33 @@ const clerkAppearance = {
     colorInputBackground: "#FFFFFF",
     colorInputText: "#1A1A2E",
     colorDanger: "#FB5607",
+    borderRadius: "0px",
+    fontFamily: "Inter, sans-serif",
   },
   elements: {
-    card: "shadow-none border-0 p-0 bg-transparent",
     rootBox: "w-full",
+    cardBox: "w-full",
+    card: "shadow-none border-0 p-0 bg-transparent w-full",
+    main: "w-full",
     headerTitle: "hidden",
     headerSubtitle: "hidden",
+    form: "space-y-3",
+    socialButtonsBlockButtonArrow: "text-memphis-black",
     socialButtonsBlockButton: "border-3 border-memphis-black rounded-none shadow-hard text-memphis-black font-black",
     socialButtonsBlockButtonText: "font-black",
     formFieldLabel: "text-[11px] uppercase tracking-wide font-black text-memphis-black",
     formFieldInput:
       "h-11 border-3 border-memphis-black/20 rounded-none text-memphis-black placeholder:text-memphis-black/40 focus:border-memphis-pink focus:ring-0",
+    formFieldInputShowPasswordButton: "text-memphis-black",
     formButtonPrimary:
       "h-10 rounded-none border-3 border-memphis-black bg-memphis-pink text-white font-black uppercase tracking-wide shadow-hard hover:bg-memphis-pink",
     footerActionLink: "text-memphis-pink font-black",
     identityPreviewText: "text-memphis-black",
+    identityPreviewEditButton: "text-memphis-pink font-black",
     formResendCodeLink: "text-memphis-pink font-black",
     otpCodeFieldInput: "border-3 border-memphis-black/20 rounded-none",
+    dividerLine: "bg-memphis-black/20",
+    dividerText: "text-[10px] uppercase tracking-wide font-black text-memphis-black/50",
     alertText: "text-memphis-black",
   },
 } as const;
@@ -104,12 +114,13 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
         ))}
       </div>
 
-      <div className="border-3 border-memphis-black bg-white p-3 shadow-hard">
+      <div className="border-3 border-memphis-black bg-white p-3 shadow-hard min-h-[540px] sm:min-h-[560px]">
         {view === "login" ? (
           <SignIn
             routing="hash"
             signUpUrl="#register"
             forceRedirectUrl="/"
+            fallbackRedirectUrl="/"
             appearance={clerkAppearance}
           />
         ) : (
@@ -117,6 +128,7 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
             routing="hash"
             signInUrl="#login"
             forceRedirectUrl="/"
+            fallbackRedirectUrl="/"
             appearance={clerkAppearance}
           />
         )}
@@ -201,8 +213,10 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
         </div>
 
         {/* Right: auth form */}
-        <div className="order-1 lg:order-2 w-full lg:w-[420px] shrink-0 px-5 sm:px-8 lg:px-11 py-6 sm:py-10 lg:py-[60px] border-b-3 lg:border-b-0 lg:border-l-3 border-memphis-black flex flex-col justify-center bg-white">
-          {renderAuthForm()}
+        <div className="order-1 lg:order-2 w-full lg:w-[460px] shrink-0 px-5 sm:px-8 lg:px-11 py-6 sm:py-10 lg:py-[60px] border-b-3 lg:border-b-0 lg:border-l-3 border-memphis-black flex flex-col justify-center bg-white">
+          <div className="w-full max-w-[460px] mx-auto">
+            {renderAuthForm()}
+          </div>
         </div>
       </div>
     </div>
