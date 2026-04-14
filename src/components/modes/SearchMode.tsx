@@ -141,27 +141,27 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
     <div className="max-w-[860px] mx-auto px-1 sm:px-0">
 
       {/* ── Search bar with Trie autocomplete ── */}
-      <div className="sticky top-0 z-30 mb-4 pt-1 pb-2 bg-memphis-offwhite/95 backdrop-blur-sm">
-        <div className="relative">
-        <div className={cn("flex gap-2", isMobile && "flex-col")}>
-          <Input
-            value={query}
-            onChange={e => handleQueryChange(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === "Enter")  doSearch(query);
-              if (e.key === "Escape") setShowSuggestions(false);
-            }}
-            onBlur={e => { e.currentTarget.blur(); setTimeout(() => setShowSuggestions(false), 150); }}
-            onFocus={() => query.trim().length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
-            disabled={loading}
-            placeholder="Search for US, China, EU, Japan economic data, trade stats, news…"
-            className="flex-1 h-11 text-sm focus-visible:ring-emerald-500 focus-visible:border-emerald-500"
-          />
-          <Button onClick={() => doSearch(query)} disabled={loading || !query.trim()}
-            className="h-11 min-h-11 px-6 whitespace-nowrap bg-gradient-to-br from-[#10B981] to-[#059669] shadow-[0_2px_10px_#10B98144] font-bold">
-            {loading ? "…" : "Search →"}
-          </Button>
-        </div>
+      <div className="sticky top-0 z-30 mb-5 pt-2 pb-2 bg-memphis-offwhite/90 backdrop-blur-sm">
+        <div className="relative border-3 border-memphis-black bg-white p-2 sm:p-2.5 shadow-hard">
+          <div className={cn("flex gap-2", isMobile && "flex-col")}>
+            <Input
+              value={query}
+              onChange={e => handleQueryChange(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter")  doSearch(query);
+                if (e.key === "Escape") setShowSuggestions(false);
+              }}
+              onBlur={e => { e.currentTarget.blur(); setTimeout(() => setShowSuggestions(false), 150); }}
+              onFocus={() => query.trim().length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
+              disabled={loading}
+              placeholder="Search for US, China, EU, Japan economic data, trade stats, news…"
+              className="flex-1 h-11 text-sm focus-visible:ring-emerald-500 focus-visible:border-emerald-500"
+            />
+            <Button onClick={() => doSearch(query)} disabled={loading || !query.trim()}
+              className="h-11 min-h-11 px-6 whitespace-nowrap bg-gradient-to-br from-[#10B981] to-[#059669] shadow-[0_2px_10px_#10B98144] font-bold">
+              {loading ? "…" : "Search →"}
+            </Button>
+          </div>
 
         {/* Trie autocomplete dropdown */}
         {showSuggestions && suggestions.length > 0 && (
