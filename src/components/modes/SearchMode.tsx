@@ -235,7 +235,7 @@ export default function SearchMode() {
       )}
 
       <p className="text-center text-[10px] text-border mt-5">
-        Powered by Claude · Web search via Anthropic · Sources: World Bank · IMF · Reuters · Bloomberg
+        Powered by Kagi FastGPT (primary) · Claude web search fallback · Sources: World Bank · IMF · Reuters · Bloomberg
       </p>
     </div>
   );

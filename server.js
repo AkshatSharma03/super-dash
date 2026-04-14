@@ -34,6 +34,8 @@ const PORT              = process.env.PORT || 3000;
 const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const KAGI_API_KEY      = process.env.KAGI_API_KEY;
+const KAGI_BASE         = 'https://kagi.com/api/v1';
 const IS_DEV            = process.env.NODE_ENV !== 'production';
 const CLERK_SECRET_KEY  = process.env.CLERK_SECRET_KEY;
 const CLERK_JWT_KEY     = process.env.CLERK_JWT_KEY;
@@ -74,6 +76,7 @@ const CSV_SAMPLE_ROWS   = 30;
 const MAX_SEARCH_TURNS  = 8;
 const ANTHROPIC_TIMEOUT_MS        = 55_000;  // non-streaming calls
 const ANTHROPIC_STREAM_TIMEOUT_MS = 180_000; // streaming: allow up to 3 min for large responses
+const KAGI_TIMEOUT_MS             = 25_000;
 
 // Auth
 const JWT_SECRET     = process.env.JWT_SECRET || 'dev-secret-change-in-production';
@@ -1117,6 +1120,38 @@ async function callAnthropic(body, extraHeaders = {}) {
   return res.json();
 }
 
+async function callKagi(path, { method = 'GET', body = null, timeoutMs = KAGI_TIMEOUT_MS } = {}) {
+  if (!KAGI_API_KEY) throw new Error('KAGI_API_KEY not configured');
+
+  const res = await fetch(`${KAGI_BASE}${path}`, {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bot ${KAGI_API_KEY}`,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+
+  let payload = null;
+  try {
+    payload = await res.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!res.ok) {
+    const detail = payload?.error?.[0]?.msg || payload?.message || `${res.status} ${res.statusText}`;
+    throw new Error(`Kagi ${res.status}: ${detail}`);
+  }
+
+  if (Array.isArray(payload?.error) && payload.error.length > 0) {
+    throw new Error(`Kagi error: ${payload.error.map(e => e.msg).join('; ')}`);
+  }
+
+  return payload;
+}
+
 // ── SSE + streaming helpers ────────────────────────────────────────────────────
 
 /** Write a named SSE event with JSON payload. */
@@ -1735,46 +1770,75 @@ app.post('/api/search', apiLimiter, async (req, res) => {
     console.error('News pre-fetch error in /api/search:', e.message);
   }
 
-  try {
-    const newsPrefix = searchNewsSources.length > 0
-      ? `Recent news context (use these to inform your answer and cite them):\n${JSON.stringify(searchNewsSources.map(s => s.title))}\n\nQuestion: `
-      : '';
-    const msgs = [{ role: 'user', content: newsPrefix + query }];
-    for (let turn = 0; turn < MAX_SEARCH_TURNS; turn++) {
-      const data = await callAnthropic(
-        { model: MODEL, max_tokens: 4000, temperature: 0, system: SEARCH_SYSTEM, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }], messages: msgs },
-        { 'anthropic-beta': 'web-search-2025-03-05' }
-      );
+  let searchResolved = false;
 
-      for (const blk of data.content || []) {
-        if (blk.type === 'text') { text = blk.text; webSearchUsed = true; }
-        for (const r of (Array.isArray(blk.content) ? blk.content : [])) {
-          if (r.url && !sources.find(s => s.url === r.url))
-            sources.push({ title: r.title || r.url, url: r.url });
+  if (KAGI_API_KEY) {
+    try {
+      const kagi = await callKagi('/fastgpt', {
+        method: 'POST',
+        body: { query, cache: true },
+      });
+
+      text = kagi?.data?.output?.trim?.() || '';
+      const refs = Array.isArray(kagi?.data?.references) ? kagi.data.references : [];
+      for (const ref of refs) {
+        if (!ref?.url) continue;
+        if (!sources.find(s => s.url === ref.url)) {
+          sources.push({ title: ref.title || ref.url, url: ref.url });
         }
       }
 
-      if (data.stop_reason === 'end_turn') break;
-
-      if (data.stop_reason === 'tool_use') {
-        msgs.push({ role: 'assistant', content: data.content });
-        const toolUses = (data.content || []).filter(b => b.type === 'tool_use' || b.type === 'server_tool_use');
-        if (!toolUses.length) break;
-        msgs.push({ role: 'user', content: toolUses.map(b => ({ type: 'tool_result', tool_use_id: b.id, content: 'Search complete.' })) });
-      } else break;
+      if (text) {
+        webSearchUsed = true;
+        searchResolved = true;
+      }
+    } catch (e) {
+      console.error('/api/search Kagi error:', e.message);
     }
-  } catch (_) {
+  }
+
+  if (!searchResolved) {
     try {
-      const data = await callAnthropic({
-        model: MODEL, max_tokens: 4000, temperature: 0,
-        system: SEARCH_SYSTEM + '\n\nNote: Web search unavailable. Answer from training knowledge (data up to early 2025). Clearly note when figures may be outdated.',
-        messages: [{ role: 'user', content: query }],
-      });
-      text    = data.content?.map(b => b.text || '').join('') || '';
-      sources = [{ title: 'Claude (training knowledge — may be outdated)', url: null }];
-    } catch (e2) {
-      console.error('/api/search fallback error:', e2.message);
-      return res.status(502).json({ error: e2.message });
+      const newsPrefix = searchNewsSources.length > 0
+        ? `Recent news context (use these to inform your answer and cite them):\n${JSON.stringify(searchNewsSources.map(s => s.title))}\n\nQuestion: `
+        : '';
+      const msgs = [{ role: 'user', content: newsPrefix + query }];
+      for (let turn = 0; turn < MAX_SEARCH_TURNS; turn++) {
+        const data = await callAnthropic(
+          { model: MODEL, max_tokens: 4000, temperature: 0, system: SEARCH_SYSTEM, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }], messages: msgs },
+          { 'anthropic-beta': 'web-search-2025-03-05' }
+        );
+
+        for (const blk of data.content || []) {
+          if (blk.type === 'text') { text = blk.text; webSearchUsed = true; }
+          for (const r of (Array.isArray(blk.content) ? blk.content : [])) {
+            if (r.url && !sources.find(s => s.url === r.url))
+              sources.push({ title: r.title || r.url, url: r.url });
+          }
+        }
+
+        if (data.stop_reason === 'end_turn') break;
+
+        if (data.stop_reason === 'tool_use') {
+          msgs.push({ role: 'assistant', content: data.content });
+          const toolUses = (data.content || []).filter(b => b.type === 'tool_use' || b.type === 'server_tool_use');
+          if (!toolUses.length) break;
+          msgs.push({ role: 'user', content: toolUses.map(b => ({ type: 'tool_result', tool_use_id: b.id, content: 'Search complete.' })) });
+        } else break;
+      }
+    } catch (_) {
+      try {
+        const data = await callAnthropic({
+          model: MODEL, max_tokens: 4000, temperature: 0,
+          system: SEARCH_SYSTEM + '\n\nNote: Web search unavailable. Answer from training knowledge (data up to early 2025). Clearly note when figures may be outdated.',
+          messages: [{ role: 'user', content: query }],
+        });
+        text    = data.content?.map(b => b.text || '').join('') || '';
+        sources = [{ title: 'Claude (training knowledge — may be outdated)', url: null }];
+      } catch (e2) {
+        console.error('/api/search fallback error:', e2.message);
+        return res.status(502).json({ error: e2.message });
+      }
     }
   }
 

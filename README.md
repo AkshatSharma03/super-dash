@@ -9,7 +9,7 @@
 | Mode | Description |
 |------|-------------|
 | 💬 **AI Chat** | Conversational interface — Claude generates interactive Recharts visualisations and expert analysis from any natural-language prompt. Persistent session history. |
-| 🔍 **Search** | Live web search powered by Claude's tool-use loop; returns sourced, cited summaries from World Bank, IMF, Reuters, and Bloomberg. Trie-powered O(m) autocomplete. |
+| 🔍 **Search** | Live web search with **Kagi FastGPT** as primary summarizer (Claude web-search fallback); returns sourced, cited summaries from World Bank, IMF, Reuters, and Bloomberg. Trie-powered O(m) autocomplete. |
 | 📁 **Data Upload** | Drag-and-drop any CSV → auto-parsed → Claude generates tailored charts and insights for your own dataset. |
 | 🧮 **Analytics** | Eight-algorithm panel (regression, CAGR, HP filter, correlation, HHI, anomaly, K-Means, trade openness) on live data for any country. |
 | 🌍 **Country Data** | Real GDP and trade data from the World Bank for any country — cached locally, with dual-handle year-range filtering and sector-level breakdowns. |
@@ -185,7 +185,7 @@ npm install
 # 2. Configure environment
 cp .env.example .env
 # Required: ANTHROPIC_API_KEY, CLERK_SECRET_KEY, VITE_CLERK_PUBLISHABLE_KEY
-# Optional: KIMI_API_KEY (enables LLM-based query canonicalization for better cache hit rates)
+# Optional: KAGI_API_KEY (Search mode primary provider), KIMI_API_KEY (query canonicalization)
 
 # 3. Development (two terminals)
 npm run dev:server   # Express API on :3000
@@ -213,7 +213,7 @@ Open [http://localhost:5173](http://localhost:5173) in development or [http://lo
 | Toasts | Sonner |
 | Backend | Express 5 · Node ≥ 20 |
 | Database | better-sqlite3 |
-| AI | Anthropic Claude API (tool-use agentic loop) · Kimi 2.5 (query canonicalization) |
+| AI | Anthropic Claude API (chat, analytics, CSV; search fallback) · Kagi FastGPT API (search + summarization primary) · Kimi 2.5 (query canonicalization) |
 | Security | Helmet.js · express-rate-limit · Clerk auth |
 
 ---
@@ -225,7 +225,7 @@ Open [http://localhost:5173](http://localhost:5173) in development or [http://lo
 | [World Bank Open Data](https://data.worldbank.org) | GDP, growth rates, GDP per capita — any country |
 | [UN Comtrade](https://comtrade.un.org) | Trade flows by partner and sector |
 | [IMF](https://www.imf.org/en/Data) | Macro indicators, forecasts |
-| Claude web search | Live news, current economic analysis |
+| Kagi FastGPT + Claude web search fallback | Live news, current economic analysis |
 
 > **Note:** Sector-level trade breakdowns are AI-estimated from published aggregate sources. All AI Chat and Search responses cite live sources at query time.
 
