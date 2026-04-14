@@ -19,17 +19,38 @@ export default function CountrySearchInput({ token, onSelect, placeholder = "Sea
   const [searching, setSearching] = useState(false);
   const [open,      setOpen]      = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
+    const q = query.trim();
     if (timer.current) clearTimeout(timer.current);
-    if (query.length < 2) { setResults([]); setOpen(false); return; }
+    if (q.length < 2) {
+      setResults([]);
+      setOpen(false);
+      setSearching(false);
+      return;
+    }
+
+    const requestId = ++requestIdRef.current;
     timer.current = setTimeout(async () => {
       setSearching(true);
-      try { const hits = await searchCountries(query, token); setResults(hits); setOpen(!!hits.length); }
+      try {
+        const hits = await searchCountries(q, token);
+        if (requestId !== requestIdRef.current) return;
+        setResults(hits);
+        setOpen(hits.length > 0);
+      }
       catch { /* ignore */ }
-      finally { setSearching(false); }
+      finally {
+        if (requestId === requestIdRef.current) {
+          setSearching(false);
+        }
+      }
     }, 350);
-    return () => { if (timer.current) clearTimeout(timer.current); };
+
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
   }, [query, token]);
 
   const pick = (code: string) => { setOpen(false); setQuery(""); setResults([]); onSelect(code); };

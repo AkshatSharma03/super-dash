@@ -6,9 +6,30 @@
 import type { AIResponse, SearchResult, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../types";
 
 let authTokenGetter: null | (() => Promise<string | null>) = null;
+const API_TIMEOUT_MS = 30_000;
+const CHAT_STREAM_TIMEOUT_MS = 190_000;
 
 export function setAuthTokenGetter(getter: (() => Promise<string | null>) | null) {
   authTokenGetter = getter;
+}
+
+async function parseErrorMessage(res: Response): Promise<string> {
+  const fallback = `${res.status} ${res.statusText}`.trim();
+  const contentType = res.headers.get("content-type") ?? "";
+
+  try {
+    if (contentType.includes("application/json")) {
+      const json = await res.json() as { error?: unknown; message?: unknown };
+      if (typeof json.error === "string" && json.error.trim()) return json.error;
+      if (typeof json.message === "string" && json.message.trim()) return json.message;
+      return fallback;
+    }
+
+    const text = (await res.text()).trim();
+    return text || fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 async function resolveAuthToken(token?: string): Promise<string | undefined> {
@@ -23,8 +44,13 @@ async function post<T>(path: string, body: unknown, token?: string): Promise<T> 
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const authToken = await resolveAuthToken(token);
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  const res = await fetch(path, { method: "POST", headers, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(`${await res.text()}`);
+  const res = await fetch(path, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(await parseErrorMessage(res));
   return res.json() as Promise<T>;
 }
 
@@ -33,8 +59,11 @@ async function get<T>(path: string, token?: string): Promise<T> {
   const headers: Record<string, string> = {};
   const authToken = await resolveAuthToken(token);
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  const res = await fetch(path, { headers });
-  if (!res.ok) throw new Error(`${await res.text()}`);
+  const res = await fetch(path, {
+    headers,
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(await parseErrorMessage(res));
   return res.json() as Promise<T>;
 }
 
@@ -43,8 +72,13 @@ async function patch<T>(path: string, body: unknown, token?: string): Promise<T>
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const authToken = await resolveAuthToken(token);
   if (authToken) headers["Authorization"] = `Bearer ${authToken}`;
-  const res = await fetch(path, { method: "PATCH", headers, body: JSON.stringify(body) });
-  if (!res.ok) throw new Error(`${await res.text()}`);
+  const res = await fetch(path, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(await parseErrorMessage(res));
   return res.json() as Promise<T>;
 }
 
@@ -57,8 +91,9 @@ async function del<T>(path: string, token?: string, body?: unknown): Promise<T> 
   const res = await fetch(path, {
     method: "DELETE", headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(API_TIMEOUT_MS),
   });
-  if (!res.ok) throw new Error(`${await res.text()}`);
+  if (!res.ok) throw new Error(await parseErrorMessage(res));
   return res.json() as Promise<T>;
 }
 
@@ -167,10 +202,11 @@ export async function askClaudeStream(
     method: "POST",
     headers,
     body: JSON.stringify({ messages }),
+    signal: AbortSignal.timeout(CHAT_STREAM_TIMEOUT_MS),
   });
 
   if (!res.ok || !res.body) {
-    callbacks.onError(await res.text().catch(() => "Network error"));
+    callbacks.onError(await parseErrorMessage(res));
     return;
   }
 
@@ -203,6 +239,9 @@ export async function askClaudeStream(
         }
       }
     }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Network error";
+    callbacks.onError(msg);
   } finally {
     reader.releaseLock();
   }

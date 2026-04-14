@@ -213,10 +213,16 @@ function AnomalyPanel({ dataset }: { dataset: CountryDataset }) {
     detectAllAnomaliesGeneric(dataset.gdpData, dataset.exportData, dataset.importData),
     [dataset]);
 
-  const yearCounts: Record<number, number> = {};
-  anomalies.forEach(a => { yearCounts[a.year] = (yearCounts[a.year] ?? 0) + 1; });
-  const allYears  = [...new Set([...dataset.gdpData, ...dataset.exportData].map(d => d.year))].sort();
-  const countData = allYears.map(y => ({ year: y, anomalies: yearCounts[y] ?? 0 }));
+  const { yearCounts, countData } = useMemo(() => {
+    const counts: Record<number, number> = {};
+    anomalies.forEach(a => { counts[a.year] = (counts[a.year] ?? 0) + 1; });
+
+    const years = [...new Set([...dataset.gdpData, ...dataset.exportData].map(d => d.year))].sort((a, b) => a - b);
+    return {
+      yearCounts: counts,
+      countData: years.map(y => ({ year: y, anomalies: counts[y] ?? 0 })),
+    };
+  }, [anomalies, dataset.gdpData, dataset.exportData]);
 
   return (
     <AnalyticsCard title={`${dataset.name} Anomaly Detection — Z-Score`}
@@ -339,6 +345,13 @@ function CorrelationPanel({ dataset }: { dataset: CountryDataset }) {
   const result = useMemo(() =>
     buildCorrelationMatrix(dataset.gdpData, dataset.exportData, dataset.importData),
     [dataset]);
+  const cellMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of result.cells) {
+      map.set(`${c.rowLabel}__${c.colLabel}`, c.r);
+    }
+    return map;
+  }, [result.cells]);
 
   return (
     <AnalyticsCard title={`${dataset.name} Correlation Matrix — Pearson r`}
@@ -369,8 +382,7 @@ function CorrelationPanel({ dataset }: { dataset: CountryDataset }) {
                   {isMobile ? row.replace(" ($B)", "").replace(" (%)", "").replace("GDP", "G") : row.replace(" ($B)", "").replace(" (%)", "")}
                 </td>
                 {result.variables.map(col => {
-                  const cell = result.cells.find(c => c.rowLabel === row && c.colLabel === col);
-                  const r = cell?.r ?? 0;
+                  const r = cellMap.get(`${row}__${col}`) ?? 0;
                   const isDiag = row === col;
                   return (
                     <td key={col} title={`${row} ↔ ${col}: r = ${r}`} className="px-1.5 py-1 text-center rounded" style={{
@@ -397,7 +409,7 @@ function OpennessPanel({ dataset }: { dataset: CountryDataset }) {
     const expMap = new Map(dataset.exportData.map(d => [d.year, d.total]));
     const impMap = new Map(dataset.importData.map(d => [d.year, d.total]));
 
-    return [...gdpMap.keys()].sort().map(year => {
+    return [...gdpMap.keys()].sort((a, b) => a - b).map(year => {
       const gdp = gdpMap.get(year) ?? 0;
       const exp = expMap.get(year) ?? 0;
       const imp = impMap.get(year) ?? 0;
@@ -481,12 +493,24 @@ function CountrySelector({ token, dataset, loading, error, onSelect }: SelectorP
   const [history, setHistory] = useState<CountrySearchResult[]>([]);
 
   useEffect(() => {
+    let cancelled = false;
     getCountryHistory(token)
-      .then(h => setHistory(h.slice(0, 6).map(e => ({ code: e.code, name: e.name, flag: e.flag, region: e.region }))))
+      .then(h => {
+        if (cancelled) return;
+        setHistory(h.slice(0, 6).map(e => ({ code: e.code, name: e.name, flag: e.flag, region: e.region })));
+      })
       .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [token, dataset?.code]);
 
-  const extraHistory = history.filter(h => !POPULAR_COUNTRIES.some(p => p.code === h.code));
+  const popularCodes = useMemo(() => new Set(POPULAR_COUNTRIES.map(p => p.code)), []);
+  const extraHistory = useMemo(
+    () => history.filter(h => !popularCodes.has(h.code)),
+    [history, popularCodes],
+  );
 
   return (
     <div className="bg-white p-3 sm:p-5 border-3 border-memphis-black shadow-hard-lg mb-5">
@@ -553,6 +577,12 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
   const [aiLoading,   setAILoading]   = useState(false);
   const [aiError,     setAIError]     = useState<string | null>(null);
 
+  useEffect(() => {
+    setAIResult(null);
+    setAIError(null);
+    setQuery("");
+  }, [dataset?.code]);
+
   function toggleAlgo(id: string) {
     setActiveAlgos(prev => {
       const next = new Set(prev);
@@ -582,7 +612,7 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
   }, [dataset]);
 
   const runQuery = useCallback(async () => {
-    if (!query.trim()) return;
+    if (!dataset || !query.trim()) return;
     setAILoading(true);
     setAIError(null);
     setAIResult(null);
@@ -594,7 +624,7 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
     } finally {
       setAILoading(false);
     }
-  }, [query, context, token]);
+  }, [dataset, query, context, token]);
 
   const enabledAlgos = ALGOS.filter(a => activeAlgos.has(a.id));
 
@@ -653,10 +683,10 @@ export default function AnalyticsMode({ token, dataset, loading, error, onSelect
           <Input value={query} onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); runQuery(); } }}
             placeholder={dataset ? `Ask about ${dataset.name}…` : "Select a country first…"}
-            disabled={aiLoading}
+            disabled={aiLoading || !dataset}
             className="flex-1 bg-white border-2 sm:border-3 border-memphis-black"
           />
-          <Button onClick={runQuery} disabled={aiLoading || !query.trim()}>
+          <Button onClick={runQuery} disabled={aiLoading || !dataset || !query.trim()}>
             {aiLoading ? "Analyzing…" : "Analyze"}
           </Button>
         </div>

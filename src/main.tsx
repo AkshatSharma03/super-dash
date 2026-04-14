@@ -10,7 +10,7 @@ initAnalytics();
 
 const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
-const isValidClerkKey = (key?: string) => {
+const isValidClerkKey = (key?: string): key is string => {
   if (!key) return false;
   const trimmed = key.trim();
   if (!trimmed) return false;
@@ -51,7 +51,7 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, { hasEr
 
 const Root = isValidClerkKey(clerkPublishableKey) ? (
   <RootErrorBoundary>
-    <ClerkProvider afterSignOutUrl="/">
+    <ClerkProvider publishableKey={clerkPublishableKey} afterSignOutUrl="/">
       <App />
       <Toaster position="bottom-center" theme="dark" richColors />
     </ClerkProvider>

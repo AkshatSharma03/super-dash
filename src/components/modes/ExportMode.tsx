@@ -354,7 +354,10 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
       };
       const html = buildDashboardHTML(dashDataset, svgs);
       if (print) {
-        printHTML(html);
+        const opened = printHTML(html);
+        if (!opened) {
+          toast.error("Popup blocked. Enable popups, then retry print.");
+        }
       } else {
         const blob = new Blob([html], { type: "text/html;charset=utf-8" });
         const url  = URL.createObjectURL(blob);
@@ -393,8 +396,12 @@ export default function ExportMode({ dashDataset, analyticsDataset }: ExportMode
       `GDP per capita: $${latest?.gdp_per_capita?.toLocaleString()}`,
       ...ds.kpis.map(k => `${k.label}: ${k.value} (${k.sub})`),
     ].join("\n");
-    await copyToClipboard(text);
-    toast.success("Summary copied to clipboard");
+    try {
+      await copyToClipboard(text);
+      toast.success("Summary copied to clipboard");
+    } catch {
+      toast.error("Clipboard unavailable. Copy manually from report.");
+    }
   }
 
   return (

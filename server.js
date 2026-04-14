@@ -233,6 +233,7 @@ db.exec(`
 const stmtCountry = {
   get:    db.prepare('SELECT data_json, cached_at FROM country_cache WHERE code = ?'),
   upsert: db.prepare('INSERT OR REPLACE INTO country_cache (code, data_json, cached_at) VALUES (?, ?, ?)'),
+  del:    db.prepare('DELETE FROM country_cache WHERE code = ?'),
 };
 
 const stmt = {
@@ -592,6 +593,16 @@ function iso2ToFlag(code) {
     .join('');
 }
 
+function errorMessage(err, fallback = 'Unexpected error') {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+function normalizeSessionTitle(title, fallback = 'New Chat') {
+  if (typeof title !== 'string') return fallback;
+  const normalized = title.trim().replace(/\s+/g, ' ').slice(0, 100);
+  return normalized || fallback;
+}
+
 async function fetchVerifiedNews(query) {
   if (!NEWS_API_KEY) return [];
 
@@ -619,7 +630,7 @@ async function fetchVerifiedNews(query) {
       url: article.url
     }));
   } catch (error) {
-    console.error('Failed to fetch news:', error.message);
+    console.error('Failed to fetch news:', errorMessage(error));
     return [];
   }
 }
@@ -1933,8 +1944,13 @@ app.get('/api/auth/usage', requireAuth, (req, res) => {
   const rows     = stmt.sessionMessages.all(req.user.id);
   const sessionCount = rows.length;
   const messageCount = rows.reduce((sum, r) => {
-    const msgs = JSON.parse(r.messages);
-    return sum + msgs.filter(m => m.role === 'user').length;
+    try {
+      const msgs = JSON.parse(r.messages);
+      if (!Array.isArray(msgs)) return sum;
+      return sum + msgs.filter(m => m && m.role === 'user').length;
+    } catch {
+      return sum;
+    }
   }, 0);
   const memberSince = user?.created_at
     || (req.user?.iat ? new Date(req.user.iat * 1000).toISOString() : new Date().toISOString());
@@ -2054,7 +2070,7 @@ app.get('/api/sessions', requireAuth, (req, res) => {
 app.post('/api/sessions', requireAuth, (req, res) => {
   const body = validate(CreateSessionSchema, req.body, res);
   if (!body) return;
-  const title = body.title ?? 'New Chat';
+  const title = normalizeSessionTitle(body.title, 'New Chat');
   const id    = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const now   = new Date().toISOString();
   // Guests have no DB record — return a fake session without inserting
@@ -2063,26 +2079,46 @@ app.post('/api/sessions', requireAuth, (req, res) => {
 });
 
 app.get('/api/sessions/:id', requireAuth, (req, res) => {
+  if (req.user.isGuest) {
+    return res.status(404).json({ error: 'Session not found' });
+  }
+
   const row = stmt.sessionById.get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Session not found' });
-  res.json({ ...row, messages: JSON.parse(row.messages) });
+
+  try {
+    const parsedMessages = JSON.parse(row.messages);
+    return res.json({ ...row, messages: Array.isArray(parsedMessages) ? parsedMessages : [] });
+  } catch {
+    return res.json({ ...row, messages: [] });
+  }
 });
 
 app.patch('/api/sessions/:id', requireAuth, (req, res) => {
-  // Guest sessions are in-memory only — silently acknowledge the update
-  if (req.user.isGuest) return res.json({ id: req.params.id, title: '', updatedAt: new Date().toISOString() });
   const body = validate(UpdateSessionSchema, req.body, res);
   if (!body) return;
+
+  // Guest sessions are in-memory only — acknowledge validated payload with normalized title
+  if (req.user.isGuest) {
+    return res.json({
+      id: req.params.id,
+      title: body.title !== undefined ? normalizeSessionTitle(body.title) : 'New Chat',
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
   const row = stmt.sessionById.get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Session not found' });
   const newMessages = body.messages !== undefined ? JSON.stringify(body.messages) : row.messages;
-  const newTitle    = body.title    !== undefined ? body.title                    : row.title;
+  const newTitle    = body.title    !== undefined ? normalizeSessionTitle(body.title, row.title) : row.title;
   const now         = new Date().toISOString();
   stmt.updateSession.run(newMessages, newTitle, now, req.params.id, req.user.id);
   res.json({ id: row.id, title: newTitle, updatedAt: now });
 });
 
 app.delete('/api/sessions/:id', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.json({ ok: true });
+
   const row = stmt.sessionById.get(req.params.id, req.user.id);
   if (!row) return res.status(404).json({ error: 'Session not found' });
   stmt.deleteSession.run(req.params.id, req.user.id);
@@ -2136,6 +2172,7 @@ app.get('/api/country/search', requireAuth, apiLimiter, async (req, res) => {
 
   try {
     const r    = await fetch('https://api.worldbank.org/v2/country?format=json&per_page=500', { signal: AbortSignal.timeout(10_000) });
+    if (!r.ok) throw new Error(`World Bank country list HTTP ${r.status}`);
     const data = await r.json();
     const hits = (data[1] ?? [])
       // region.id === 'NA' marks World Bank aggregates (not sovereign countries)
@@ -2145,8 +2182,9 @@ app.get('/api/country/search', requireAuth, apiLimiter, async (req, res) => {
       .map(c => ({ code: c.iso2Code, name: c.name, flag: iso2ToFlag(c.iso2Code), region: c.region?.value ?? '' }));
     res.json(hits);
   } catch (e) {
-    console.error('/api/country/search:', e.message);
-    res.status(502).json({ error: e.message });
+    const message = errorMessage(e, 'Failed to fetch country list');
+    console.error('/api/country/search:', message);
+    res.status(502).json({ error: message });
   }
 });
 
@@ -2161,8 +2199,13 @@ app.get('/api/country/:code', requireAuth, apiLimiter, async (req, res) => {
   
   const row = stmtCountry.get.get(code);
   if (row && (Date.now() - row.cached_at) < COUNTRY_CACHE_TTL_MS) {
-    track(req.user?.id || 'guest', 'country_viewed', { country_code: code, cache_hit: true });
-    return res.json(JSON.parse(row.data_json));
+    try {
+      const cached = JSON.parse(row.data_json);
+      track(req.user?.id || 'guest', 'country_viewed', { country_code: code, cache_hit: true });
+      return res.json(cached);
+    } catch {
+      stmtCountry.del.run(code);
+    }
   }
 
   try {
@@ -2176,9 +2219,17 @@ app.get('/api/country/:code', requireAuth, apiLimiter, async (req, res) => {
     });
     res.json(dataset);
   } catch (e) {
-    console.error(`/api/country/${code}:`, e.message);
-    if (row) return res.json({ ...JSON.parse(row.data_json), _meta: { ...JSON.parse(row.data_json)._meta, stale: true } });
-    res.status(502).json({ error: e.message });
+    const message = errorMessage(e, 'Failed to build country dataset');
+    console.error(`/api/country/${code}:`, message);
+    if (row) {
+      try {
+        const stale = JSON.parse(row.data_json);
+        return res.json({ ...stale, _meta: { ...stale._meta, stale: true } });
+      } catch {
+        stmtCountry.del.run(code);
+      }
+    }
+    res.status(502).json({ error: message });
   }
 });
 
@@ -2194,8 +2245,9 @@ app.post('/api/country/:code/refresh', requireAuth, apiLimiter, async (req, res)
     stmtCountry.upsert.run(code, JSON.stringify(dataset), Date.now());
     res.json(dataset);
   } catch (e) {
-    console.error(`/api/country/${code}/refresh:`, e.message);
-    res.status(502).json({ error: e.message });
+    const message = errorMessage(e, 'Failed to refresh country dataset');
+    console.error(`/api/country/${code}/refresh:`, message);
+    res.status(502).json({ error: message });
   }
 });
 
@@ -2282,7 +2334,7 @@ Rules:
       return res.json(parsed);
     }
   } catch (e) {
-    console.error('News fetch or AI error in /api/analytics:', e.message);
+    console.error('News fetch or AI error in /api/analytics:', errorMessage(e));
   }
 
   // Fallback: call AI without news context
@@ -2319,8 +2371,9 @@ Rules:
     });
     res.json(parsed);
   } catch (e) {
-    console.error('/api/analytics error:', e.message);
-    res.status(502).json({ error: e.message });
+    const message = errorMessage(e, 'Failed to generate analytics response');
+    console.error('/api/analytics error:', message);
+    res.status(502).json({ error: message });
   }
 });
 // ── MCP SSE server (remote access from Claude Code / other MCP clients) ───────
@@ -2334,7 +2387,7 @@ const mcpSessions = new Map(); // sessionId → SSEServerTransport
 function mcpAuth(req, res, next) {
   if (!MCP_API_KEY) return next();
   if (req.headers['x-mcp-key'] === MCP_API_KEY) return next();
-  res.status(401).json({ error: 'Invalid MCP API key' });
+  return res.status(401).json({ error: 'Invalid MCP API key' });
 }
 
 function createMcpServerInstance() {

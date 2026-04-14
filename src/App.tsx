@@ -1,7 +1,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // APP SHELL — Memphis Design Edition — Bold colors, thick borders, geometric patterns
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useCallback, lazy, Suspense, type ComponentType } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense, type ComponentType } from "react";
 import { useAuth, useClerk, useUser } from "@clerk/react";
 import type { Mode, User, CountryDataset } from "./types";
 import { useMobile } from "./utils/useMobile";
@@ -68,42 +68,56 @@ export default function App() {
   const [analyticsData, setAnalyticsData] = useState<CountryDataset | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const countryReqIdRef = useRef(0);
+  const analyticsReqIdRef = useRef(0);
 
   const loadCountry = useCallback(async (code: string, tok: string) => {
+    const reqId = ++countryReqIdRef.current;
     setCountryLoading(true);
     setCountryError(null);
     try {
       const data = await getCountryData(code, tok);
+      if (reqId !== countryReqIdRef.current) return;
       setCountryData(data);
     } catch (e) {
+      if (reqId !== countryReqIdRef.current) return;
       setCountryError(e instanceof Error ? e.message : "Failed to load country data");
     } finally {
+      if (reqId !== countryReqIdRef.current) return;
       setCountryLoading(false);
     }
   }, []);
 
   const loadAnalyticsCountry = useCallback(async (code: string, tok: string) => {
+    const reqId = ++analyticsReqIdRef.current;
     setAnalyticsLoading(true);
     setAnalyticsError(null);
     try {
       const data = await getCountryData(code, tok);
+      if (reqId !== analyticsReqIdRef.current) return;
       setAnalyticsData(data);
     } catch (e) {
+      if (reqId !== analyticsReqIdRef.current) return;
       setAnalyticsError(e instanceof Error ? e.message : "Failed to load country data");
     } finally {
+      if (reqId !== analyticsReqIdRef.current) return;
       setAnalyticsLoading(false);
     }
   }, []);
 
   const handleRefreshCountry = useCallback(async (tok: string, currentCode: string) => {
+    const reqId = ++countryReqIdRef.current;
     setCountryLoading(true);
     setCountryError(null);
     try {
       const data = await refreshCountryData(currentCode, tok);
+      if (reqId !== countryReqIdRef.current) return;
       setCountryData(data);
     } catch (e) {
+      if (reqId !== countryReqIdRef.current) return;
       setCountryError(e instanceof Error ? e.message : "Refresh failed");
     } finally {
+      if (reqId !== countryReqIdRef.current) return;
       setCountryLoading(false);
     }
   }, []);
@@ -169,6 +183,8 @@ export default function App() {
   };
 
   const logout = async () => {
+    countryReqIdRef.current += 1;
+    analyticsReqIdRef.current += 1;
     if (user?.isGuest && token) {
       await logoutApi(token).catch(() => {});
     }
@@ -181,6 +197,14 @@ export default function App() {
     setUser(null);
     resetUser();
     setCountryData(null);
+    setCountryLoading(false);
+    setCountryError(null);
+    setAnalyticsData(null);
+    setAnalyticsLoading(false);
+    setAnalyticsError(null);
+    setSettingsOpen(false);
+    setMobileMenuOpen(false);
+    setMode("chat");
   };
 
   if (!authReady) return null;

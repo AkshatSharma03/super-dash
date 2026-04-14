@@ -28,6 +28,7 @@ export default function DataMode() {
 
   const handleFile = (f: File | null | undefined) => {
     if (!f) return;
+    if (fileRef.current) fileRef.current.value = "";
     if (!f.name.toLowerCase().endsWith(".csv")) {
       setError("Please upload a .csv file."); return;
     }
@@ -62,6 +63,7 @@ export default function DataMode() {
   };
 
   const reset = () => {
+    if (fileRef.current) fileRef.current.value = "";
     setFile(null); setCsv(null); setResult(null); setError(null); setContext("");
   };
 

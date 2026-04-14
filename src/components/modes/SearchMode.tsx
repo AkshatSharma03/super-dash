@@ -14,6 +14,7 @@ import { Input }   from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge }   from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { AlertTriangle, Globe2, BookOpen } from "lucide-react";
 
 export default function SearchMode() {
@@ -64,7 +65,8 @@ export default function SearchMode() {
   const exportSearch = async () => {
     if (!result) return;
     const { buildSearchReportHTML, printHTML } = await import("../../utils/export");
-    printHTML(buildSearchReportHTML(searched, result));
+    const opened = printHTML(buildSearchReportHTML(searched, result));
+    if (!opened) toast.error("Popup blocked. Enable popups, then retry export.");
   };
 
   return (

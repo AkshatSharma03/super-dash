@@ -15,24 +15,39 @@ export function downloadBlob(
 ): void {
   const blob = new Blob([content], { type: mimeType });
   const url  = URL.createObjectURL(blob);
-  const a    = Object.assign(document.createElement("a"), { href: url, download: filename });
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  try {
+    const a = Object.assign(document.createElement("a"), { href: url, download: filename });
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 export const downloadCSV  = (filename: string, csv: string)  => downloadBlob(filename, csv,  "text/csv;charset=utf-8");
 export const downloadJSON = (filename: string, data: unknown) => downloadBlob(filename, JSON.stringify(data, null, 2), "application/json");
 
 export async function copyToClipboard(text: string): Promise<void> {
-  if (navigator.clipboard) return navigator.clipboard.writeText(text);
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // Fall through to legacy copy path.
+    }
+  }
+
   // Legacy fallback
   const ta = Object.assign(document.createElement("textarea"), { value: text });
+  ta.setAttribute("readonly", "true");
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
   document.body.appendChild(ta);
   ta.select();
-  document.execCommand("copy");
+  const ok = document.execCommand("copy");
   document.body.removeChild(ta);
+  if (!ok) throw new Error("Clipboard copy failed");
 }
 
 // ── CSV builders ──────────────────────────────────────────────────────────────
@@ -102,12 +117,20 @@ export function tradeBalanceToCSV(dataset: CountryDataset): string {
 // ── Print helper ──────────────────────────────────────────────────────────────
 
 /** Open the HTML report in a new window and trigger the print dialog. */
-export function printHTML(html: string): void {
+export function printHTML(html: string): boolean {
   const win = window.open("", "_blank");
-  if (!win) return;
+  if (!win) return false;
   win.document.write(html);
   win.document.close();
-  setTimeout(() => win.print(), 500);
+  setTimeout(() => {
+    try {
+      win.focus();
+      win.print();
+    } catch {
+      // Ignore print popup errors.
+    }
+  }, 500);
+  return true;
 }
 
 // ── HTML report builder ───────────────────────────────────────────────────────

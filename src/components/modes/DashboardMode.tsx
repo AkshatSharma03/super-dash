@@ -46,7 +46,16 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
 
   // ── Load fetch history on mount and whenever the loaded country changes ──────
   useEffect(() => {
-    getCountryHistory(token).then(setHistory).catch(() => {});
+    let cancelled = false;
+    getCountryHistory(token)
+      .then((next) => {
+        if (!cancelled) setHistory(next);
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, [token, dataset?.code]);
 
   // ── Adapt year range when a new dataset loads ───────────────────────────────
@@ -57,14 +66,15 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
   }, [dataset?.code]);  // only reset range when the country changes
 
   // ── Filtered data slices (memoized — only recalculate when dataset/range changes) ──
-  const { gdp, exp, imp, bal } = useMemo(() => {
-    if (!dataset) return { gdp: [], exp: [], imp: [], bal: [] };
+  const { gdp, exp, imp, bal, hasDigital } = useMemo(() => {
+    if (!dataset) return { gdp: [], exp: [], imp: [], bal: [], hasDigital: false };
     const inRange = <T extends { year: number }>(d: T[]) =>
       d.filter(r => r.year >= yearRange[0] && r.year <= yearRange[1]);
+    const filteredGdp = inRange(dataset.gdpData);
     const filteredExp = inRange(dataset.exportData);
     const impMap = new Map(dataset.importData.map(d => [d.year, d.total]));
     return {
-      gdp: inRange(dataset.gdpData),
+      gdp: filteredGdp,
       exp: filteredExp,
       imp: inRange(dataset.importData),
       bal: filteredExp.map(e => ({
@@ -72,12 +82,26 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         imports: impMap.get(e.year) ?? 0,
         balance: +(e.total - (impMap.get(e.year) ?? 0)).toFixed(1),
       })),
+      hasDigital: filteredGdp.some(d => d.digital_pct != null),
     };
   }, [dataset, yearRange]);
 
+  const topImportPartners = useMemo(
+    () => dataset?.importPartners.filter(p => p.key !== "other").slice(0, 3) ?? [],
+    [dataset?.importPartners],
+  );
+
   // ── Helpers ─────────────────────────────────────────────────────────────────
-  const yearMin = dataset?.gdpData[0]?.year ?? 2010;
-  const yearMax = dataset?.gdpData[dataset.gdpData.length - 1]?.year ?? 2024;
+  const [yearMin, yearMax] = useMemo(() => {
+    if (!dataset?.gdpData.length) return [2010, 2024] as const;
+    let min = dataset.gdpData[0].year;
+    let max = dataset.gdpData[0].year;
+    for (const row of dataset.gdpData) {
+      if (row.year < min) min = row.year;
+      if (row.year > max) max = row.year;
+    }
+    return [min, max] as const;
+  }, [dataset?.gdpData]);
 
   function timeAgo(ms: number) {
     const d = Date.now() - ms;
@@ -227,16 +251,16 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
 
         {/* ── GDP tab ── */}
         {tab === "GDP" && <>
-          <Card title={`GDP (Nominal $B)${gdp.some(d => d.digital_pct) ? " vs Digital Economy %" : ""}`}>
+          <Card title={`GDP (Nominal $B)${hasDigital ? " vs Digital Economy %" : ""}`}>
             <ResponsiveContainer width="100%" height={isMobile ? 220 : 270}>
               <ComposedChart data={gdp} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid {...GRID} />
                 <XAxis dataKey="year" tick={AX} />
                 <YAxis yAxisId="left" tick={AX} />
-                {gdp.some(d => d.digital_pct) && <YAxis yAxisId="right" orientation="right" tick={AX} />}
+                {hasDigital && <YAxis yAxisId="right" orientation="right" tick={AX} />}
                 <Tooltip {...TT} /><Legend {...LEG} />
                 <Bar yAxisId="left" dataKey="gdp_bn" name="GDP ($B)" fill="#00AAFF" opacity={0.75} radius={[3, 3, 0, 0]} />
-                {gdp.some(d => d.digital_pct) && (
+                {hasDigital && (
                   <Line yAxisId="right" type="monotone" dataKey="digital_pct" name="Digital % GDP" stroke="#F97316" strokeWidth={2.5} dot={{ r: 4 }} />
                 )}
               </ComposedChart>
@@ -330,7 +354,7 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
                   <CartesianGrid {...GRID} />
                   <XAxis dataKey="year" tick={AX} /><YAxis tick={AX} />
                   <Tooltip {...TT} /><Legend {...LEG} />
-                  {dataset.importPartners.filter(p => p.key !== "other").slice(0, 3).map(p => (
+                  {topImportPartners.map(p => (
                     <Line key={p.key} type="monotone" dataKey={p.key} name={p.label}
                       stroke={p.color} strokeWidth={2.5} dot={{ r: 4 }} />
                   ))}

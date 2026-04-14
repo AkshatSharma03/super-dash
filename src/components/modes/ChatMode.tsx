@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input }  from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import { AlertTriangle, Sparkles, BarChart3, Menu, X, Plus } from "lucide-react";
 
 // ── ChatMessage sub-component ─────────────────────────────────────────────────
@@ -125,10 +126,15 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
 
   // Load session list on mount
   useEffect(() => {
+    let cancelled = false;
     getSessions(token)
-      .then(setSessions)
+      .then((next) => { if (!cancelled) setSessions(next); })
       .catch(() => {})
-      .finally(() => setSessionsLoading(false));
+      .finally(() => { if (!cancelled) setSessionsLoading(false); });
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, streamingInsight]);
@@ -137,6 +143,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
     setMessages([]);
     setActiveSessionId(null);
     setInput("");
+    setSidebarOpen(false);
     inputRef.current?.focus();
   };
 
@@ -146,6 +153,7 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
       const session = await getSession(token, sessionId);
       setMessages(session.messages as Message[]);
       setActiveSessionId(sessionId);
+      setSidebarOpen(false);
     } catch { /* silently ignore */ }
   };
 
@@ -214,7 +222,8 @@ export default function ChatMode({ token, isGuest = false }: ChatModeProps) {
   const exportConversation = async () => {
     const title = sessions.find(s => s.id === activeSessionId)?.title ?? "AI Chat Report";
     const { buildChatReportHTML, printHTML } = await import("../../utils/export");
-    printHTML(buildChatReportHTML(messages, title));
+    const opened = printHTML(buildChatReportHTML(messages, title));
+    if (!opened) toast.error("Popup blocked. Enable popups, then retry export.");
   };
 
   const isEmpty = messages.length === 0;

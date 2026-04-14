@@ -74,7 +74,20 @@ export default function SettingsPanel({ user, token, onClose }: Props) {
   const [usageError,    setUsageError]   = useState(false);
 
   useEffect(() => {
-    getUsage(token).then(setUsage).catch(() => setUsageError(true));
+    let cancelled = false;
+    setUsage(null);
+    setUsageError(false);
+    getUsage(token)
+      .then((next) => {
+        if (!cancelled) setUsage(next);
+      })
+      .catch(() => {
+        if (!cancelled) setUsageError(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   const memberSince = usage
