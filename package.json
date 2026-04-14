@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "mcp": "node mcp-server.js"
+    "mcp": "node mcp-server.js",
+    "admin:enterprise": "node scripts/upgrade-user-enterprise.mjs"
   },
   "engines": {
     "node": ">=20.0.0"
