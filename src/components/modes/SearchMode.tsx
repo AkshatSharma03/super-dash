@@ -141,7 +141,8 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
     <div className="max-w-[860px] mx-auto px-1 sm:px-0">
 
       {/* ── Search bar with Trie autocomplete ── */}
-      <div className="relative mb-4">
+      <div className="sticky top-0 z-30 mb-4 pt-1 pb-2 bg-memphis-offwhite/95 backdrop-blur-sm">
+        <div className="relative">
         <div className={cn("flex gap-2", isMobile && "flex-col")}>
           <Input
             value={query}
@@ -179,6 +180,7 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
             ))}
           </div>
         )}
+        </div>
       </div>
 
       {/* ── Recent searches ── */}
