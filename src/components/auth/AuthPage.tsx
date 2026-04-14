@@ -3,7 +3,7 @@
 // Left: hero explaining the product. Right: login / register form.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, type ComponentType } from "react";
-import { SignIn, SignUp } from "@clerk/clerk-react";
+import { SignIn, SignUp } from "@clerk/react";
 import { guestLogin } from "../../utils/api";
 import type { User } from "../../types";
 import { useMobile } from "../../utils/useMobile";

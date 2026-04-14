@@ -3,7 +3,7 @@
 // Sections: profile summary + usage stats + Clerk-managed account controls.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from "react";
-import { UserProfile } from "@clerk/clerk-react";
+import { UserProfile } from "@clerk/react";
 import { getUsage } from "../../utils/api";
 import type { User } from "../../types";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";

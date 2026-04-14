@@ -2,7 +2,7 @@
 // APP SHELL — Memphis Design Edition — Bold colors, thick borders, geometric patterns
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect, useCallback, lazy, Suspense, type ComponentType } from "react";
-import { useAuth, useClerk, useUser } from "@clerk/clerk-react";
+import { useAuth, useClerk, useUser } from "@clerk/react";
 import type { Mode, User, CountryDataset } from "./types";
 import { useMobile } from "./utils/useMobile";
 import { cn } from "@/lib/utils";
