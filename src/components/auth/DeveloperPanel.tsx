@@ -104,7 +104,7 @@ export default function DeveloperPanel({ token, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[130] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white border-3 border-memphis-black shadow-hard-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(event) => event.stopPropagation()}>
         <div className="px-5 py-4 border-b-3 border-memphis-black flex items-center justify-between">
           <h2 className="text-sm font-black uppercase tracking-wide">Developer API</h2>
