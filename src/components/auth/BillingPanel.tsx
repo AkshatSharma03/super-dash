@@ -78,6 +78,11 @@ export default function BillingPanel({ token, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     fetch("/api/billing/subscription", { headers: { Authorization: `Bearer ${token}` } })
@@ -135,11 +140,19 @@ export default function BillingPanel({ token, onClose }: Props) {
 
   const currentPlan = subscription?.plan || "free";
 
+  if (!mounted) return null;
+
   return createPortal(
     <div className="fixed inset-0 z-[130] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white border-3 border-memphis-black shadow-hard-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+      <div
+        className="bg-white border-3 border-memphis-black shadow-hard-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="billing-plans-title"
+      >
         <div className="px-6 py-4 border-b-3 border-memphis-black flex items-center justify-between">
-          <h2 className="text-lg font-black uppercase tracking-wide">Billing & Plans</h2>
+          <h2 id="billing-plans-title" className="text-lg font-black uppercase tracking-wide">Billing & Plans</h2>
           <button onClick={onClose} className="text-memphis-black/50 hover:text-memphis-black text-xl font-bold">×</button>
         </div>
 
