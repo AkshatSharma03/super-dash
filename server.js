@@ -36,7 +36,7 @@ const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const KAGI_API_KEY      = process.env.KAGI_API_KEY;
-const KAGI_BASE         = 'https://kagi.com/api/v1';
+const KAGI_BASE         = process.env.KAGI_BASE || 'https://kagi.com/api/v0';
 const IS_DEV            = process.env.NODE_ENV !== 'production';
 const CLERK_SECRET_KEY  = process.env.CLERK_SECRET_KEY;
 const CLERK_JWT_KEY     = process.env.CLERK_JWT_KEY;
