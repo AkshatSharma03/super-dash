@@ -20,7 +20,8 @@ const MAX_SEARCH_HISTORY = 20;
 export function validate(schema, data, res) {
   const result = schema.safeParse(data);
   if (!result.success) {
-    const message = result.error.errors
+    const issues = result.error?.issues || result.error?.errors || [];
+    const message = issues
       .map(e => `${e.path.join('.') || 'body'}: ${e.message}`)
       .join('; ');
     res.status(400).json({ error: message });
@@ -139,6 +140,12 @@ export const DataApiSchema = z.object({
   years: z.string().trim().min(5, 'years must be like 2020:2024').max(15).regex(/^\d{4}\s*:\s*\d{4}$/, 'years must be yyyy:yyyy').optional(),
   countries: z.string().trim().max(120).optional(),
   format: z.enum(['json', 'csv']).optional(),
+});
+
+export const PeerComparisonSchema = z.object({
+  groupType: z.enum(['region', 'income', 'brics']).default('region'),
+  metric: z.enum(['gdp', 'gdp_growth', 'gdp_per_capita', 'exports', 'imports', 'trade_openness']).default('gdp'),
+  year: z.coerce.number().int().min(1960).max(2500).optional(),
 });
 
 export const ApiKeyCreateSchema = z.object({

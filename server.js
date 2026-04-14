@@ -27,6 +27,7 @@ import {
   CreateSearchSessionSchema, UpdateSearchSessionSchema,
   CountrySearchQuerySchema,
   DataApiSchema,
+  PeerComparisonSchema,
   ApiKeyCreateSchema,
   ApiKeyDeleteSchema,
 } from './schemas.js';
@@ -445,6 +446,8 @@ const API_INDICATOR_LABELS = {
   imports: 'Imports (current USD)',
   trade_openness: 'Trade openness (%)',
 };
+
+const BRICS_COUNTRY_CODES = ['BR', 'RU', 'IN', 'CN', 'ZA'];
 
 function normalizeIndicatorKey(input) {
   return String(input || '')
@@ -1790,17 +1793,204 @@ async function fetchWorldBankCountryCatalog() {
   const json = await res.json();
   const countriesPayload = Array.isArray(json) ? json[1] : [];
   const rows = (countriesPayload || [])
-    .filter(c => typeof c === 'object' && c.region?.id !== 'NA' && typeof c.iso2Code === 'string' && c.iso2Code.length === 2)
-    .map(c => ({
-      code: c.iso2Code,
-      alpha3: c.iso3Code || c.iso2Code,
-      name: c.name,
-      flag: iso2ToFlag(c.iso2Code),
-      region: c.region?.value || 'Unknown',
-    }));
+      .filter(c => typeof c === 'object' && c.region?.id !== 'NA' && typeof c.iso2Code === 'string' && c.iso2Code.length === 2)
+      .map(c => ({
+        code: c.iso2Code,
+        alpha3: c.iso3Code || c.iso2Code,
+        name: c.name,
+        flag: iso2ToFlag(c.iso2Code),
+        region: c.region?.value || 'Unknown',
+        income: c.incomeLevel?.value || 'Unknown',
+        incomeLevel: c.incomeLevel?.value || c.incomeLevel?.id || 'Unknown',
+      }));
 
   rawDataCache.put(ck, rows, RAW_DATA_TTL_MS);
   return rows;
+}
+
+function normalizeIncomeGroup(raw) {
+  const value = String(raw || '').trim().toLowerCase();
+  if (!value) return 'Other income';
+  if (value.includes('high income')) return 'High income';
+  if (value.includes('low income')) return 'Low income';
+  if (value.includes('middle income')) return 'Middle income';
+  return 'Other income';
+}
+
+function peerCodeFromRow(row) {
+  const code = String(row?.countryCode || '').toUpperCase();
+  if (code.length === 2) return code;
+  const alpha2 = countries.alpha3ToAlpha2(code);
+  return alpha2 || code;
+}
+
+function toNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function percentileRank(values, target) {
+  if (!values.length) return null;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const below = sorted.filter((value) => value < target).length;
+  const equal = sorted.filter((value) => value === target).length;
+  const n = sorted.length;
+  if (!Number.isFinite(n) || n === 0) return null;
+  return +(((below + equal / 2) / n) * 100).toFixed(2);
+}
+
+function computeRank(values, target) {
+  if (!values.length) return null;
+  const sortedDesc = values.slice().sort((a, b) => b - a);
+  const idx = sortedDesc.findIndex((value) => value <= target);
+  return idx >= 0 ? idx + 1 : null;
+}
+
+function computeAverage(values) {
+  if (!values.length) return null;
+  const sum = values.reduce((total, value) => total + value, 0);
+  return +(sum / values.length).toFixed(2);
+}
+
+function computeMedian(values) {
+  if (!values.length) return null;
+  const sorted = values.slice().sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return +sorted[mid].toFixed(2);
+  return +((sorted[mid - 1] + sorted[mid]) / 2).toFixed(2);
+}
+
+function normalizePeerMetricMetric(raw) {
+  const metric = String(raw || 'gdp').trim().toLowerCase().replace(/\s+/g, '_');
+  return metric === 'tradeopenness' ? 'trade_openness' : metric;
+}
+
+function resolvePeerGroupMembers(catalogRow, groupType, catalog) {
+  if (groupType === 'brics') {
+    const bricsSet = new Set(BRICS_COUNTRY_CODES);
+    return catalog.filter((item) => bricsSet.has(item.code));
+  }
+
+  if (groupType === 'income') {
+    const incomeBucket = normalizeIncomeGroup(catalogRow.incomeLevel || catalogRow.income);
+    return catalog.filter((item) => normalizeIncomeGroup(item.incomeLevel || item.income) === incomeBucket);
+  }
+
+  const region = catalogRow.region || 'Unknown';
+  return catalog.filter((item) => (item.region || 'Unknown') === region);
+}
+
+function groupTypeLabel(groupType, groupValue) {
+  if (groupType === 'brics') return 'BRICS';
+  if (groupType === 'income') return `${normalizeIncomeGroup(groupValue)} economies`;
+  return `${groupValue || 'Region'} economies`;
+}
+
+async function fetchPeerMetricRows(metric, countryCodes, startYear, endYear) {
+  const codes = countryCodes.filter(Boolean).filter((item, idx, all) => all.indexOf(item) === idx);
+  if (!codes.length) return [];
+
+  if (metric === 'trade_openness') {
+    const [importsRows, exportsRows, gdpRows] = await Promise.all([
+      fetchWorldBankIndicator(codes, API_INDICATORS.imports, startYear, endYear),
+      fetchWorldBankIndicator(codes, API_INDICATORS.exports, startYear, endYear),
+      fetchWorldBankIndicator(codes, API_INDICATORS.gdp, startYear, endYear),
+    ]);
+
+    const toMap = (rows) => {
+      const m = new Map();
+      for (const row of rows) {
+        const year = toNumber(row.year);
+        if (year == null || year < startYear || year > endYear) continue;
+        const code = peerCodeFromRow(row);
+        const key = `${code}:${year}`;
+        const value = toNumber(row.value);
+        if (!Number.isFinite(value)) continue;
+        m.set(key, value);
+      }
+      return m;
+    };
+
+    const importMap = toMap(importsRows);
+    const exportMap = toMap(exportsRows);
+    const gdpMap = toMap(gdpRows);
+    const byCodeMap = new Map();
+
+    for (const key of importMap.keys()) {
+      const [code, yearText] = String(key).split(':');
+      const year = Number(yearText);
+      const yearImports = importMap.get(key);
+      const yearExports = exportMap.get(key);
+      const yearGdp = gdpMap.get(key);
+      if (![yearImports, yearExports, yearGdp].every(Number.isFinite) || yearGdp === 0) continue;
+      byCodeMap.set(key, ((yearImports + yearExports) / yearGdp) * 100);
+    }
+
+    const rows = [];
+    for (const [key, value] of byCodeMap.entries()) {
+      const [code, yearText] = String(key).split(':');
+      rows.push({
+        countryCode: code,
+        country: null,
+        year: Number(yearText),
+        value,
+        indicator: 'trade_openness',
+        indicatorName: API_INDICATOR_LABELS.trade_openness,
+      });
+    }
+
+    return rows;
+  }
+
+  const wbCode = API_INDICATORS[metric];
+  if (!wbCode) return [];
+  return fetchWorldBankIndicator(codes, wbCode, startYear, endYear);
+}
+
+function buildPeerRows(valuesByCode, targetCode, catalogByCode, metricLabel) {
+  return valuesByCode
+    .map((entry) => {
+      const row = catalogByCode.get(entry.code);
+      return {
+        code: entry.code,
+        name: row?.name ?? entry.code,
+        flag: row?.flag ?? iso2ToFlag(entry.code),
+        value: entry.value,
+        isTarget: entry.code === targetCode,
+      };
+    })
+    .sort((a, b) => b.value - a.value);
+}
+
+async function resolvePeerComparisonYear(targetCode, metric) {
+  const now = new Date();
+  const endYear = now.getUTCFullYear();
+  const startYear = Math.max(2010, endYear - 8);
+  const rows = await fetchPeerMetricRows(metric, [targetCode], startYear, endYear);
+  const years = rows
+    .map((row) => toNumber(row.year))
+    .filter((value) => value != null && value > 0);
+
+  if (!years.length) return null;
+  return Math.max(...years);
+}
+
+function buildCountryValuesByCode(rows, year, peerCodesSet) {
+  const valuesByCode = new Map();
+  for (const row of rows) {
+    const code = peerCodeFromRow(row);
+    const rowYear = toNumber(row.year);
+    if (!code || !peerCodesSet.has(code) || rowYear == null) continue;
+    if (year != null && rowYear !== year) continue;
+    const value = toNumber(row.value);
+    if (value == null) continue;
+
+    const existing = valuesByCode.get(code);
+    if (!existing || existing.year < rowYear) {
+      valuesByCode.set(code, { code, year: rowYear, value: value, name: row.country || code });
+    }
+  }
+  return valuesByCode;
 }
 
 /**
@@ -3110,6 +3300,7 @@ function checkPlanLimit(userId, feature) {
     sessions: { free: 3, pro: 50, enterprise: Infinity },
     snapshots: { free: 2, pro: 50, enterprise: Infinity },
     apiCalls: { free: 500, pro: 5000, enterprise: Infinity },
+    peers: { free: 2, pro: 10, enterprise: 50 },
   };
   return { plan, limit: limits[feature]?.[plan] ?? 0 };
 }
@@ -3519,6 +3710,120 @@ app.get('/api/data/:code', authenticateApiKey, async (req, res) => {
   }
 });
 
+app.get('/api/peers/:countryCode', requireAuth, apiLimiter, async (req, res) => {
+  const query = validate(PeerComparisonSchema, req.query, res);
+  if (!query) return;
+
+  const countryCode = normalizeCountryCode(req.params.countryCode);
+  if (!countryCode || !countries.isValid(countryCode)) {
+    return res.status(400).json({ error: `Invalid country code: ${req.params.countryCode}` });
+  }
+
+  const metric = normalizePeerMetricMetric(query.metric);
+  const groupType = query.groupType || 'region';
+  const requestedYear = Number.isFinite(query.year) ? query.year : null;
+
+  try {
+    const catalog = await fetchWorldBankCountryCatalog();
+    const selectedMeta = catalog.find((item) => item.code === countryCode);
+    if (!selectedMeta) {
+      return res.status(404).json({ error: `Country catalog entry not found for ${countryCode}` });
+    }
+
+    const peers = resolvePeerGroupMembers(selectedMeta, groupType, catalog);
+    const limit = checkPlanLimit(req.user.id, 'peers');
+
+    if (limit.limit !== Number.POSITIVE_INFINITY && peers.length > limit.limit) {
+      return res.status(402).json({ error: `Peer comparison limit reached (${limit.limit}). Upgrade your plan for more.` });
+    }
+
+    const peerCodes = peers.map((p) => p.code);
+    const peerCodesSet = new Set(peerCodes);
+    const catalogByCode = new Map(peers.map((item) => [item.code, item]));
+
+    const year = requestedYear ?? (await resolvePeerComparisonYear(countryCode, metric));
+    if (!Number.isFinite(year)) {
+      return res.status(404).json({ error: `No ${metric} data found for ${countryCode} in recent years` });
+    }
+
+    const peerRows = await fetchPeerMetricRows(metric, peerCodes, year, year);
+    const valuesByCode = buildCountryValuesByCode(peerRows, year, peerCodesSet);
+    const targetEntry = valuesByCode.get(countryCode);
+    if (!targetEntry) {
+      return res.status(404).json({ error: `No ${metric} value found for ${countryCode} in ${year}` });
+    }
+
+    const values = [];
+    const peerList = [];
+
+    for (const peer of peers) {
+      const item = valuesByCode.get(peer.code);
+      if (!item) continue;
+      values.push(item.value);
+      peerList.push({
+        code: peer.code,
+        name: peer.name,
+        flag: peer.flag,
+        value: item.value,
+      });
+    }
+
+    if (!peerList.length) {
+      return res.status(404).json({ error: `No peers found for metric ${metric} in ${year}` });
+    }
+
+    const metricLabel = API_INDICATOR_LABELS[metric] || metric;
+    const metricUnits = {
+      gdp: 'USD',
+      gdp_growth: '%',
+      gdp_per_capita: 'USD',
+      exports: 'USD',
+      imports: 'USD',
+      trade_openness: '%',
+    };
+
+    const rowsWithRanks = peerList
+      .map((peer) => ({
+        ...peer,
+        rank: computeRank(values, peer.value) || 0,
+        percentile: percentileRank(values, peer.value) || 0,
+      }))
+      .sort((a, b) => a.rank - b.rank);
+
+    const summary = {
+      metric,
+      metricLabel,
+      metricUnit: metricUnits[metric] || '',
+      groupType,
+      groupName: groupTypeLabel(groupType, groupType === 'income' ? selectedMeta.incomeLevel : selectedMeta.region),
+      year,
+      peerCount: rowsWithRanks.length,
+      selectedCountryCode: countryCode,
+      selectedCountryValue: targetEntry.value,
+      selectedCountryRank: computeRank(values, targetEntry.value),
+      selectedCountryPercentile: percentileRank(values, targetEntry.value),
+      median: computeMedian(values),
+      average: computeAverage(values),
+    };
+
+    if (summary.selectedCountryRank === null || summary.selectedCountryPercentile === null) {
+      return res.status(500).json({ error: 'Failed to build peer ranking summary.' });
+    }
+
+    return res.json({
+      peers: rowsWithRanks.map((row) => ({
+        ...row,
+        isTarget: row.code === countryCode,
+      })),
+      summary,
+    });
+  } catch (e) {
+    const message = errorMessage(e, `Failed to build peer comparison for ${req.params.countryCode}`);
+    console.error(`/api/peers/${req.params.countryCode}:`, message);
+    return res.status(502).json({ error: message });
+  }
+});
+
 app.post('/api/analytics', requireAuth, apiLimiter, async (req, res) => {
   const body = validate(AnalyticsSchema, req.body, res);
   if (!body) return;
@@ -3747,7 +4052,12 @@ app.use(staticLimiter);
 app.use(express.static(DIST));
 app.use((_req, res) => res.sendFile(join(DIST, 'index.html')));
 
-app.listen(PORT, () => {
-  console.log(`Economic Dashboard server running on http://localhost:${PORT}`);
-  console.log(`Supported countries: ${countries.getNames('en').length} via i18n-iso-countries`);
-});
+const shouldStartServer = String(process.env.NODE_ENV) !== 'test' || process.env.VITEST_FORCE_LISTEN === '1';
+if (shouldStartServer) {
+  app.listen(PORT, () => {
+    console.log(`Economic Dashboard server running on http://localhost:${PORT}`);
+    console.log(`Supported countries: ${countries.getNames('en').length} via i18n-iso-countries`);
+  });
+}
+
+export { app };

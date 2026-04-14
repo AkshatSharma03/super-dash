@@ -24,6 +24,7 @@ import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
 import { AlertTriangle, Loader2, Globe2, RefreshCw } from "lucide-react";
 import DataQualityHeatmap from "../ui/DataQualityHeatmap";
+import { PeerComparison } from "../ui/PeerComparison";
 
 
 const DASH_TABS = ["GDP", "Exports", "Imports", "Trade Balance"] as const;
@@ -253,6 +254,8 @@ export default function DashboardMode({ token, dataset, loading, error, onSelect
         <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: isMobile ? "repeat(2,minmax(0,1fr))" : "repeat(auto-fit,minmax(140px,1fr))" }}>
           {dataset.kpis.map(k => <KPI key={k.label} label={k.label} value={k.value} sub={k.sub} trend={k.trend} color={k.color} />)}
         </div>
+
+        <PeerComparison token={token} countryCode={dataset.code} />
 
         {/* Sub-tab selector */}
           <div className="flex gap-1 mb-1 bg-memphis-offwhite border-3 border-memphis-black p-1 w-full sm:w-fit overflow-x-auto shadow-hard-sm">

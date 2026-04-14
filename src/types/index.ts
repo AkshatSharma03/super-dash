@@ -89,6 +89,7 @@ export interface PublicApiCountry {
   name: string;
   flag: string;
   region: string;
+  income?: string;
 }
 
 export interface PublicApiCountriesResponse {
@@ -250,6 +251,42 @@ export interface CountrySearchResult { code: string; name: string; flag: string;
 
 /** Entry in the local fetch history from /api/country/history. */
 export interface CountryHistoryEntry { code: string; name: string; flag: string; region: string; cachedAt: number; }
+
+// ── Peer comparison types ───────────────────────────────────────────────────
+
+export type PeerGroupType = "region" | "income" | "brics";
+export type PeerMetricKey = "gdp" | "gdp_growth" | "gdp_per_capita" | "exports" | "imports" | "trade_openness";
+
+export interface PeerComparisonPeer {
+  code: string;
+  name: string;
+  flag: string;
+  value: number;
+  rank: number;
+  percentile: number;
+  isTarget: boolean;
+}
+
+export interface PeerComparisonSummary {
+  metric: PeerMetricKey;
+  metricLabel: string;
+  metricUnit: string;
+  groupType: PeerGroupType;
+  groupName: string;
+  year: number;
+  peerCount: number;
+  selectedCountryCode: string;
+  selectedCountryValue: number;
+  selectedCountryRank: number;
+  selectedCountryPercentile: number;
+  median: number | null;
+  average: number | null;
+}
+
+export interface PeerComparisonResponse {
+  peers: PeerComparisonPeer[];
+  summary: PeerComparisonSummary;
+}
 
 // ── App types ─────────────────────────────────────────────────────────────────
 

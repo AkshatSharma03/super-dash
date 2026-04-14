@@ -22,6 +22,9 @@ import type {
   PublicApiCountriesResponse,
   PublicApiCountryPayload,
   PublicApiSeriesResponse,
+  PeerComparisonResponse,
+  PeerGroupType,
+  PeerMetricKey,
 } from "../types";
 
 let authTokenGetter: null | (() => Promise<string | null>) = null;
@@ -500,6 +503,23 @@ export function getApiDataBatch(
     return requestText(path, { token });
   }
   return get<PublicApiSeriesResponse>(path, token);
+}
+
+export function getPeerComparison(
+  token: string,
+  countryCode: string,
+  options: {
+    groupType?: PeerGroupType;
+    metric?: PeerMetricKey;
+    year?: number;
+  } = {},
+): Promise<PeerComparisonResponse> {
+  const q = stringifyApiParams({
+    groupType: options.groupType,
+    metric: options.metric,
+    year: options.year,
+  });
+  return get<PeerComparisonResponse>(`/api/peers/${countryCode}${q}`, token);
 }
 
 export interface SessionShare {
