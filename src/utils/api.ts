@@ -8,6 +8,7 @@ import type { AIResponse, SearchResult, ParsedCSV, User, ChatSession, ChatSessio
 let authTokenGetter: null | (() => Promise<string | null>) = null;
 const API_TIMEOUT_MS = 30_000;
 const CHAT_STREAM_TIMEOUT_MS = 190_000;
+const SEARCH_TIMEOUT_MS = 75_000;
 
 export function setAuthTokenGetter(getter: (() => Promise<string | null>) | null) {
   authTokenGetter = getter;
@@ -75,11 +76,12 @@ async function requestJSON<T>(
  }
 
 /** Helper: POST to an endpoint, throw on non-2xx, return typed JSON. */
-async function post<T>(path: string, body: unknown, token?: string): Promise<T> {
+async function post<T>(path: string, body: unknown, token?: string, timeoutMs?: number): Promise<T> {
   return requestJSON<T>(path, {
     method: "POST",
     body,
     token,
+    timeoutMs,
   });
 }
 
@@ -263,7 +265,7 @@ export async function askClaudeStream(
  * @returns SearchResult with markdown text, source list, and webSearchUsed flag
  */
 export function performWebSearch(query: string): Promise<SearchResult> {
-  return post<SearchResult>("/api/search", { query });
+  return post<SearchResult>("/api/search", { query }, undefined, SEARCH_TIMEOUT_MS);
 }
 
 /**

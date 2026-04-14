@@ -30,6 +30,14 @@ export default function SearchMode() {
 
   const trie = getSearchTrie();
 
+  const normalizeSearchError = (value: unknown): string => {
+    const message = value instanceof Error ? value.message : String(value);
+    if (message.toLowerCase().includes("signal timed out")) {
+      return "Search timed out. Try narrower query or retry in few seconds.";
+    }
+    return message;
+  };
+
   const handleQueryChange = (val: string) => {
     setQuery(val);
     if (val.trim().length >= 2) {
@@ -57,7 +65,7 @@ export default function SearchMode() {
       const res = await performWebSearch(trimmed);
       setResult(res);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(normalizeSearchError(e));
     }
     setLoading(false);
   };
