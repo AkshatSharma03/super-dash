@@ -3,7 +3,7 @@
 // The Express server (server.js) holds the ANTHROPIC_API_KEY; the client
 // bundle never sees it. All requests go to /api/*.
 // ─────────────────────────────────────────────────────────────────────────────
-import type { AIResponse, SearchResult, SearchHistoryEntry, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../types";
+import type { AIResponse, SearchResult, SearchHistoryEntry, SearchContextTurn, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../types";
 
 let authTokenGetter: null | (() => Promise<string | null>) = null;
 const API_TIMEOUT_MS = 30_000;
@@ -259,13 +259,13 @@ export async function askClaudeStream(
 }
 
 /**
- * Perform a live web search (via Anthropic web_search beta tool).
- * Falls back to model knowledge if the tool is unavailable.
+ * Perform a live web search via Kagi FastGPT.
  * @param query - Raw search query string
+ * @param context - Optional prior turns for follow-up continuity
  * @returns SearchResult with markdown text, source list, and webSearchUsed flag
  */
-export function performWebSearch(query: string): Promise<SearchResult> {
-  return post<SearchResult>("/api/search", { query }, undefined, SEARCH_TIMEOUT_MS);
+export function performWebSearch(query: string, context: SearchContextTurn[] = []): Promise<SearchResult> {
+  return post<SearchResult>("/api/search", { query, context }, undefined, SEARCH_TIMEOUT_MS);
 }
 
 export function getSearchHistory(token: string): Promise<SearchHistoryEntry[]> {

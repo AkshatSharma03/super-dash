@@ -61,11 +61,17 @@ export type Message = UserMessage | AssistantMessage;
 /** A single source returned by /api/search. url is null for model-knowledge results. */
 export interface SearchSource { title: string; url: string | null; }
 
+/** Prior turns sent to /api/search so follow-up searches keep context continuity. */
+export interface SearchContextTurn {
+  query: string;
+  summary?: string;
+}
+
 /** Full response from /api/search. */
 export interface SearchResult {
   text: string;
   sources: SearchSource[];
-  webSearchUsed: boolean; // false when Claude fell back to training knowledge
+  webSearchUsed: boolean;
 }
 
 /** Saved search query metadata for Search history list. */

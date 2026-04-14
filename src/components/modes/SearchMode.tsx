@@ -7,7 +7,7 @@ import { useMobile } from "../../utils/useMobile";
 import { SEARCH_SUGGESTIONS } from "../../data/suggestions";
 import { clearSearchHistory, getSearchHistory, performWebSearch, saveSearchHistory } from "../../utils/api";
 import { getSearchTrie } from "../../algorithms/trie";
-import type { SearchHistoryEntry, SearchResult } from "../../types";
+import type { SearchContextTurn, SearchHistoryEntry, SearchResult } from "../../types";
 import { MarkdownText } from "../ui";
 import { Button }  from "@/components/ui/button";
 import { Input }   from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import { AlertTriangle, Globe2, BookOpen } from "lucide-react";
 
 const MAX_SEARCH_HISTORY = 10;
+const MAX_SEARCH_CONTEXT_TURNS = 8;
 
 interface SearchModeProps {
   token: string;
@@ -35,6 +36,7 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
   const [suggestions,     setSuggestions]     = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [history,         setHistory]         = useState<SearchHistoryEntry[]>([]);
+  const [searchContext,   setSearchContext]   = useState<SearchContextTurn[]>([]);
 
   const trie = getSearchTrie();
 
@@ -93,9 +95,14 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
     }
   };
 
-  const doSearch = async (q: string) => {
+  const summarizeForContext = (text: string): string =>
+    text.replace(/\s+/g, " ").trim().slice(0, 1200);
+
+  const doSearch = async (q: string, opts: { followUp?: boolean } = {}) => {
     if (!q?.trim() || loading) return;
+    const { followUp = false } = opts;
     const trimmed = q.trim();
+    const contextForRequest = followUp ? searchContext : [];
     setShowSuggestions(false);
     setSuggestions([]);
     setLoading(true);
@@ -105,9 +112,18 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
     addToHistory(trimmed);
     setQuery("");
     setFollowQuery("");
+    if (!followUp) setSearchContext([]);
     try {
-      const res = await performWebSearch(trimmed);
+      const res = await performWebSearch(trimmed, contextForRequest);
       setResult(res);
+      const nextTurn: SearchContextTurn = {
+        query: trimmed,
+        summary: summarizeForContext(res.text),
+      };
+      setSearchContext(prev => {
+        const base = followUp ? prev : [];
+        return [...base, nextTurn].slice(-MAX_SEARCH_CONTEXT_TURNS);
+      });
     } catch (e) {
       setError(normalizeSearchError(e));
     }
@@ -251,7 +267,7 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
                 Export ↓
               </Button>
               <Button variant="outline" size="sm" className="text-xs"
-                onClick={() => { setResult(null); setError(null); setSearched(""); }}>
+                onClick={() => { setResult(null); setError(null); setSearched(""); setSearchContext([]); }}>
                 Clear
               </Button>
             </div>
@@ -305,11 +321,11 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
             <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-[0.6px] mb-2">Refine or follow up</p>
             <div className={cn("flex gap-2", isMobile && "flex-col")}>
               <Input value={followQuery} onChange={e => setFollowQuery(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && doSearch(followQuery)}
+                onKeyDown={e => e.key === "Enter" && doSearch(followQuery, { followUp: true })}
                 disabled={loading}
                 placeholder="Enter a follow-up or related search…"
                 className="flex-1 focus-visible:ring-emerald-500 focus-visible:border-emerald-500" />
-              <Button onClick={() => doSearch(followQuery)} disabled={loading || !followQuery.trim()}
+              <Button onClick={() => doSearch(followQuery, { followUp: true })} disabled={loading || !followQuery.trim()}
                 className="bg-[#10B981] hover:bg-[#059669] font-bold min-h-11">
                 Search
               </Button>
@@ -319,7 +335,7 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
       )}
 
       <p className="text-center text-[10px] text-border mt-5">
-        Powered by Kagi FastGPT (primary) · Claude web search fallback · Sources: World Bank · IMF · Reuters · Bloomberg
+        Powered by Kagi FastGPT · Sources: World Bank · IMF · Reuters · Bloomberg
       </p>
     </div>
   );

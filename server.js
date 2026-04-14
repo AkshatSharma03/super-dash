@@ -1170,7 +1170,25 @@ async function callKagi(path, { method = 'GET', body = null, timeoutMs = KAGI_TI
   return payload;
 }
 
-function buildKagiSearchPrompt(query, searchNewsSources = []) {
+function buildKagiSearchPrompt(query, searchNewsSources = [], searchContext = []) {
+  const contextTurns = Array.isArray(searchContext)
+    ? searchContext
+        .filter(turn => turn && typeof turn.query === 'string' && turn.query.trim())
+        .slice(-6)
+    : [];
+
+  const followUpContext = contextTurns.length > 0
+    ? `\n\nConversation context (most recent last):\n${contextTurns
+        .map((turn, i) => {
+          const q = turn.query.trim();
+          const s = typeof turn.summary === 'string' ? turn.summary.trim() : '';
+          return s
+            ? `${i + 1}. Query: ${q}\n   Prior answer summary: ${s}`
+            : `${i + 1}. Query: ${q}`;
+        })
+        .join('\n')}`
+    : '';
+
   const newsContext = searchNewsSources.length > 0
     ? `\n\nRecent context (verify before use):\n${searchNewsSources
         .slice(0, 6)
@@ -1190,6 +1208,8 @@ function buildKagiSearchPrompt(query, searchNewsSources = []) {
     '6) Risks and unknowns (what could invalidate this view)',
     '',
     'Rules: concise but deep, avoid fluff, include concrete figures and assumptions, clearly mark uncertainty.',
+    'If conversation context is provided, treat the research question as a follow-up and preserve continuity with prior turns.',
+    followUpContext,
     newsContext,
   ].join('\n');
 }
@@ -1793,9 +1813,9 @@ app.post('/api/chat', apiLimiter, async (req, res) => {
 app.post('/api/search', apiLimiter, async (req, res) => {
   const body = validate(SearchSchema, req.body, res);
   if (!body) return;
-  const { query } = body;
+  const { query, context = [] } = body;
 
-  const ck = await cacheKey('/search', { query });
+  const ck = await cacheKey('/search', { query, context });
   const cached = apiCache.get(ck);
   if (cached) { if (IS_DEV) console.log('[cache hit] /api/search:', query.slice(0, 40)); return res.json(cached); }
 
@@ -1812,77 +1832,40 @@ app.post('/api/search', apiLimiter, async (req, res) => {
     console.error('News pre-fetch error in /api/search:', e.message);
   }
 
-  let searchResolved = false;
-
-  if (KAGI_API_KEY) {
-    try {
-      const kagiPrompt = buildKagiSearchPrompt(query, searchNewsSources);
-      const kagi = await callKagi('/fastgpt', {
-        method: 'POST',
-        body: { query: kagiPrompt, cache: true },
-      });
-
-      text = kagi?.data?.output?.trim?.() || '';
-      const refs = Array.isArray(kagi?.data?.references) ? kagi.data.references : [];
-      for (const ref of refs) {
-        if (!ref?.url) continue;
-        if (!sources.find(s => s.url === ref.url)) {
-          sources.push({ title: ref.title || ref.url, url: ref.url });
-        }
-      }
-
-      if (text) {
-        webSearchUsed = true;
-        searchResolved = true;
-      }
-    } catch (e) {
-      console.error('/api/search Kagi error:', e.message);
-    }
+  if (!KAGI_API_KEY) {
+    return res.status(503).json({
+      error: 'Search is configured for Kagi only. Set KAGI_API_KEY on the server.',
+    });
   }
 
-  if (!searchResolved) {
-    try {
-      const newsPrefix = searchNewsSources.length > 0
-        ? `Recent news context (use these to inform your answer and cite them):\n${JSON.stringify(searchNewsSources.map(s => s.title))}\n\nQuestion: `
-        : '';
-      const msgs = [{ role: 'user', content: newsPrefix + query }];
-      for (let turn = 0; turn < MAX_SEARCH_TURNS; turn++) {
-        const data = await callAnthropic(
-          { model: MODEL, max_tokens: 4000, temperature: 0, system: SEARCH_SYSTEM, tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }], messages: msgs },
-          { 'anthropic-beta': 'web-search-2025-03-05' }
-        );
+  try {
+    const kagiPrompt = buildKagiSearchPrompt(query, searchNewsSources, context);
+    const kagi = await callKagi('/fastgpt', {
+      method: 'POST',
+      body: { query: kagiPrompt, cache: true },
+    });
 
-        for (const blk of data.content || []) {
-          if (blk.type === 'text') { text = blk.text; webSearchUsed = true; }
-          for (const r of (Array.isArray(blk.content) ? blk.content : [])) {
-            if (r.url && !sources.find(s => s.url === r.url))
-              sources.push({ title: r.title || r.url, url: r.url });
-          }
-        }
-
-        if (data.stop_reason === 'end_turn') break;
-
-        if (data.stop_reason === 'tool_use') {
-          msgs.push({ role: 'assistant', content: data.content });
-          const toolUses = (data.content || []).filter(b => b.type === 'tool_use' || b.type === 'server_tool_use');
-          if (!toolUses.length) break;
-          msgs.push({ role: 'user', content: toolUses.map(b => ({ type: 'tool_result', tool_use_id: b.id, content: 'Search complete.' })) });
-        } else break;
-      }
-    } catch (_) {
-      try {
-        const data = await callAnthropic({
-          model: MODEL, max_tokens: 4000, temperature: 0,
-          system: SEARCH_SYSTEM + '\n\nNote: Web search unavailable. Answer from training knowledge (data up to early 2025). Clearly note when figures may be outdated.',
-          messages: [{ role: 'user', content: query }],
-        });
-        text    = data.content?.map(b => b.text || '').join('') || '';
-        sources = [{ title: 'Claude (training knowledge — may be outdated)', url: null }];
-      } catch (e2) {
-        console.error('/api/search fallback error:', e2.message);
-        return res.status(502).json({ error: e2.message });
+    text = kagi?.data?.output?.trim?.() || '';
+    const refs = Array.isArray(kagi?.data?.references) ? kagi.data.references : [];
+    for (const ref of refs) {
+      if (!ref?.url) continue;
+      if (!sources.find(s => s.url === ref.url)) {
+        sources.push({ title: ref.title || ref.url, url: ref.url });
       }
     }
+
+    if (text) {
+      webSearchUsed = true;
+    } else {
+      return res.status(502).json({
+        error: 'Kagi search returned no output. Claude fallback is disabled.',
+      });
+    }
+  } catch (e) {
+    console.error('/api/search Kagi error:', e.message);
+    return res.status(502).json({
+      error: 'Kagi search failed. Claude fallback is disabled.',
+    });
   }
 
   // Merge news sources that weren't already found by web search

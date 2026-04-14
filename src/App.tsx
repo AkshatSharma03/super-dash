@@ -32,7 +32,7 @@ const MODES: { mode: Mode; label: string; Icon: ComponentType<{ className?: stri
 /* Unified Memphis Color Palette for all modes */
 const MODE_META: Record<Mode, { label: string; desc: string; color: string; bg: string }> = {
   chat:      { label: "AI Chat",       color: "#FF006E", bg: "#FF006E", desc: "Ask any economic question — Claude generates interactive charts and analysis from your query" },
-  search:    { label: "Web Search",    color: "#00D9FF", bg: "#00D9FF", desc: "Live web search · Kagi FastGPT primary, Claude fallback · cited economic sources" },
+  search:    { label: "Web Search",    color: "#00D9FF", bg: "#00D9FF", desc: "Live web search · Kagi FastGPT · cited economic sources" },
   data:      { label: "Data Upload",   color: "#FB5607", bg: "#FB5607", desc: "Upload a CSV file · Claude analyses your data and creates charts automatically" },
   analytics: { label: "Analytics",     color: "#FFBE0B", bg: "#FFBE0B", desc: "Algorithms from scratch: OLS Regression · HHI Concentration · K-Means Clustering · Z-Score Anomaly Detection" },
   dashboard: { label: "Country Data",  color: "#8338EC", bg: "#8338EC", desc: "Select any country — real GDP & trade data from World Bank, cached locally · sector breakdown AI-estimated" },

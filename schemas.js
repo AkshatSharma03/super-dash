@@ -46,6 +46,15 @@ export const ChatSchema = z.object({
 
 export const SearchSchema = z.object({
   query: z.string().min(1, 'query is required').max(MAX_QUERY_CHARS),
+  context: z
+    .array(
+      z.object({
+        query: z.string().min(1).max(MAX_QUERY_CHARS),
+        summary: z.string().max(MAX_CONTEXT_CHARS).optional(),
+      })
+    )
+    .max(8)
+    .optional(),
 });
 
 export const SearchHistorySchema = z.object({
