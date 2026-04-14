@@ -13,6 +13,7 @@ const MAX_QUERY_CHARS   = 1_000;
 const MAX_CSV_COLS      = 50;
 const MAX_CSV_ROWS      = 500;
 const MAX_CONTEXT_CHARS = 2_000;
+const MAX_SEARCH_HISTORY = 20;
 
 // ── Validation helper ─────────────────────────────────────────────────────────
 // Returns the parsed value on success; sends a 400 and returns null on failure.
