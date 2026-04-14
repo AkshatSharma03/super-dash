@@ -3,10 +3,11 @@
 // Sections: profile summary + usage stats + Clerk-managed account controls.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from "react";
-import { UserProfile } from "@clerk/react";
+import { useClerk } from "@clerk/react";
 import { getUsage } from "../../utils/api";
 import type { User } from "../../types";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import { Settings, MessageSquare, Send } from "lucide-react";
 
 interface Props {
@@ -28,48 +29,8 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
-const clerkAppearance = {
-  variables: {
-    colorPrimary: "#FF006E",
-    colorText: "#1A1A2E",
-    colorBackground: "#FAFAFA",
-    colorInputBackground: "#FFFFFF",
-    colorInputText: "#1A1A2E",
-    colorDanger: "#FB5607",
-    borderRadius: "0px",
-    fontFamily: "Inter, sans-serif",
-  },
-  elements: {
-    rootBox: "w-full",
-    cardBox: "w-full",
-    card: "shadow-none border-0 rounded-none bg-transparent",
-    navbar: "hidden",
-    pageScrollBox: "p-0",
-    page: "space-y-3",
-    profileSectionPrimaryButton:
-      "rounded-none border-3 border-memphis-black bg-memphis-pink text-white font-black uppercase tracking-wide shadow-hard hover:bg-memphis-pink",
-    profileSectionSecondaryButton:
-      "rounded-none border-3 border-memphis-black bg-white text-memphis-black font-black uppercase tracking-wide shadow-hard",
-    formButtonPrimary:
-      "rounded-none border-3 border-memphis-black bg-memphis-pink text-white font-black uppercase tracking-wide shadow-hard hover:bg-memphis-pink",
-    formFieldInput:
-      "h-11 border-3 border-memphis-black/20 rounded-none text-memphis-black placeholder:text-memphis-black/40 focus:border-memphis-pink focus:ring-0",
-    formFieldLabel: "text-[11px] uppercase tracking-wide font-black text-memphis-black",
-    formFieldInputShowPasswordButton: "text-memphis-black",
-    accordionTriggerButton:
-      "rounded-none border-3 border-memphis-black bg-white text-memphis-black font-black uppercase tracking-wide",
-    dangerSection: "border-3 border-destructive/50 bg-destructive/5",
-    badge: "rounded-none border-2 border-memphis-black",
-    footerActionLink: "text-memphis-pink font-black",
-    formResendCodeLink: "text-memphis-pink font-black",
-    dividerLine: "bg-memphis-black/20",
-    dividerText: "text-[10px] uppercase tracking-wide font-black text-memphis-black/50",
-    breadcrumbs: "hidden",
-    profileSection: "border-3 border-memphis-black bg-white p-3 sm:p-4 shadow-hard-sm",
-  },
-} as const;
-
 export default function SettingsPanel({ user, token, onClose }: Props) {
+  const clerk = useClerk();
   const [usage,         setUsage]        = useState<{ sessionCount: number; messageCount: number; memberSince: string } | null>(null);
   const [usageError,    setUsageError]   = useState(false);
 
@@ -146,10 +107,15 @@ export default function SettingsPanel({ user, token, onClose }: Props) {
 
           <Section title="Account Security">
             <div className="border-3 border-memphis-black bg-white p-3.5 shadow-hard-sm">
-              <UserProfile
-                routing="hash"
-                appearance={clerkAppearance}
-              />
+              <p className="text-xs text-memphis-black/70 mb-3">
+                Manage profile, email, connected accounts, password, and security settings in Clerk account manager.
+              </p>
+              <Button
+                onClick={() => clerk.openUserProfile()}
+                className="w-full sm:w-auto min-h-11"
+              >
+                Open Account Manager
+              </Button>
             </div>
           </Section>
 
