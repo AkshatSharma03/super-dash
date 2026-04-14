@@ -406,7 +406,7 @@ export default function App() {
             }
           >
             {mode === "chat" && <div className="max-w-[1060px] mx-auto h-full flex flex-col"><ChatMode token={token} isGuest={user.isGuest ?? false} /></div>}
-            {mode === "search" && <SearchMode />}
+            {mode === "search" && <SearchMode token={token} isGuest={user.isGuest ?? false} />}
             {mode === "data" && <DataMode />}
             {mode === "analytics" && (
               <AnalyticsMode

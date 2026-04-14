@@ -68,6 +68,14 @@ export interface SearchResult {
   webSearchUsed: boolean; // false when Claude fell back to training knowledge
 }
 
+/** Saved search query metadata for Search history list. */
+export interface SearchHistoryEntry {
+  id: string;
+  query: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /** CSV parsed client-side before being sent to /api/analyze-csv. */
 export interface ParsedCSV {
   headers: string[];

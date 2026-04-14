@@ -20,6 +20,7 @@ import enLocale from 'i18n-iso-countries/langs/en.json' with { type: 'json' };
 import {
   validate,
   ChatSchema, SearchSchema, AnalyzeCsvSchema, AnalyticsSchema,
+  SearchHistorySchema,
   RegisterSchema, LoginSchema, ChangePasswordSchema, DeleteAccountSchema,
   ForgotPasswordSchema, ResetPasswordSchema,
   CreateSessionSchema, UpdateSessionSchema,
@@ -74,6 +75,7 @@ const MAX_CSV_ROWS      = 500;
 const MAX_CONTEXT_CHARS = 2_000;
 const CSV_SAMPLE_ROWS   = 30;
 const MAX_SEARCH_TURNS  = 8;
+const MAX_SEARCH_HISTORY = 20;
 const ANTHROPIC_TIMEOUT_MS        = 55_000;  // non-streaming calls
 const ANTHROPIC_STREAM_TIMEOUT_MS = 180_000; // streaming: allow up to 3 min for large responses
 const KAGI_TIMEOUT_MS             = 25_000;
@@ -219,6 +221,17 @@ db.exec(`
 
   CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON chat_sessions(user_id);
 
+  CREATE TABLE IF NOT EXISTS search_history (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    query      TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_search_history_user_id_updated_at
+  ON search_history(user_id, updated_at DESC);
+
   CREATE TABLE IF NOT EXISTS password_reset_tokens (
     token      TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -248,6 +261,11 @@ const stmt = {
   insertSession:   db.prepare('INSERT INTO chat_sessions (id, user_id, title, messages, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
   updateSession:   db.prepare('UPDATE chat_sessions SET messages = ?, title = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
   deleteSession:   db.prepare('DELETE FROM chat_sessions WHERE id = ? AND user_id = ?'),
+  searchHistoryByUser: db.prepare('SELECT id, query, created_at AS createdAt, updated_at AS updatedAt FROM search_history WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?'),
+  searchHistoryByQuery: db.prepare('SELECT * FROM search_history WHERE user_id = ? AND lower(query) = lower(?) LIMIT 1'),
+  insertSearchHistory: db.prepare('INSERT INTO search_history (id, user_id, query, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'),
+  updateSearchHistory: db.prepare('UPDATE search_history SET query = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
+  clearSearchHistory: db.prepare('DELETE FROM search_history WHERE user_id = ?'),
   userByIdFull:    db.prepare('SELECT * FROM users WHERE id = ?'),
   updatePassword:  db.prepare('UPDATE users SET hashed_password = ? WHERE id = ?'),
   deleteUser:      db.prepare('DELETE FROM users WHERE id = ?'),
@@ -2150,6 +2168,51 @@ app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
 });
 
 // ── Chat session routes ───────────────────────────────────────────────────────
+
+app.get('/api/search/history', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.json([]);
+  const rows = stmt.searchHistoryByUser.all(req.user.id, MAX_SEARCH_HISTORY);
+  res.json(rows);
+});
+
+app.post('/api/search/history', requireAuth, (req, res) => {
+  const body = validate(SearchHistorySchema, req.body, res);
+  if (!body) return;
+
+  if (req.user.isGuest) {
+    const now = new Date().toISOString();
+    return res.json({
+      id: `guest_${Date.now()}`,
+      query: body.query.trim(),
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
+
+  const query = body.query.trim();
+  const now = new Date().toISOString();
+  const existing = stmt.searchHistoryByQuery.get(req.user.id, query);
+
+  if (existing) {
+    stmt.updateSearchHistory.run(query, now, existing.id, req.user.id);
+    return res.json({
+      id: existing.id,
+      query,
+      createdAt: existing.created_at,
+      updatedAt: now,
+    });
+  }
+
+  const id = `sh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  stmt.insertSearchHistory.run(id, req.user.id, query, now, now);
+  res.json({ id, query, createdAt: now, updatedAt: now });
+});
+
+app.delete('/api/search/history', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.json({ ok: true });
+  stmt.clearSearchHistory.run(req.user.id);
+  res.json({ ok: true });
+});
 
 app.get('/api/sessions', requireAuth, (req, res) => {
   if (req.user.isGuest) return res.json([]);

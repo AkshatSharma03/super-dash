@@ -2,12 +2,12 @@
 // SEARCH MODE  —  live web search backed by /api/search.
 // Includes Trie-powered O(m) autocomplete from a weighted economic term corpus.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMobile } from "../../utils/useMobile";
 import { SEARCH_SUGGESTIONS } from "../../data/suggestions";
-import { performWebSearch } from "../../utils/api";
+import { clearSearchHistory, getSearchHistory, performWebSearch, saveSearchHistory } from "../../utils/api";
 import { getSearchTrie } from "../../algorithms/trie";
-import type { SearchResult } from "../../types";
+import type { SearchHistoryEntry, SearchResult } from "../../types";
 import { MarkdownText } from "../ui";
 import { Button }  from "@/components/ui/button";
 import { Input }   from "@/components/ui/input";
@@ -17,7 +17,14 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AlertTriangle, Globe2, BookOpen } from "lucide-react";
 
-export default function SearchMode() {
+const MAX_SEARCH_HISTORY = 10;
+
+interface SearchModeProps {
+  token: string;
+  isGuest?: boolean;
+}
+
+export default function SearchMode({ token, isGuest = false }: SearchModeProps) {
   const isMobile = useMobile();
   const [query,           setQuery]           = useState("");
   const [loading,         setLoading]         = useState(false);
@@ -27,6 +34,7 @@ export default function SearchMode() {
   const [followQuery,     setFollowQuery]     = useState("");
   const [suggestions,     setSuggestions]     = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [history,         setHistory]         = useState<SearchHistoryEntry[]>([]);
 
   const trie = getSearchTrie();
 
@@ -36,6 +44,41 @@ export default function SearchMode() {
       return "Search timed out. Try narrower query or retry in few seconds.";
     }
     return message;
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    if (isGuest) {
+      setHistory([]);
+      return;
+    }
+    getSearchHistory(token)
+      .then(rows => {
+        if (cancelled) return;
+        setHistory(rows.slice(0, MAX_SEARCH_HISTORY));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setHistory([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token, isGuest]);
+
+  const addToHistory = (term: string) => {
+    const normalized = term.trim();
+    if (!normalized) return;
+    if (isGuest) return;
+    saveSearchHistory(token, normalized)
+      .then(saved => {
+        setHistory(prev => {
+          const next = [saved, ...prev.filter(h => h.id !== saved.id && h.query.toLowerCase() !== saved.query.toLowerCase())];
+          return next.slice(0, MAX_SEARCH_HISTORY);
+        });
+      })
+      .catch(() => {});
   };
 
   const handleQueryChange = (val: string) => {
@@ -59,6 +102,7 @@ export default function SearchMode() {
     setResult(null);
     setError(null);
     setSearched(trimmed);
+    addToHistory(trimmed);
     setQuery("");
     setFollowQuery("");
     try {
@@ -120,6 +164,43 @@ export default function SearchMode() {
           </div>
         )}
       </div>
+
+      {/* ── Recent searches ── */}
+      {history.length > 0 && (
+        <div className="bg-white border-3 border-memphis-black p-3 mb-4 shadow-hard-sm">
+          <div className="flex items-center gap-2 mb-2.5">
+            <p className="text-[10px] font-black uppercase tracking-[0.6px] text-memphis-black/65">Recent searches</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto text-[10px] h-7 px-2"
+              onClick={() => {
+                if (isGuest) {
+                  setHistory([]);
+                  return;
+                }
+                clearSearchHistory(token)
+                  .then(() => setHistory([]))
+                  .catch(() => {});
+              }}
+            >
+              Clear history
+            </Button>
+          </div>
+          <div className={cn("grid gap-1.5", isMobile ? "grid-cols-1" : "grid-cols-2")}>
+            {history.map((h) => (
+              <button
+                key={h.id}
+                onClick={() => doSearch(h.query)}
+                className="text-left min-h-10 px-3 py-2 bg-memphis-offwhite border-2 border-memphis-black/20 text-[12px] text-memphis-black/85 hover:border-emerald-500/60 hover:bg-emerald-500/5 transition-snap"
+                title={h.query}
+              >
+                {h.query}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Suggested searches ── */}
       {!result && !loading && !error && (

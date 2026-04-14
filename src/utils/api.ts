@@ -3,7 +3,7 @@
 // The Express server (server.js) holds the ANTHROPIC_API_KEY; the client
 // bundle never sees it. All requests go to /api/*.
 // ─────────────────────────────────────────────────────────────────────────────
-import type { AIResponse, SearchResult, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../types";
+import type { AIResponse, SearchResult, SearchHistoryEntry, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../types";
 
 let authTokenGetter: null | (() => Promise<string | null>) = null;
 const API_TIMEOUT_MS = 30_000;
@@ -266,6 +266,18 @@ export async function askClaudeStream(
  */
 export function performWebSearch(query: string): Promise<SearchResult> {
   return post<SearchResult>("/api/search", { query }, undefined, SEARCH_TIMEOUT_MS);
+}
+
+export function getSearchHistory(token: string): Promise<SearchHistoryEntry[]> {
+  return get<SearchHistoryEntry[]>("/api/search/history", token);
+}
+
+export function saveSearchHistory(token: string, query: string): Promise<SearchHistoryEntry> {
+  return post<SearchHistoryEntry>("/api/search/history", { query }, token);
+}
+
+export function clearSearchHistory(token: string): Promise<{ ok: boolean }> {
+  return del<{ ok: boolean }>("/api/search/history", token);
 }
 
 /**
