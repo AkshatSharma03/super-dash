@@ -3,7 +3,7 @@
 // The Express server (server.js) holds the ANTHROPIC_API_KEY; the client
 // bundle never sees it. All requests go to /api/*.
 // ─────────────────────────────────────────────────────────────────────────────
-import type { AIResponse, SearchResult, SearchHistoryEntry, SearchContextTurn, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../types";
+import type { AIResponse, SearchResult, SearchHistoryEntry, SearchContextTurn, SearchSession, SearchSessionTurn, ParsedCSV, User, ChatSession, ChatSessionFull, CountryDataset, CountrySearchResult, CountryHistoryEntry } from "../types";
 
 let authTokenGetter: null | (() => Promise<string | null>) = null;
 const API_TIMEOUT_MS = 30_000;
@@ -278,6 +278,26 @@ export function saveSearchHistory(token: string, query: string): Promise<SearchH
 
 export function clearSearchHistory(token: string): Promise<{ ok: boolean }> {
   return del<{ ok: boolean }>("/api/search/history", token);
+}
+
+export function getSearchSessions(token: string): Promise<SearchSession[]> {
+  return get<SearchSession[]>("/api/search/sessions", token);
+}
+
+export function createSearchSession(token: string, title: string): Promise<SearchSession> {
+  return post<SearchSession>("/api/search/sessions", { title }, token);
+}
+
+export function updateSearchSession(
+  token: string,
+  id: string,
+  data: Partial<{ turns: SearchSessionTurn[]; title: string }>,
+): Promise<{ id: string; title: string; updatedAt: string }> {
+  return patch<{ id: string; title: string; updatedAt: string }>(`/api/search/sessions/${id}`, data, token);
+}
+
+export function deleteSearchSession(token: string, id: string): Promise<{ ok: boolean }> {
+  return del<{ ok: boolean }>(`/api/search/sessions/${id}`, token);
 }
 
 /**

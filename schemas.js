@@ -114,6 +114,15 @@ export const UpdateSessionSchema = z.object({
   title:    z.string().max(100).optional(),
 });
 
+export const CreateSearchSessionSchema = z.object({
+  title: z.string().max(100).optional(),
+});
+
+export const UpdateSearchSessionSchema = z.object({
+  turns: z.array(z.record(z.unknown())).max(MAX_SEARCH_HISTORY).optional(),
+  title: z.string().max(100).optional(),
+});
+
 // ── Country search query param ────────────────────────────────────────────────
 
 export const CountrySearchQuerySchema = z.object({

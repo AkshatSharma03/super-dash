@@ -24,6 +24,7 @@ import {
   RegisterSchema, LoginSchema, ChangePasswordSchema, DeleteAccountSchema,
   ForgotPasswordSchema, ResetPasswordSchema,
   CreateSessionSchema, UpdateSessionSchema,
+  CreateSearchSessionSchema, UpdateSearchSessionSchema,
   CountrySearchQuerySchema,
 } from './schemas.js';
 
@@ -232,6 +233,18 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_search_history_user_id_updated_at
   ON search_history(user_id, updated_at DESC);
 
+  CREATE TABLE IF NOT EXISTS search_sessions (
+    id         TEXT PRIMARY KEY,
+    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title      TEXT NOT NULL,
+    turns      TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_search_sessions_user_id
+  ON search_sessions(user_id, updated_at DESC);
+
   CREATE TABLE IF NOT EXISTS password_reset_tokens (
     token      TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -266,6 +279,11 @@ const stmt = {
   insertSearchHistory: db.prepare('INSERT INTO search_history (id, user_id, query, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'),
   updateSearchHistory: db.prepare('UPDATE search_history SET query = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
   clearSearchHistory: db.prepare('DELETE FROM search_history WHERE user_id = ?'),
+  searchSessionsByUser: db.prepare('SELECT id, title, turns, created_at AS createdAt, updated_at AS updatedAt FROM search_sessions WHERE user_id = ? ORDER BY updated_at DESC'),
+  searchSessionById: db.prepare('SELECT * FROM search_sessions WHERE id = ? AND user_id = ?'),
+  insertSearchSession: db.prepare('INSERT INTO search_sessions (id, user_id, title, turns, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
+  updateSearchSession: db.prepare('UPDATE search_sessions SET turns = ?, title = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
+  deleteSearchSession: db.prepare('DELETE FROM search_sessions WHERE id = ? AND user_id = ?'),
   userByIdFull:    db.prepare('SELECT * FROM users WHERE id = ?'),
   updatePassword:  db.prepare('UPDATE users SET hashed_password = ? WHERE id = ?'),
   deleteUser:      db.prepare('DELETE FROM users WHERE id = ?'),
@@ -2194,6 +2212,68 @@ app.post('/api/search/history', requireAuth, (req, res) => {
 app.delete('/api/search/history', requireAuth, (req, res) => {
   if (req.user.isGuest) return res.json({ ok: true });
   stmt.clearSearchHistory.run(req.user.id);
+  res.json({ ok: true });
+});
+
+app.get('/api/search/sessions', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.json([]);
+  const rows = stmt.searchSessionsByUser.all(req.user.id);
+  const sessions = rows.map((row) => {
+    let turns = [];
+    try {
+      const parsed = JSON.parse(row.turns);
+      turns = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      turns = [];
+    }
+    return {
+      id: row.id,
+      title: row.title,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      turns,
+    };
+  });
+  res.json(sessions);
+});
+
+app.post('/api/search/sessions', requireAuth, (req, res) => {
+  const body = validate(CreateSearchSessionSchema, req.body, res);
+  if (!body) return;
+  const title = normalizeSessionTitle(body.title, 'New Search');
+  const id = `ss_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const now = new Date().toISOString();
+  if (!req.user.isGuest) stmt.insertSearchSession.run(id, req.user.id, title, '[]', now, now);
+  res.json({ id, title, turns: [], createdAt: now, updatedAt: now });
+});
+
+app.patch('/api/search/sessions/:id', requireAuth, (req, res) => {
+  const body = validate(UpdateSearchSessionSchema, req.body, res);
+  if (!body) return;
+
+  if (req.user.isGuest) {
+    return res.json({
+      id: req.params.id,
+      title: body.title !== undefined ? normalizeSessionTitle(body.title, 'New Search') : 'New Search',
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  const row = stmt.searchSessionById.get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Session not found' });
+  const newTurns = body.turns !== undefined ? JSON.stringify(body.turns) : row.turns;
+  const newTitle = body.title !== undefined ? normalizeSessionTitle(body.title, row.title) : row.title;
+  const now = new Date().toISOString();
+  stmt.updateSearchSession.run(newTurns, newTitle, now, req.params.id, req.user.id);
+  res.json({ id: row.id, title: newTitle, updatedAt: now });
+});
+
+app.delete('/api/search/sessions/:id', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.json({ ok: true });
+
+  const row = stmt.searchSessionById.get(req.params.id, req.user.id);
+  if (!row) return res.status(404).json({ error: 'Session not found' });
+  stmt.deleteSearchSession.run(req.params.id, req.user.id);
   res.json({ ok: true });
 });
 

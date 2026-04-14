@@ -82,6 +82,20 @@ export interface SearchHistoryEntry {
   updatedAt: string;
 }
 
+export interface SearchSessionTurn {
+  query: string;
+  summary: string;
+  result: SearchResult;
+}
+
+export interface SearchSession {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  turns: SearchSessionTurn[];
+}
+
 /** CSV parsed client-side before being sent to /api/analyze-csv. */
 export interface ParsedCSV {
   headers: string[];
