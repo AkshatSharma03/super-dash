@@ -118,7 +118,8 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
         {view === "login" ? (
           <SignIn
             routing="hash"
-            signUpUrl="#register"
+            signUpUrl="/sign-up"
+            oauthFlow="redirect"
             forceRedirectUrl="/"
             fallbackRedirectUrl="/"
             appearance={clerkAppearance}
@@ -126,7 +127,8 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
         ) : (
           <SignUp
             routing="hash"
-            signInUrl="#login"
+            signInUrl="/sign-in"
+            oauthFlow="redirect"
             forceRedirectUrl="/"
             fallbackRedirectUrl="/"
             appearance={clerkAppearance}
