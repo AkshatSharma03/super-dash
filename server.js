@@ -81,6 +81,12 @@ import {
   ApiKeyDeleteSchema,
   SnapshotCreateSchema,
   SnapshotRegenerateSchema,
+  RegisterSchema,
+  LoginSchema,
+  ChangePasswordSchema,
+  DeleteAccountSchema,
+  ForgotPasswordSchema,
+  ResetPasswordSchema,
 } from './schemas.js';
 
 countries.registerLocale(enLocale);
