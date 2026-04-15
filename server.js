@@ -1079,29 +1079,6 @@ app.use('/api/metrics', createMetricsRouter({
   checkPlanLimit,
 }));
 
-app.use('/api/chat', createChatRouter({
-  apiLimiter,
-  validate,
-  ChatSchema,
-  cacheKey,
-  apiCache,
-  fetchVerifiedNews,
-  executeDataTool,
-  validateAIResponse,
-  chatCacheTtlMs,
-  track,
-  sseWrite,
-  IS_DEV,
-  MAX_HISTORY,
-  KAGI_API_KEY,
-  KAGI_BASE,
-  DATA_TOOLS,
-  ANTHROPIC_BASE,
-  ANTHROPIC_API_KEY,
-  ANTHROPIC_STREAM_TIMEOUT_MS,
-  MODEL,
-}));
-
 app.use('/api/search', createSearchRouter({
   apiLimiter,
   validate,
@@ -1904,6 +1881,30 @@ OTHER: BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), 
     },
   },
 ];
+
+// ── Chat router (mounted after DATA_TOOLS to avoid TDZ) ─────────────────────────
+app.use('/api/chat', createChatRouter({
+  apiLimiter,
+  validate,
+  ChatSchema,
+  cacheKey,
+  apiCache,
+  fetchVerifiedNews,
+  executeDataTool,
+  validateAIResponse,
+  chatCacheTtlMs,
+  track,
+  sseWrite,
+  IS_DEV,
+  MAX_HISTORY,
+  KAGI_API_KEY,
+  KAGI_BASE,
+  DATA_TOOLS,
+  ANTHROPIC_BASE,
+  ANTHROPIC_API_KEY,
+  ANTHROPIC_STREAM_TIMEOUT_MS,
+  MODEL,
+}));
 
 /** Build the system prompt dynamically so it reflects which tools are actually available. */
 function buildVerifiedChatSystem() {
