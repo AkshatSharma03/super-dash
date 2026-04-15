@@ -1,28 +1,72 @@
 import 'dotenv/config';
 import express from 'express';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-import rateLimit from 'express-rate-limit';
+import { join } from 'path';
 import helmet from 'helmet';
 import { createHash, randomBytes } from 'crypto';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { verifyToken as verifyClerkToken } from '@clerk/backend';
-import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
 import countries from 'i18n-iso-countries';
-import { PostHog } from 'posthog-node';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { z } from 'zod';
+import {
+  ROOT_DIR,
+  PORT,
+  MODEL,
+  ANTHROPIC_BASE,
+  ANTHROPIC_API_KEY,
+  KAGI_API_KEY,
+  KAGI_BASE,
+  IS_DEV,
+  CLERK_SECRET_KEY,
+  CLERK_JWT_KEY,
+  CLERK_AUTH_ENABLED,
+  NEWS_API_KEY,
+  TRUSTED_NEWS_DOMAINS,
+  KIMI_API_KEY,
+  KIMI_BASE,
+  KIMI_MODEL,
+  TTL_SEARCH_MS,
+  chatCacheTtlMs,
+  RL_WINDOW_MS,
+  RL_MAX,
+  MAX_HISTORY,
+  MAX_MSG_CHARS,
+  MAX_QUERY_CHARS,
+  MAX_CSV_COLS,
+  MAX_CSV_ROWS,
+  MAX_CONTEXT_CHARS,
+  CSV_SAMPLE_ROWS,
+  MAX_SEARCH_TURNS,
+  MAX_SEARCH_HISTORY,
+  ANTHROPIC_TIMEOUT_MS,
+  ANTHROPIC_STREAM_TIMEOUT_MS,
+  KAGI_TIMEOUT_MS,
+  JWT_SECRET,
+  BCRYPT_ROUNDS,
+  DB_PATH,
+  COUNTRY_CACHE_TTL_MS,
+  RAW_DATA_TTL_MS,
+} from './src/server/config.js';
+import { apiCache, canonCache, rawDataCache } from './src/server/cache/index.js';
+import { createDb } from './src/server/db/index.js';
+import { initSchema } from './src/server/db/schema.js';
+import { prepareStatements } from './src/server/db/statements.js';
+import { createApiLimiter, createAuthLimiter, createStaticLimiter } from './src/server/auth/limits.js';
+import { createAuthenticateApiKey, createMcpAuth, createRequireAuth } from './src/server/auth/middleware.js';
+import { createAuthRouter } from './src/server/routes/auth.js';
+import { createCountryRouter } from './src/server/routes/country.js';
+import { createPeersRouter } from './src/server/routes/peers.js';
+import { createPublicApiRouter } from './src/server/routes/publicApi.js';
+import { createSessionsRouter } from './src/server/routes/sessions.js';
+import { createTelemetry } from './src/server/services/telemetry.js';
+import { errorMessage } from './src/server/utils/errors.js';
+import { sseWrite } from './src/server/utils/http.js';
 
 import enLocale from 'i18n-iso-countries/langs/en.json' with { type: 'json' };
 import {
   validate,
   ChatSchema, SearchSchema, AnalyzeCsvSchema, AnalyticsSchema,
   SearchHistorySchema,
-  RegisterSchema, LoginSchema, ChangePasswordSchema, DeleteAccountSchema,
-  ForgotPasswordSchema, ResetPasswordSchema,
   CreateSessionSchema, UpdateSessionSchema,
   CreateSearchSessionSchema, UpdateSearchSessionSchema,
   CountrySearchQuerySchema,
@@ -30,71 +74,11 @@ import {
   PeerComparisonSchema,
   ApiKeyCreateSchema,
   ApiKeyDeleteSchema,
+  SnapshotCreateSchema,
+  SnapshotRegenerateSchema,
 } from './schemas.js';
 
 countries.registerLocale(enLocale);
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-// ── Configuration ─────────────────────────────────────────────────────────────
-const PORT              = process.env.PORT || 3000;
-const MODEL             = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
-const ANTHROPIC_BASE    = 'https://api.anthropic.com/v1/messages';
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const KAGI_API_KEY      = process.env.KAGI_API_KEY;
-const KAGI_BASE         = process.env.KAGI_BASE || 'https://kagi.com/api/v0';
-const IS_DEV            = process.env.NODE_ENV !== 'production';
-const CLERK_SECRET_KEY  = process.env.CLERK_SECRET_KEY;
-const CLERK_JWT_KEY     = process.env.CLERK_JWT_KEY;
-const CLERK_AUTH_ENABLED = Boolean(CLERK_SECRET_KEY || CLERK_JWT_KEY);
-const NEWS_API_KEY      = process.env.NEWS_API_KEY;
-const TRUSTED_NEWS_DOMAINS = 'reuters.com,bloomberg.com,ft.com,wsj.com,economist.com,apnews.com';
-
-// ── Kimi 2.5 canonicalization ─────────────────────────────────────────────────
-const KIMI_API_KEY = process.env.KIMI_API_KEY;
-const KIMI_BASE    = 'https://api.moonshot.cn/v1/chat/completions';
-const KIMI_MODEL   = process.env.KIMI_MODEL || 'moonshot-v1-8k';
-
-// LRU cache
-const CACHE_CAP         = 200;
-const TTL_SEARCH_MS     = 30 * 60 * 1000;
-
-// Chat cache TTL: expires at midnight UTC on Jan 1 of the NEXT calendar year.
-// This means the same question returns the same answer all year, then resets when
-// new annual data becomes available.
-function chatCacheTtlMs() {
-  const now  = new Date();
-  const flip = Date.UTC(now.getUTCFullYear() + 1, 0, 1); // Jan 1 next year, 00:00 UTC
-  return flip - Date.now();
-}
-
-// Rate limiting
-const RL_WINDOW_MS      = 15 * 60 * 1000;
-const RL_MAX            = 20;
-
-// Input sanitization limits
-const MAX_HISTORY       = 40;
-const MAX_MSG_CHARS     = 12_000;
-const MAX_QUERY_CHARS   = 1_000;
-const MAX_CSV_COLS      = 50;
-const MAX_CSV_ROWS      = 500;
-const MAX_CONTEXT_CHARS = 2_000;
-const CSV_SAMPLE_ROWS   = 30;
-const MAX_SEARCH_TURNS  = 8;
-const MAX_SEARCH_HISTORY = 20;
-const ANTHROPIC_TIMEOUT_MS        = 55_000;  // non-streaming calls
-const ANTHROPIC_STREAM_TIMEOUT_MS = 180_000; // streaming: allow up to 3 min for large responses
-const KAGI_TIMEOUT_MS             = 25_000;
-
-// Auth
-const JWT_SECRET     = process.env.JWT_SECRET || 'dev-secret-change-in-production';
-const BCRYPT_ROUNDS  = 10;
-
-// Database
-const DB_PATH = process.env.DB_PATH || join(__dirname, 'data', 'econChart.db');
-
-// Country cache TTL
-const COUNTRY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-// ─────────────────────────────────────────────────────────────────────────────
 
 if (!ANTHROPIC_API_KEY) {
   console.error('ERROR: ANTHROPIC_API_KEY environment variable is not set.');
@@ -102,20 +86,7 @@ if (!ANTHROPIC_API_KEY) {
 }
 
 // ── PostHog telemetry ─────────────────────────────────────────────────────────
-const ph = process.env.POSTHOG_API_KEY
-  ? new PostHog(process.env.POSTHOG_API_KEY, { host: 'https://us.i.posthog.com', flushAt: 20, flushInterval: 10_000 })
-  : null;
-
-/** Fire-and-forget event. distinctId is the user's DB id or 'guest'. */
-function track(distinctId, event, properties = {}) {
-  if (!ph) return;
-  ph.capture({ distinctId: String(distinctId), event, properties });
-}
-
-if (ph) {
-  process.on('SIGTERM', async () => { await ph.shutdown(); process.exit(0); });
-  process.on('SIGINT',  async () => { await ph.shutdown(); process.exit(0); });
-}
+const { ph, track } = createTelemetry();
 // ─────────────────────────────────────────────────────────────────────────────
 
 if (!process.env.JWT_SECRET && !IS_DEV) {
@@ -123,272 +94,12 @@ if (!process.env.JWT_SECRET && !IS_DEV) {
   process.exit(1);
 }
 
-// ── LRU Cache ─────────────────────────────────────────────────────────────────
-class LRUNode {
-  constructor(key, value, ttlMs) {
-    this.key       = key;
-    this.value     = value;
-    this.expiresAt = Date.now() + ttlMs;
-    this.prev      = null;
-    this.next      = null;
-  }
-}
-
-class LRUCache {
-  constructor(capacity) {
-    this.capacity = capacity;
-    this.map      = new Map();
-    this.head = new LRUNode(null, null, Infinity);
-    this.tail = new LRUNode(null, null, Infinity);
-    this.head.next = this.tail;
-    this.tail.prev = this.head;
-  }
-
-  _detach(node) {
-    node.prev.next = node.next;
-    node.next.prev = node.prev;
-  }
-
-  _attachFront(node) {
-    node.next           = this.head.next;
-    node.prev           = this.head;
-    this.head.next.prev = node;
-    this.head.next      = node;
-  }
-
-  get(key) {
-    const node = this.map.get(key);
-    if (!node) return null;
-    if (Date.now() > node.expiresAt) {
-      this._detach(node);
-      this.map.delete(key);
-      return null;
-    }
-    this._detach(node);
-    this._attachFront(node);
-    return node.value;
-  }
-
-  put(key, value, ttlMs) {
-    if (this.map.has(key)) {
-      this._detach(this.map.get(key));
-      this.map.delete(key);
-    }
-    const node = new LRUNode(key, value, ttlMs);
-    this._attachFront(node);
-    this.map.set(key, node);
-    if (this.map.size > this.capacity) {
-      const lru = this.tail.prev;
-      this._detach(lru);
-      this.map.delete(lru.key);
-    }
-  }
-
-  get size() { return this.map.size; }
-}
-
-const apiCache   = new LRUCache(CACHE_CAP);
-const canonCache = new LRUCache(2000); // stores Kimi canonical strings, 7-day TTL
-// Shared raw API response cache — ensures chat and country endpoints always see the same data
-const rawDataCache  = new LRUCache(500);
-const RAW_DATA_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, same as country SQLite cache
-
 // ── SQLite database ────────────────────────────────────────────────────────────
-mkdirSync(join(__dirname, 'data'), { recursive: true });
-const db = new Database(DB_PATH);
-
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS country_cache (
-    code       TEXT PRIMARY KEY,
-    data_json  TEXT NOT NULL,
-    cached_at  INTEGER NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS users (
-    id              TEXT PRIMARY KEY,
-    email           TEXT UNIQUE NOT NULL,
-    name            TEXT NOT NULL,
-    hashed_password TEXT NOT NULL,
-    created_at      TEXT NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS chat_sessions (
-    id         TEXT PRIMARY KEY,
-    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title      TEXT NOT NULL,
-    messages   TEXT NOT NULL DEFAULT '[]',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON chat_sessions(user_id);
-
-  CREATE TABLE IF NOT EXISTS search_history (
-    id         TEXT PRIMARY KEY,
-    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    query      TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_search_history_user_id_updated_at
-  ON search_history(user_id, updated_at DESC);
-
-  CREATE TABLE IF NOT EXISTS search_sessions (
-    id         TEXT PRIMARY KEY,
-    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title      TEXT NOT NULL,
-    turns      TEXT NOT NULL DEFAULT '[]',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_search_sessions_user_id
-  ON search_sessions(user_id, updated_at DESC);
-
-  CREATE TABLE IF NOT EXISTS password_reset_tokens (
-    token      TEXT PRIMARY KEY,
-    user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    expires_at INTEGER NOT NULL,
-    used       INTEGER NOT NULL DEFAULT 0
-  );
-
-CREATE TABLE IF NOT EXISTS revoked_tokens (
-    jti        TEXT PRIMARY KEY,
-    expires_at INTEGER NOT NULL
-  );
-
-  CREATE TABLE IF NOT EXISTS session_shares (
-    id         TEXT PRIMARY KEY,
-    session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
-    share_token TEXT UNIQUE NOT NULL,
-    created_at TEXT NOT NULL,
-    expires_at TEXT,
-    view_count INTEGER NOT NULL DEFAULT 0
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_shares_token ON session_shares(share_token);
-
-  CREATE TABLE IF NOT EXISTS subscriptions (
-    id                     TEXT PRIMARY KEY,
-    user_id                TEXT UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    stripe_customer_id     TEXT UNIQUE NOT NULL,
-    stripe_subscription_id TEXT,
-    plan                   TEXT NOT NULL DEFAULT 'free',
-    status                 TEXT NOT NULL DEFAULT 'active',
-    current_period_end     INTEGER,
-    created_at             TEXT NOT NULL,
-    updated_at             TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_subscriptions_user ON subscriptions(user_id);
-
-  CREATE TABLE IF NOT EXISTS custom_metrics (
-    id          TEXT PRIMARY KEY,
-    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name        TEXT NOT NULL,
-    expression  TEXT NOT NULL,
-    description TEXT,
-    created_at  TEXT NOT NULL,
-    updated_at  TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_custom_metrics_user ON custom_metrics(user_id);
-
-  CREATE TABLE IF NOT EXISTS api_keys (
-    id           TEXT PRIMARY KEY,
-    user_id      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    key_hash     TEXT NOT NULL UNIQUE,
-    key_preview  TEXT NOT NULL,
-    name         TEXT NOT NULL,
-    rate_limit   INTEGER NOT NULL,
-    calls_this_month INTEGER NOT NULL DEFAULT 0,
-    month_key    TEXT,
-    last_used_at INTEGER,
-    created_at   TEXT NOT NULL
-  );
-
-  CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
- `);
-
-function ensureApiKeyColumns() {
-  const cols = db.prepare('PRAGMA table_info(api_keys)').all().map((row) => row.name);
-  if (!cols.includes('calls_this_month')) {
-    db.exec('ALTER TABLE api_keys ADD COLUMN calls_this_month INTEGER NOT NULL DEFAULT 0');
-  }
-  if (!cols.includes('month_key')) {
-    db.exec('ALTER TABLE api_keys ADD COLUMN month_key TEXT');
-  }
-}
-
-ensureApiKeyColumns();
+const db = createDb(DB_PATH);
+initSchema(db);
 
 // ── Prepared statements ──────────────────────────────────────────────────────
-const stmtCountry = {
-  get:    db.prepare('SELECT data_json, cached_at FROM country_cache WHERE code = ?'),
-  upsert: db.prepare('INSERT OR REPLACE INTO country_cache (code, data_json, cached_at) VALUES (?, ?, ?)'),
-  del:    db.prepare('DELETE FROM country_cache WHERE code = ?'),
-};
-
-const stmt = {
-  userByEmail:     db.prepare('SELECT * FROM users WHERE email = ?'),
-  userById:        db.prepare('SELECT id, email, name FROM users WHERE id = ?'),
-  insertUser:      db.prepare('INSERT INTO users (id, email, name, hashed_password, created_at) VALUES (?, ?, ?, ?, ?)'),
-  sessionsByUser:  db.prepare('SELECT id, title, created_at, updated_at FROM chat_sessions WHERE user_id = ? ORDER BY updated_at DESC'),
-  sessionById:     db.prepare('SELECT * FROM chat_sessions WHERE id = ? AND user_id = ?'),
-  insertSession:   db.prepare('INSERT INTO chat_sessions (id, user_id, title, messages, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
-  updateSession:   db.prepare('UPDATE chat_sessions SET messages = ?, title = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
-  deleteSession:   db.prepare('DELETE FROM chat_sessions WHERE id = ? AND user_id = ?'),
-
-  shareByToken:      db.prepare('SELECT * FROM session_shares WHERE share_token = ?'),
-  sharesBySession:   db.prepare('SELECT id, share_token, created_at, view_count FROM session_shares WHERE session_id = ?'),
-  insertShare:       db.prepare('INSERT INTO session_shares (id, session_id, share_token, created_at, expires_at, view_count) VALUES (?, ?, ?, ?, ?, 0)'),
-  deleteShare:       db.prepare('DELETE FROM session_shares WHERE id = ? AND session_id IN (SELECT id FROM chat_sessions WHERE user_id = ?)'),
-  incrementViewCount: db.prepare('UPDATE session_shares SET view_count = view_count + 1 WHERE share_token = ?'),
-
-  subscriptionByUser:       db.prepare('SELECT * FROM subscriptions WHERE user_id = ?'),
-  subscriptionByCustomerId: db.prepare('SELECT * FROM subscriptions WHERE stripe_customer_id = ?'),
-  subscriptionBySubId:      db.prepare('SELECT * FROM subscriptions WHERE stripe_subscription_id = ?'),
-  insertSubscription:       db.prepare('INSERT INTO subscriptions (id, user_id, stripe_customer_id, stripe_subscription_id, plan, status, current_period_end, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'),
-  updateSubscription:       db.prepare('UPDATE subscriptions SET plan = ?, status = ?, stripe_subscription_id = ?, current_period_end = ?, updated_at = ? WHERE user_id = ?'),
-  deleteSubscription:       db.prepare('DELETE FROM subscriptions WHERE user_id = ?'),
-
-  metricsByUser:    db.prepare('SELECT * FROM custom_metrics WHERE user_id = ? ORDER BY created_at DESC'),
-  metricById:       db.prepare('SELECT * FROM custom_metrics WHERE id = ? AND user_id = ?'),
-  insertMetric:     db.prepare('INSERT INTO custom_metrics (id, user_id, name, expression, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'),
-  updateMetric:     db.prepare('UPDATE custom_metrics SET name = ?, expression = ?, description = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
-  deleteMetric:     db.prepare('DELETE FROM custom_metrics WHERE id = ? AND user_id = ?'),
-  apiKeysByUser:        db.prepare('SELECT id, name, key_preview, rate_limit, calls_this_month, month_key, last_used_at, created_at FROM api_keys WHERE user_id = ? ORDER BY created_at DESC'),
-  apiKeyByIdAndUser:    db.prepare('SELECT * FROM api_keys WHERE id = ? AND user_id = ?'),
-  apiKeyByHash:         db.prepare('SELECT * FROM api_keys WHERE key_hash = ?'),
-  insertApiKey:         db.prepare('INSERT INTO api_keys (id, user_id, key_hash, key_preview, name, rate_limit, calls_this_month, month_key, last_used_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'),
-  updateApiKeyUsage:    db.prepare('UPDATE api_keys SET calls_this_month = ?, month_key = ?, last_used_at = ? WHERE id = ?'),
-  deleteApiKey:         db.prepare('DELETE FROM api_keys WHERE id = ? AND user_id = ?'),
-  searchHistoryByUser: db.prepare('SELECT id, query, created_at AS createdAt, updated_at AS updatedAt FROM search_history WHERE user_id = ? ORDER BY updated_at DESC LIMIT ?'),
-  searchHistoryByQuery: db.prepare('SELECT * FROM search_history WHERE user_id = ? AND lower(query) = lower(?) LIMIT 1'),
-  insertSearchHistory: db.prepare('INSERT INTO search_history (id, user_id, query, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'),
-  updateSearchHistory: db.prepare('UPDATE search_history SET query = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
-  clearSearchHistory: db.prepare('DELETE FROM search_history WHERE user_id = ?'),
-  searchSessionsByUser: db.prepare('SELECT id, title, turns, created_at AS createdAt, updated_at AS updatedAt FROM search_sessions WHERE user_id = ? ORDER BY updated_at DESC'),
-  searchSessionById: db.prepare('SELECT * FROM search_sessions WHERE id = ? AND user_id = ?'),
-  insertSearchSession: db.prepare('INSERT INTO search_sessions (id, user_id, title, turns, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'),
-  updateSearchSession: db.prepare('UPDATE search_sessions SET turns = ?, title = ?, updated_at = ? WHERE id = ? AND user_id = ?'),
-  deleteSearchSession: db.prepare('DELETE FROM search_sessions WHERE id = ? AND user_id = ?'),
-  userByIdFull:    db.prepare('SELECT * FROM users WHERE id = ?'),
-  updatePassword:  db.prepare('UPDATE users SET hashed_password = ? WHERE id = ?'),
-  deleteUser:      db.prepare('DELETE FROM users WHERE id = ?'),
-  sessionMessages: db.prepare('SELECT messages FROM chat_sessions WHERE user_id = ?'),
-  insertResetToken:        db.prepare('INSERT INTO password_reset_tokens (token, user_id, expires_at, used) VALUES (?, ?, ?, 0)'),
-  getResetToken:           db.prepare('SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0'),
-  markResetTokenUsed:      db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE token = ?'),
-  deleteExpiredResetTokens: db.prepare('DELETE FROM password_reset_tokens WHERE expires_at < ?'),
-  revokeToken:             db.prepare('INSERT OR IGNORE INTO revoked_tokens (jti, expires_at) VALUES (?, ?)'),
-  isTokenRevoked:          db.prepare('SELECT 1 FROM revoked_tokens WHERE jti = ?'),
-  pruneRevokedTokens:      db.prepare('DELETE FROM revoked_tokens WHERE expires_at < ?'),
-};
+const { stmt, stmtCountry } = prepareStatements(db);
 
 const CLERK_PLACEHOLDER_HASH = bcrypt.hashSync(randomBytes(24).toString('hex'), BCRYPT_ROUNDS);
 
@@ -486,44 +197,6 @@ function getApiMonthlyLimitForUser(userId) {
     enterprise: Number.POSITIVE_INFINITY,
   };
   return planLimits[plan] ?? 500;
-}
-
-async function authenticateApiKey(req, res, nextMiddleware) {
-  const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  if (!token || !token.startsWith('ec_')) return res.status(401).json({ error: 'Invalid or missing API key' });
-
-  const hashed = createHash('sha256').update(token).digest('hex');
-  const row = stmt.apiKeyByHash.get(hashed);
-  if (!row) return res.status(401).json({ error: 'Invalid or missing API key' });
-
-  const userPlanLimit = getApiMonthlyLimitForUser(row.user_id);
-  const configuredLimit = Number.isFinite(row.rate_limit) ? row.rate_limit : 0;
-  const effectiveLimit = Number.isFinite(configuredLimit) && configuredLimit > 0
-    ? configuredLimit
-    : userPlanLimit;
-
-  const nowBucket = monthBucket();
-  const monthBucketForKey = row.month_key === nowBucket ? nowBucket : nowBucket;
-  const previousMonthKey = row.month_key || nowBucket;
-  const callsUsed = previousMonthKey === nowBucket ? (row.calls_this_month || 0) : 0;
-
-  const limit = Math.min(userPlanLimit, effectiveLimit);
-
-  if (limit !== Number.POSITIVE_INFINITY && callsUsed >= limit) {
-    return res.status(429).json({ error: `API rate limit exceeded for this month (${limit} calls).` });
-  }
-
-  const nextUsageCount = callsUsed + 1;
-  stmt.updateApiKeyUsage.run(nextUsageCount, monthBucketForKey, Date.now(), row.id);
-
-  const remaining = limit === Number.POSITIVE_INFINITY ? Number.POSITIVE_INFINITY : Math.max(limit - nextUsageCount, 0);
-  req.apiKey = row;
-  req.apiKey.callsRemaining = remaining;
-  req.apiKey.callsThisMonth = nextUsageCount;
-  req.apiKey.month_key = monthBucketForKey;
-  req.apiKey.monthlyLimit = limit;
-  return nextMiddleware();
 }
 
 // ── Semantic query normalisation for cache keys ───────────────────────────────
@@ -770,61 +443,25 @@ async function cacheKey(endpoint, messages) {
   return createHash('sha256').update(endpoint + JSON.stringify(normalized)).digest('hex');
 }
 
-async function requireAuth(req, res, next) {
-  const auth  = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!token) return res.status(401).json({ error: 'Authentication required' });
+const authenticateApiKey = createAuthenticateApiKey({
+  stmt,
+  getApiMonthlyLimitForUser,
+  monthBucket,
+});
 
-  try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    if (payload.jti && stmt.isTokenRevoked.get(payload.jti)) {
-      return res.status(401).json({ error: 'Token has been revoked' });
-    }
-    req.user = payload;
-    return next();
-  } catch {
-    if (!CLERK_AUTH_ENABLED) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-
-    try {
-      const verified = await verifyClerkToken(token, {
-        ...(CLERK_SECRET_KEY ? { secretKey: CLERK_SECRET_KEY } : {}),
-        ...(CLERK_JWT_KEY ? { jwtKey: CLERK_JWT_KEY } : {}),
-      });
-
-      req.user = {
-        id: verified.sub,
-        email: verified.email || '',
-        name: verified.name || 'User',
-        isGuest: false,
-        iat: verified.iat,
-        exp: verified.exp,
-        isClerkUser: true,
-      };
-
-      try {
-        ensureClerkUserRecord(req.user);
-      } catch (e) {
-        console.error('Failed to provision Clerk user record:', e.message);
-        return res.status(500).json({ error: 'Unable to initialize user profile' });
-      }
-
-      return next();
-    } catch {
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-  }
-}
+const requireAuth = createRequireAuth({
+  JWT_SECRET,
+  CLERK_AUTH_ENABLED,
+  CLERK_SECRET_KEY,
+  CLERK_JWT_KEY,
+  stmt,
+  ensureClerkUserRecord,
+});
 
 function iso2ToFlag(code) {
   return [...code.toUpperCase()]
     .map(c => String.fromCodePoint(c.charCodeAt(0) - 65 + 0x1F1E6))
     .join('');
-}
-
-function errorMessage(err, fallback = 'Unexpected error') {
-  return err instanceof Error && err.message ? err.message : fallback;
 }
 
 function normalizeSessionTitle(title, fallback = 'New Chat') {
@@ -1305,29 +942,101 @@ app.use(
 
 app.use(express.json({ limit: '2mb' }));
 
-const apiLimiter = rateLimit({
-  windowMs: RL_WINDOW_MS,
-  max:      RL_MAX,
-  standardHeaders: true,
-  legacyHeaders:   false,
-  message: { error: 'Too many requests. Please wait a few minutes and try again.' },
-});
+const apiLimiter = createApiLimiter({ windowMs: RL_WINDOW_MS, max: RL_MAX });
+const authLimiter = createAuthLimiter();
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max:      10,
-  standardHeaders: true,
-  legacyHeaders:   false,
-  message: { error: 'Too many authentication attempts. Please wait 15 minutes and try again.' },
-});
+app.use('/api/auth', createAuthRouter({
+  authLimiter,
+  requireAuth,
+  track,
+  ph,
+  stmt,
+  validate,
+  schemas: {
+    RegisterSchema,
+    LoginSchema,
+    ChangePasswordSchema,
+    DeleteAccountSchema,
+    ForgotPasswordSchema,
+    ResetPasswordSchema,
+  },
+  BCRYPT_ROUNDS,
+  JWT_SECRET,
+  PORT,
+  revokeCurrentToken,
+}));
 
-const staticLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000,
-  max:      200,
-  standardHeaders: true,
-  legacyHeaders:   false,
-  message: { error: 'Too many requests.' },
-});
+app.use('/api', createSessionsRouter({
+  requireAuth,
+  stmt,
+  db,
+  validate,
+  schemas: {
+    SearchHistorySchema,
+    CreateSearchSessionSchema,
+    UpdateSearchSessionSchema,
+    CreateSessionSchema,
+    UpdateSessionSchema,
+  },
+  normalizeSessionTitle,
+  MAX_SEARCH_HISTORY,
+}));
+
+app.use('/api/country', createCountryRouter({
+  requireAuth,
+  apiLimiter,
+  db,
+  stmtCountry,
+  validate,
+  CountrySearchQuerySchema,
+  iso2ToFlag,
+  errorMessage,
+  buildCountryDataset,
+  track,
+  COUNTRY_CACHE_TTL_MS,
+}));
+
+app.use('/api/data', createPublicApiRouter({
+  authenticateApiKey,
+  validate,
+  DataApiSchema,
+  fetchWorldBankCountryCatalog,
+  parseIndicatorKeys,
+  normalizeApiCountries,
+  normalizeCountryCode,
+  parseApiYears,
+  buildApiCountryPayload,
+  buildApiSeriesForCountry,
+  buildApiBatchCsvPayload,
+  buildApiCountrySeriesRows,
+  sendApiDataResponse,
+  toCsvString,
+  errorMessage,
+}));
+
+app.use('/api/peers', createPeersRouter({
+  requireAuth,
+  apiLimiter,
+  validate,
+  PeerComparisonSchema,
+  normalizeCountryCode,
+  normalizePeerMetricMetric,
+  fetchWorldBankCountryCatalog,
+  resolvePeerGroupMembers,
+  checkPlanLimit,
+  resolvePeerComparisonYear,
+  fetchPeerMetricRows,
+  buildCountryValuesByCode,
+  API_INDICATOR_LABELS,
+  computeRank,
+  percentileRank,
+  computeMedian,
+  computeAverage,
+  groupTypeLabel,
+  errorMessage,
+}));
+
+const staticLimiter = createStaticLimiter();
 
 // ── Anthropic helper ──────────────────────────────────────────────────────────
 
@@ -1466,11 +1175,6 @@ function defaultChatFollowUps() {
 }
 
 // ── SSE + streaming helpers ────────────────────────────────────────────────────
-
-/** Write a named SSE event with JSON payload. */
-function sseWrite(res, event, data) {
-  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-}
 
 /** Call Anthropic with stream:true; returns the raw fetch Response. */
 async function callAnthropicStream(body) {
@@ -2723,414 +2427,159 @@ function revokeCurrentToken(user) {
   stmt.revokeToken.run(user.jti, user.exp * 1000); // exp is in seconds
 }
 
-app.post('/api/auth/logout', requireAuth, (req, res) => {
-  revokeCurrentToken(req.user);
-  track(req.user.id, 'user_logged_out');
-  res.json({ ok: true });
-});
+// ── Snapshot routes (analysis freeze + shareable snapshots) ───────────────────
 
-// Guest access — issues a short-lived JWT without creating a DB record.
-// Grants full read access to all AI/country endpoints; sessions are in-memory only.
-app.post('/api/auth/guest', authLimiter, (req, res) => {
-  const token = jwt.sign(
-    { id: 'guest', name: 'Guest', email: '', isGuest: true, jti: randomBytes(16).toString('hex') },
-    JWT_SECRET,
-    { expiresIn: '24h' }
-  );
-  track('guest', 'guest_session_started');
-  res.json({ token, user: { id: 'guest', name: 'Guest', email: '', isGuest: true } });
-});
-
-app.post('/api/auth/register', authLimiter, async (req, res) => {
-  const body = validate(RegisterSchema, req.body, res);
-  if (!body) return;
-  const { email, password, name } = body;
-  const em = email.toLowerCase().trim();
-  if (stmt.userByEmail.get(em)) return res.status(409).json({ error: 'Email already registered' });
-  const hashedPassword = await bcrypt.hash(password, BCRYPT_ROUNDS);
-  const id   = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const uname = name.slice(0, 80).trim();
-  stmt.insertUser.run(id, em, uname, hashedPassword, new Date().toISOString());
-  const token = jwt.sign({ id, email: em, name: uname, jti: randomBytes(16).toString('hex') }, JWT_SECRET, { expiresIn: '7d' });
-  if (ph) ph.identify({ distinctId: id, properties: { email: em, name: uname } });
-  track(id, 'user_registered', { email: em, name: uname });
-  res.json({ token, user: { id, email: em, name: uname } });
-});
-
-app.post('/api/auth/login', authLimiter, async (req, res) => {
-  const body = validate(LoginSchema, req.body, res);
-  if (!body) return;
-  const { email, password } = body;
-  const em   = email.toLowerCase().trim();
-  const user = stmt.userByEmail.get(em);
-  if (!user) return res.status(401).json({ error: 'Invalid email or password' });
-  const match = await bcrypt.compare(password, user.hashed_password);
-  if (!match) return res.status(401).json({ error: 'Invalid email or password' });
-  const token = jwt.sign({ id: user.id, email: user.email, name: user.name, jti: randomBytes(16).toString('hex') }, JWT_SECRET, { expiresIn: '7d' });
-  track(user.id, 'user_logged_in', { email: user.email });
-  res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
-});
-
-app.get('/api/auth/me', requireAuth, (req, res) => {
-  if (req.user?.isGuest) {
-    return res.json({ id: 'guest', name: 'Guest', email: '', isGuest: true });
-  }
-
-  if (req.user?.isClerkUser) {
-    return res.json({ id: req.user.id, email: req.user.email || '', name: req.user.name || 'User' });
-  }
-
-  const user = stmt.userById.get(req.user.id);
-  if (!user) return res.status(401).json({ error: 'User not found' });
-  return res.json(user);
-});
-
-app.get('/api/auth/usage', requireAuth, (req, res) => {
-  const user = stmt.userById.get(req.user.id);
-  const rows     = stmt.sessionMessages.all(req.user.id);
-  const sessionCount = rows.length;
-  const messageCount = rows.reduce((sum, r) => {
-    try {
-      const msgs = JSON.parse(r.messages);
-      if (!Array.isArray(msgs)) return sum;
-      return sum + msgs.filter(m => m && m.role === 'user').length;
-    } catch {
-      return sum;
-    }
-  }, 0);
-  const memberSince = user?.created_at
-    || (req.user?.iat ? new Date(req.user.iat * 1000).toISOString() : new Date().toISOString());
-
-  return res.json({ sessionCount, messageCount, memberSince });
-});
-
-app.patch('/api/auth/password', requireAuth, authLimiter, async (req, res) => {
-  if (req.user?.isClerkUser) {
-    return res.status(400).json({ error: 'Password is managed by Clerk. Update it from account settings.' });
-  }
-
-  const body = validate(ChangePasswordSchema, req.body, res);
-  if (!body) return;
-  const { currentPassword, newPassword } = body;
-  const user = stmt.userByIdFull.get(req.user.id);
-  if (!user) return res.status(401).json({ error: 'User not found' });
-  const match = await bcrypt.compare(currentPassword, user.hashed_password);
-  if (!match) return res.status(401).json({ error: 'Current password is incorrect' });
-  const hashed = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-  stmt.updatePassword.run(hashed, req.user.id);
-  revokeCurrentToken(req.user);
-  res.json({ ok: true });
-});
-
-app.delete('/api/auth/account', requireAuth, authLimiter, async (req, res) => {
-  if (req.user?.isClerkUser) {
-    return res.status(400).json({ error: 'Account deletion is managed by Clerk. Use account settings.' });
-  }
-
-  const body = validate(DeleteAccountSchema, req.body, res);
-  if (!body) return;
-  const { password } = body;
-  const user = stmt.userByIdFull.get(req.user.id);
-  if (!user) return res.status(401).json({ error: 'User not found' });
-  const match = await bcrypt.compare(password, user.hashed_password);
-  if (!match) return res.status(401).json({ error: 'Password is incorrect' });
-  revokeCurrentToken(req.user);
-  stmt.deleteUser.run(req.user.id);
-  res.json({ ok: true });
-});
-
-// Forgot password — generates a secure reset token (1-hour TTL).
-// If SMTP_HOST is configured the link is emailed; otherwise it is returned in
-// the response so the feature works in dev / simple deployments without a mail server.
-app.post('/api/auth/forgot-password', authLimiter, async (req, res) => {
-  const body = validate(ForgotPasswordSchema, req.body, res);
-  if (!body) return;
-  const em = body.email.toLowerCase().trim();
-
-  // Purge stale tokens first
-  stmt.deleteExpiredResetTokens.run(Date.now());
-
-  const user = stmt.userByEmail.get(em);
-  // Always return 200 to avoid leaking whether an email is registered
-  if (!user) return res.json({ ok: true });
-
-  const token    = randomBytes(32).toString('hex');
-  const expiresAt = Date.now() + 60 * 60 * 1000; // 1 hour
-  stmt.insertResetToken.run(token, user.id, expiresAt);
-
-  const APP_URL  = process.env.APP_URL || `http://localhost:${PORT}`;
-  const resetUrl = `${APP_URL}/?reset=${token}`;
-
-  // If SMTP is configured, send the email; otherwise return the link directly.
-  const smtpHost = process.env.SMTP_HOST;
-  if (smtpHost) {
-    try {
-      const nodemailer = await import('nodemailer');
-      const transporter = nodemailer.default.createTransport({
-        host:   smtpHost,
-        port:   Number(process.env.SMTP_PORT  || 587),
-        secure: process.env.SMTP_SECURE === 'true',
-        auth:   { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      });
-      await transporter.sendMail({
-        from:    process.env.SMTP_FROM || `"EconChart" <noreply@${smtpHost}>`,
-        to:      em,
-        subject: 'Reset your EconChart password',
-        text:    `Click the link below to reset your password (valid for 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
-        html:    `<p>Click the link below to reset your password (valid for 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
-      });
-      return res.json({ ok: true });
-    } catch (err) {
-      console.error('Failed to send reset email:', err);
-      return res.status(500).json({ error: 'Failed to send reset email' });
-    }
-  }
-
-  // No SMTP configured — return the link so the feature works without a mail server
-  res.json({ ok: true, resetUrl });
-});
-
-// Reset password — validates the token and sets the new password.
-app.post('/api/auth/reset-password', authLimiter, async (req, res) => {
-  const body = validate(ResetPasswordSchema, req.body, res);
-  if (!body) return;
-  const { token, newPassword } = body;
-
-  const row = stmt.getResetToken.get(token);
-  if (!row)           return res.status(400).json({ error: 'Invalid or already-used reset link' });
-  if (row.expires_at < Date.now()) return res.status(400).json({ error: 'Reset link has expired. Please request a new one.' });
-
-  const hashed = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
-  stmt.updatePassword.run(hashed, row.user_id);
-  stmt.markResetTokenUsed.run(token);
-  res.json({ ok: true });
-});
-
-// ── Chat session routes ───────────────────────────────────────────────────────
-
-app.get('/api/search/history', requireAuth, (req, res) => {
+app.get('/api/snapshots', requireAuth, (req, res) => {
   if (req.user.isGuest) return res.json([]);
-  const rows = stmt.searchHistoryByUser.all(req.user.id, MAX_SEARCH_HISTORY);
-  res.json(rows);
+
+  const rows = stmt.snapshotsByUser.all(req.user.id);
+  res.json(rows.map((row) => mapSnapshotRow(row)));
 });
 
-app.post('/api/search/history', requireAuth, (req, res) => {
-  const body = validate(SearchHistorySchema, req.body, res);
+app.post('/api/snapshots', requireAuth, async (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot create snapshots' });
+
+  const body = validate(SnapshotCreateSchema, req.body, res);
   if (!body) return;
 
-  if (req.user.isGuest) {
-    const now = new Date().toISOString();
-    return res.json({
-      id: `guest_${Date.now()}`,
-      query: body.query.trim(),
-      createdAt: now,
-      updatedAt: now,
-    });
+  const countryCode = normalizeSnapshotCountry(body.countryCode);
+  if (!countryCode) {
+    return res.status(400).json({ error: `Invalid country code: ${body.countryCode}` });
   }
 
-  const query = body.query.trim();
+  const limit = checkPlanLimit(req.user.id, 'snapshots');
+  const currentCount = stmt.snapshotsByUser.all(req.user.id).length;
+  if (limit.limit !== Number.POSITIVE_INFINITY && currentCount >= limit.limit) {
+    return res.status(402).json({ error: `Snapshot limit reached (${limit.limit}). Upgrade your plan for more.` });
+  }
+
+  const isPublic = body.isPublic ?? true;
+  const payload = body.dataPayload ?? null;
+  const title = (body.title || `Snapshot ${countryCode}`).slice(0, 160);
+  const description = (body.description || '').trim().slice(0, 1000);
   const now = new Date().toISOString();
-  const existing = stmt.searchHistoryByQuery.get(req.user.id, query);
+  const dataVersion = Number.isFinite(body.dataVersion) ? body.dataVersion : Date.now();
+  const id = `snap_${Date.now()}_${randomBytes(4).toString('hex')}`;
 
-  if (existing) {
-    stmt.updateSearchHistory.run(query, now, existing.id, req.user.id);
-    return res.json({
-      id: existing.id,
-      query,
-      createdAt: existing.created_at,
-      updatedAt: now,
-    });
-  }
-
-  const id = `sh_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  stmt.insertSearchHistory.run(id, req.user.id, query, now, now);
-  res.json({ id, query, createdAt: now, updatedAt: now });
-});
-
-app.delete('/api/search/history', requireAuth, (req, res) => {
-  if (req.user.isGuest) return res.json({ ok: true });
-  stmt.clearSearchHistory.run(req.user.id);
-  res.json({ ok: true });
-});
-
-app.get('/api/search/sessions', requireAuth, (req, res) => {
-  if (req.user.isGuest) return res.json([]);
-  const rows = stmt.searchSessionsByUser.all(req.user.id);
-  const sessions = rows.map((row) => {
-    let turns = [];
-    try {
-      const parsed = JSON.parse(row.turns);
-      turns = Array.isArray(parsed) ? parsed : [];
-    } catch {
-      turns = [];
-    }
-    return {
-      id: row.id,
-      title: row.title,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      turns,
-    };
+  const finalPayload = payload ?? await buildCountryDataset(countryCode).catch((err) => {
+    throw err;
   });
-  res.json(sessions);
+
+  const shareToken = Number(isPublic) === 1 ? randomBytes(8).toString('hex') : null;
+
+  stmt.insertSnapshot.run(
+    id,
+    req.user.id,
+    countryCode,
+    null,
+    title,
+    description,
+    JSON.stringify(finalPayload),
+    now,
+    now,
+    dataVersion,
+    Number(isPublic) ? 1 : 0,
+    shareToken,
+  );
+
+  const result = {
+    ...mapSnapshotRow({
+      id,
+      country_code: countryCode,
+      session_id: null,
+      title,
+      description,
+      is_public: Number(isPublic) ? 1 : 0,
+      share_token: shareToken,
+      data_version: dataVersion,
+      created_at: now,
+      updated_at: now,
+      data_payload: JSON.stringify(finalPayload),
+    }, { includePayload: true }),
+    citation: buildSnapshotCitation({
+      country_code: countryCode,
+      title,
+      data_version: dataVersion,
+      created_at: now,
+    }, finalPayload),
+  };
+
+  res.status(201).json(result);
 });
 
-app.post('/api/search/sessions', requireAuth, (req, res) => {
-  const body = validate(CreateSearchSessionSchema, req.body, res);
+app.get('/api/snapshots/:id', requireAuth, (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot view snapshots' });
+
+  const row = stmt.snapshotById.get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Snapshot not found' });
+  if (row.user_id !== req.user.id) return res.status(404).json({ error: 'Snapshot not found' });
+
+  const payload = parseSnapshotPayload(row.data_payload);
+  res.json({
+    ...mapSnapshotRow(row, { includePayload: true }),
+    citation: buildSnapshotCitation(row, payload),
+  });
+});
+
+app.post('/api/snapshots/:id/regenerate', requireAuth, async (req, res) => {
+  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot regenerate snapshots' });
+
+  const body = validate(SnapshotRegenerateSchema, req.body, res);
   if (!body) return;
-  const title = normalizeSessionTitle(body.title, 'New Search');
-  const id = `ss_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const now = new Date().toISOString();
-  if (!req.user.isGuest) stmt.insertSearchSession.run(id, req.user.id, title, '[]', now, now);
-  res.json({ id, title, turns: [], createdAt: now, updatedAt: now });
-});
 
-app.patch('/api/search/sessions/:id', requireAuth, (req, res) => {
-  const body = validate(UpdateSearchSessionSchema, req.body, res);
-  if (!body) return;
+  const row = stmt.snapshotById.get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Snapshot not found' });
+  if (row.user_id !== req.user.id) return res.status(404).json({ error: 'Snapshot not found' });
 
-  if (req.user.isGuest) {
-    return res.json({
-      id: req.params.id,
-      title: body.title !== undefined ? normalizeSessionTitle(body.title, 'New Search') : 'New Search',
-      updatedAt: new Date().toISOString(),
-    });
-  }
-
-  const row = stmt.searchSessionById.get(req.params.id, req.user.id);
-  if (!row) return res.status(404).json({ error: 'Session not found' });
-  const newTurns = body.turns !== undefined ? JSON.stringify(body.turns) : row.turns;
-  const newTitle = body.title !== undefined ? normalizeSessionTitle(body.title, row.title) : row.title;
-  const now = new Date().toISOString();
-  stmt.updateSearchSession.run(newTurns, newTitle, now, req.params.id, req.user.id);
-  res.json({ id: row.id, title: newTitle, updatedAt: now });
-});
-
-app.delete('/api/search/sessions/:id', requireAuth, (req, res) => {
-  if (req.user.isGuest) return res.json({ ok: true });
-
-  const row = stmt.searchSessionById.get(req.params.id, req.user.id);
-  if (!row) return res.status(404).json({ error: 'Session not found' });
-  stmt.deleteSearchSession.run(req.params.id, req.user.id);
-  res.json({ ok: true });
-});
-
-app.get('/api/sessions', requireAuth, (req, res) => {
-  if (req.user.isGuest) return res.json([]);
-  res.json(stmt.sessionsByUser.all(req.user.id));
-});
-
-app.post('/api/sessions', requireAuth, (req, res) => {
-  const body = validate(CreateSessionSchema, req.body, res);
-  if (!body) return;
-  const title = normalizeSessionTitle(body.title, 'New Chat');
-  const id    = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  const now   = new Date().toISOString();
-  // Guests have no DB record — return a fake session without inserting
-  if (!req.user.isGuest) stmt.insertSession.run(id, req.user.id, title, '[]', now, now);
-  res.json({ id, userId: req.user.id, title, messages: [], createdAt: now, updatedAt: now });
-});
-
-app.get('/api/sessions/:id', requireAuth, (req, res) => {
-  if (req.user.isGuest) {
-    return res.status(404).json({ error: 'Session not found' });
-  }
-
-  const row = stmt.sessionById.get(req.params.id, req.user.id);
-  if (!row) return res.status(404).json({ error: 'Session not found' });
+  const previousPayload = parseSnapshotPayload(row.data_payload);
+  const countryCode = normalizeSnapshotCountry(row.country_code);
+  if (!countryCode) return res.status(400).json({ error: `Invalid country code: ${row.country_code}` });
 
   try {
-    const parsedMessages = JSON.parse(row.messages);
-    return res.json({ ...row, messages: Array.isArray(parsedMessages) ? parsedMessages : [] });
-  } catch {
-    return res.json({ ...row, messages: [] });
-  }
-});
+    const nextPayload = await buildCountryDataset(countryCode);
+    const now = new Date().toISOString();
+    const nextVersion = Date.now();
+    const nextPayloadText = JSON.stringify(nextPayload);
 
-app.patch('/api/sessions/:id', requireAuth, (req, res) => {
-  const body = validate(UpdateSessionSchema, req.body, res);
-  if (!body) return;
+    stmt.updateSnapshotPayload.run(nextPayloadText, nextVersion, now, row.id, req.user.id);
 
-  // Guest sessions are in-memory only — acknowledge validated payload with normalized title
-  if (req.user.isGuest) {
-    return res.json({
-      id: req.params.id,
-      title: body.title !== undefined ? normalizeSessionTitle(body.title) : 'New Chat',
-      updatedAt: new Date().toISOString(),
+    const diff = {
+      beforeVersion: Number(row.data_version),
+      afterVersion: nextVersion,
+      forceRefresh: Boolean(body.forceRefresh),
+      ...buildSnapshotDiff(previousPayload, nextPayload),
+    };
+
+    const updatedRow = {
+      ...row,
+      data_payload: nextPayloadText,
+      data_version: nextVersion,
+      updated_at: now,
+    };
+
+    res.json({
+      snapshot: {
+        ...mapSnapshotRow(updatedRow, { includePayload: true }),
+        citation: buildSnapshotCitation(updatedRow, nextPayload),
+      },
+      diff,
     });
+  } catch (err) {
+    const message = errorMessage(err, `Failed to regenerate snapshot ${req.params.id}`);
+    console.error(`/api/snapshots/${req.params.id}/regenerate:`, message);
+    res.status(502).json({ error: message });
   }
-
-  const row = stmt.sessionById.get(req.params.id, req.user.id);
-  if (!row) return res.status(404).json({ error: 'Session not found' });
-  const newMessages = body.messages !== undefined ? JSON.stringify(body.messages) : row.messages;
-  const newTitle    = body.title    !== undefined ? normalizeSessionTitle(body.title, row.title) : row.title;
-  const now         = new Date().toISOString();
-  stmt.updateSession.run(newMessages, newTitle, now, req.params.id, req.user.id);
-  res.json({ id: row.id, title: newTitle, updatedAt: now });
 });
 
-app.delete('/api/sessions/:id', requireAuth, (req, res) => {
-  if (req.user.isGuest) return res.json({ ok: true });
+app.get('/api/snapshot/:token', (req, res) => {
+  const row = stmt.snapshotByShareToken.get(req.params.token);
+  if (!row) return res.status(404).json({ error: 'Snapshot not found' });
+  if (Number(row.is_public) !== 1) return res.status(404).json({ error: 'Snapshot is not public' });
 
-  const row = stmt.sessionById.get(req.params.id, req.user.id);
-  if (!row) return res.status(404).json({ error: 'Session not found' });
-  stmt.deleteSession.run(req.params.id, req.user.id);
-  res.json({ ok: true });
-});
-
-// ── Session sharing ───────────────────────────────────────────────────────────
-
-app.post('/api/sessions/:id/share', requireAuth, (req, res) => {
-  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot share sessions' });
-
-  const session = stmt.sessionById.get(req.params.id, req.user.id);
-  if (!session) return res.status(404).json({ error: 'Session not found' });
-
-  const shareToken = randomBytes(16).toString('hex');
-  const id = `sh_${Date.now()}_${randomBytes(4).toString('hex')}`;
-  const now = new Date().toISOString();
-  const expiresAt = null;
-
-  stmt.insertShare.run(id, req.params.id, shareToken, now, expiresAt);
-
-  res.json({ id, shareToken, url: `${req.protocol}://${req.get('host')}/share/${shareToken}`, createdAt: now });
-});
-
-app.get('/api/sessions/:id/shares', requireAuth, (req, res) => {
-  if (req.user.isGuest) return res.json([]);
-  const session = stmt.sessionById.get(req.params.id, req.user.id);
-  if (!session) return res.status(404).json({ error: 'Session not found' });
-  res.json(stmt.sharesBySession.all(req.params.id));
-});
-
-app.delete('/api/sessions/:id/shares/:shareId', requireAuth, (req, res) => {
-  if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot manage shares' });
-  stmt.deleteShare.run(req.params.shareId, req.user.id);
-  res.json({ ok: true });
-});
-
-app.get('/api/share/:token', (req, res) => {
-  const share = stmt.shareByToken.get(req.params.token);
-  if (!share) return res.status(404).json({ error: 'Share not found' });
-
-  if (share.expires_at && new Date(share.expires_at) < new Date()) {
-    return res.status(410).json({ error: 'Share link has expired' });
-  }
-
-  const session = db.prepare('SELECT id, title, messages, created_at, updated_at FROM chat_sessions WHERE id = ?').get(share.session_id);
-  if (!session) return res.status(404).json({ error: 'Session not found' });
-
-  stmt.incrementViewCount.run(req.params.token);
-
-  let messages = [];
-  try { messages = JSON.parse(session.messages); } catch { messages = []; }
-
+  const payload = parseSnapshotPayload(row.data_payload);
   res.json({
-    title: session.title,
-    messages: Array.isArray(messages) ? messages : [],
-    createdAt: session.created_at,
-    updatedAt: session.updated_at,
-    viewCount: share.view_count + 1,
+    ...mapSnapshotRow(row, { includePayload: true }),
+    citation: buildSnapshotCitation(row, payload),
   });
 });
 
@@ -3324,6 +2773,84 @@ function mapApiKeyRow(row, userPlanLimit) {
   };
 }
 
+function normalizeSnapshotCountry(rawCountryCode) {
+  const normalized = normalizeCountryCode(String(rawCountryCode || '').trim());
+  if (!normalized) return '';
+
+  const iso2 = toISO2(normalized);
+  if (!countries.isValid(iso2)) return '';
+  return iso2;
+}
+
+function parseSnapshotPayload(raw) {
+  if (raw == null) return null;
+  if (typeof raw === 'object') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function mapSnapshotRow(row, opts = {}) {
+  const includePayload = Boolean(opts.includePayload);
+  const parsedPayload = includePayload ? parseSnapshotPayload(row.data_payload) : null;
+
+  return {
+    id: row.id,
+    countryCode: row.country_code,
+    sessionId: row.session_id || null,
+    title: row.title,
+    description: row.description || '',
+    isPublic: Number(row.is_public) === 1,
+    shareToken: row.share_token || null,
+    dataVersion: Number(row.data_version),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    ...(includePayload ? { dataPayload: parsedPayload } : {}),
+  };
+}
+
+function buildSnapshotCitation(snapshot, payload) {
+  const name = (payload && typeof payload.name === 'string' && payload.name.trim()) || snapshot.countryCode;
+  const version = Number(snapshot.data_version) || Date.now();
+  const publishedYear = new Date(snapshot.created_at || Date.now()).getFullYear();
+  const title = snapshot.title || `Snapshot of ${snapshot.country_code}`;
+  return `${name}. (${publishedYear}). ${title} [Data set]. EconChart. Data version ${version}.`;
+}
+
+function buildSnapshotDiff(previousPayload, nextPayload) {
+  const sections = [
+    'code',
+    'name',
+    'flag',
+    'region',
+    'gdpData',
+    'exportData',
+    'importData',
+    'exportSectors',
+    'importPartners',
+    'kpis',
+    'pieExports',
+    'pieImports',
+    '_meta',
+  ];
+
+  const changedSections = [];
+  for (const key of sections) {
+    const before = previousPayload?.[key];
+    const after = nextPayload?.[key];
+    if (JSON.stringify(before) !== JSON.stringify(after)) {
+      changedSections.push(key);
+    }
+  }
+
+  return {
+    changedSections,
+    changed: changedSections.length > 0,
+  };
+}
+
 app.get('/api/developer/keys', requireAuth, (req, res) => {
   if (req.user.isGuest) return res.status(403).json({ error: 'Guest users cannot manage API keys' });
 
@@ -3428,401 +2955,7 @@ app.delete('/api/metrics/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Country data routes ───────────────────────────────────────────────────────
 
-app.get('/api/country/history', requireAuth, (req, res) => {
-  const rows = db.prepare('SELECT code, data_json, cached_at FROM country_cache ORDER BY cached_at DESC').all();
-  const history = rows.map(r => {
-    try {
-      const d = JSON.parse(r.data_json);
-      return { code: d.code, name: d.name, flag: d.flag, region: d.region, cachedAt: r.cached_at };
-    } catch { return null; }
-  }).filter(Boolean);
-  res.json(history);
-});
-
-app.get('/api/country/search', requireAuth, apiLimiter, async (req, res) => {
-  const query = validate(CountrySearchQuerySchema, req.query, res);
-  if (!query) return;
-  const q = query.q.trim();
-
-  // Common alternative names → World Bank canonical names
-  const ALIASES = {
-    'palestine':       'west bank',
-    'taiwan':          'taiwan, china',
-    'south korea':     'korea, rep',
-    'north korea':     'korea, dem',
-    'russia':          'russian federation',
-    'iran':            'iran, islamic rep',
-    'syria':           'syrian arab republic',
-    'laos':            'lao pdr',
-    'vietnam':         'viet nam',
-    'ivory coast':     'côte d\'ivoire',
-    'congo':           'congo, dem',
-    'czech':           'czechia',
-    'slovakia':        'slovak republic',
-    'venezuela':       'venezuela, rb',
-    'bolivia':         'bolivia',
-    'egypt':           'egypt, arab rep',
-    'yemen':           'yemen, rep',
-    'gambia':          'gambia, the',
-    'bahamas':         'bahamas, the',
-    'micronesia':      'micronesia, fed',
-    'kyrgyzstan':      'kyrgyz republic',
-  };
-  const qLower = q.toLowerCase();
-  const canonicalQ = ALIASES[qLower] ?? qLower;
-
-  try {
-    const r    = await fetch('https://api.worldbank.org/v2/country?format=json&per_page=500', { signal: AbortSignal.timeout(10_000) });
-    if (!r.ok) throw new Error(`World Bank country list HTTP ${r.status}`);
-    const data = await r.json();
-    const hits = (data[1] ?? [])
-      // region.id === 'NA' marks World Bank aggregates (not sovereign countries)
-      .filter(c => c.region?.id !== 'NA' &&
-        (c.name.toLowerCase().includes(qLower) || c.name.toLowerCase().includes(canonicalQ)))
-      .slice(0, 15)
-      .map(c => ({ code: c.iso2Code, name: c.name, flag: iso2ToFlag(c.iso2Code), region: c.region?.value ?? '' }));
-    res.json(hits);
-  } catch (e) {
-    const message = errorMessage(e, 'Failed to fetch country list');
-    console.error('/api/country/search:', message);
-    res.status(502).json({ error: message });
-  }
-});
-
-app.get('/api/country/:code', requireAuth, apiLimiter, async (req, res) => {
-  const code = req.params.code.toUpperCase().replace(/[^A-Z]/g, '');
-  if (code.length !== 2) return res.status(400).json({ error: 'Expected ISO 2-letter country code' });
-  
-  // Validate with i18n-iso-countries
-  if (!countries.isValid(code)) {
-    return res.status(400).json({ error: `Unknown country code: ${code}` });
-  }
-  
-  const row = stmtCountry.get.get(code);
-  if (row && (Date.now() - row.cached_at) < COUNTRY_CACHE_TTL_MS) {
-    try {
-      const cached = JSON.parse(row.data_json);
-      track(req.user?.id || 'guest', 'country_viewed', { country_code: code, cache_hit: true });
-      return res.json(cached);
-    } catch {
-      stmtCountry.del.run(code);
-    }
-  }
-
-  try {
-    const dataset = await buildCountryDataset(code);
-    stmtCountry.upsert.run(code, JSON.stringify(dataset), Date.now());
-    track(req.user?.id || 'guest', 'country_viewed', {
-      country_code: code,
-      country_name: dataset.name,
-      cache_hit: false,
-      sources: dataset._meta?.sources ?? [],
-    });
-    res.json(dataset);
-  } catch (e) {
-    const message = errorMessage(e, 'Failed to build country dataset');
-    console.error(`/api/country/${code}:`, message);
-    if (row) {
-      try {
-        const stale = JSON.parse(row.data_json);
-        return res.json({ ...stale, _meta: { ...stale._meta, stale: true } });
-      } catch {
-        stmtCountry.del.run(code);
-      }
-    }
-    res.status(502).json({ error: message });
-  }
-});
-
-app.post('/api/country/:code/refresh', requireAuth, apiLimiter, async (req, res) => {
-  const code = req.params.code.toUpperCase().replace(/[^A-Z]/g, '');
-  if (code.length !== 2) return res.status(400).json({ error: 'Expected ISO 2-letter country code' });
-  if (!countries.isValid(code)) {
-    return res.status(400).json({ error: `Unknown country code: ${code}` });
-  }
-  
-  try {
-    const dataset = await buildCountryDataset(code);
-    stmtCountry.upsert.run(code, JSON.stringify(dataset), Date.now());
-    res.json(dataset);
-  } catch (e) {
-    const message = errorMessage(e, 'Failed to refresh country dataset');
-    console.error(`/api/country/${code}/refresh:`, message);
-    res.status(502).json({ error: message });
-  }
-});
-
-// ── Public API data routes ───────────────────────────────────────────────────
-
-app.get('/api/data/countries', authenticateApiKey, async (req, res) => {
-  const query = validate(DataApiSchema, req.query, res);
-  if (!query) return;
-
-  const search = (query.search || '').trim().toLowerCase();
-  const requestedFormat = query.format || 'json';
-
-  try {
-    const countriesCatalog = await fetchWorldBankCountryCatalog();
-    const items = countriesCatalog
-      .filter((item) => {
-        if (!search) return true;
-        const name = String(item.name || '').toLowerCase();
-        return name.includes(search);
-      })
-      .slice(0, 500);
-
-    const payload = {
-      query: search || null,
-      count: items.length,
-      countries: items,
-    };
-
-    if (requestedFormat === 'csv') {
-      const csvRows = toCsvString(items.map((item) => ({
-        code: item.code,
-        alpha3: item.alpha3,
-        name: item.name,
-        flag: item.flag,
-        region: item.region,
-      })));
-      return sendApiDataResponse(res, req, csvRows, requestedFormat);
-    }
-
-    sendApiDataResponse(res, req, payload, requestedFormat);
-  } catch (err) {
-    const message = errorMessage(err, 'Failed to load country list');
-    console.error('/api/data/countries:', message);
-    res.status(502).json({ error: message });
-  }
-});
-
-app.get('/api/data/batch', authenticateApiKey, async (req, res) => {
-  const query = validate(DataApiSchema, req.query, res);
-  if (!query) return;
-
-  const requestedIndicators = parseIndicatorKeys(query.indicators);
-  const requestedFormat = query.format || 'json';
-  const rawCountries = query.countries || '';
-
-  const normalizedCountries = normalizeApiCountries(rawCountries)
-    .map(c => normalizeCountryCode(c))
-    .filter(Boolean)
-    .filter((value, index, all) => all.indexOf(value) === index);
-
-  const { startYear, endYear } = parseApiYears(query.start_year, query.end_year, query.years);
-
-  if (!normalizedCountries.length) {
-    return res.status(400).json({ error: 'Invalid countries list. Use ISO-2 or ISO-3 codes, e.g. countries=US,CN,IN.' });
-  }
-
-  const invalid = [];
-  const requestedCountryMap = normalizedCountries.filter((code) => {
-    const valid = countries.isValid(code);
-    if (!valid) invalid.push(code);
-    return valid;
-  });
-
-  if (!requestedCountryMap.length) {
-    return res.status(400).json({ error: `Invalid country codes: ${invalid.join(', ')}` });
-  }
-
-  const settled = await Promise.allSettled(
-    requestedCountryMap.map(async (code) => {
-      return buildApiCountryPayload(
-        await buildApiSeriesForCountry(code, requestedIndicators, startYear, endYear),
-        requestedIndicators,
-        startYear,
-        endYear,
-      );
-    }),
-  );
-
-  const countriesPayload = [];
-  const fetchErrors = [];
-
-  settled.forEach((result, idx) => {
-    const code = requestedCountryMap[idx];
-    if (result.status === 'fulfilled') {
-      countriesPayload.push(result.value);
-      return;
-    }
-    fetchErrors.push({ code, error: result.reason?.message || 'Failed to fetch data' });
-  });
-
-  if (!countriesPayload.length) {
-    return res.status(502).json({
-      error: 'Failed to fetch data for requested countries',
-      errors: fetchErrors,
-    });
-  }
-
-  const payload = {
-    period: { startYear, endYear },
-    requestedIndicators,
-    requestedCountries: requestedCountryMap,
-    countries: countriesPayload,
-    failed: fetchErrors,
-    invalid,
-  };
-
-  if (requestedFormat === 'csv') {
-    const csvRows = buildApiBatchCsvPayload(countriesPayload);
-    return sendApiDataResponse(res, req, toCsvString(csvRows), requestedFormat);
-  }
-
-  sendApiDataResponse(res, req, payload, requestedFormat);
-});
-
-app.get('/api/data/:code', authenticateApiKey, async (req, res) => {
-  const query = validate(DataApiSchema, req.query, res);
-  if (!query) return;
-
-  const requestedFormat = query.format || 'json';
-  const requestedIndicators = parseIndicatorKeys(query.indicators);
-  const countryCode = normalizeCountryCode(req.params.code);
-
-  if (!countryCode || !countries.isValid(countryCode)) {
-    return res.status(400).json({ error: `Invalid country code: ${req.params.code}` });
-  }
-
-  const { startYear, endYear } = parseApiYears(query.start_year, query.end_year, query.years);
-
-  try {
-    const payload = buildApiCountryPayload(
-      await buildApiSeriesForCountry(countryCode, requestedIndicators, startYear, endYear),
-      requestedIndicators,
-      startYear,
-      endYear,
-    );
-
-    if (requestedFormat === 'csv') {
-      const rows = buildApiCountrySeriesRows(payload);
-      return sendApiDataResponse(res, req, toCsvString(rows), requestedFormat);
-    }
-
-    sendApiDataResponse(res, req, payload, requestedFormat);
-  } catch (err) {
-    const message = errorMessage(err, `Failed to build API data for ${req.params.code}`);
-    console.error(`/api/data/${req.params.code}:`, message);
-    res.status(502).json({ error: message });
-  }
-});
-
-app.get('/api/peers/:countryCode', requireAuth, apiLimiter, async (req, res) => {
-  const query = validate(PeerComparisonSchema, req.query, res);
-  if (!query) return;
-
-  const countryCode = normalizeCountryCode(req.params.countryCode);
-  if (!countryCode || !countries.isValid(countryCode)) {
-    return res.status(400).json({ error: `Invalid country code: ${req.params.countryCode}` });
-  }
-
-  const metric = normalizePeerMetricMetric(query.metric);
-  const groupType = query.groupType || 'region';
-  const requestedYear = Number.isFinite(query.year) ? query.year : null;
-
-  try {
-    const catalog = await fetchWorldBankCountryCatalog();
-    const selectedMeta = catalog.find((item) => item.code === countryCode);
-    if (!selectedMeta) {
-      return res.status(404).json({ error: `Country catalog entry not found for ${countryCode}` });
-    }
-
-    const peers = resolvePeerGroupMembers(selectedMeta, groupType, catalog);
-    const limit = checkPlanLimit(req.user.id, 'peers');
-
-    if (limit.limit !== Number.POSITIVE_INFINITY && peers.length > limit.limit) {
-      return res.status(402).json({ error: `Peer comparison limit reached (${limit.limit}). Upgrade your plan for more.` });
-    }
-
-    const peerCodes = peers.map((p) => p.code);
-    const peerCodesSet = new Set(peerCodes);
-    const catalogByCode = new Map(peers.map((item) => [item.code, item]));
-
-    const year = requestedYear ?? (await resolvePeerComparisonYear(countryCode, metric));
-    if (!Number.isFinite(year)) {
-      return res.status(404).json({ error: `No ${metric} data found for ${countryCode} in recent years` });
-    }
-
-    const peerRows = await fetchPeerMetricRows(metric, peerCodes, year, year);
-    const valuesByCode = buildCountryValuesByCode(peerRows, year, peerCodesSet);
-    const targetEntry = valuesByCode.get(countryCode);
-    if (!targetEntry) {
-      return res.status(404).json({ error: `No ${metric} value found for ${countryCode} in ${year}` });
-    }
-
-    const values = [];
-    const peerList = [];
-
-    for (const peer of peers) {
-      const item = valuesByCode.get(peer.code);
-      if (!item) continue;
-      values.push(item.value);
-      peerList.push({
-        code: peer.code,
-        name: peer.name,
-        flag: peer.flag,
-        value: item.value,
-      });
-    }
-
-    if (!peerList.length) {
-      return res.status(404).json({ error: `No peers found for metric ${metric} in ${year}` });
-    }
-
-    const metricLabel = API_INDICATOR_LABELS[metric] || metric;
-    const metricUnits = {
-      gdp: 'USD',
-      gdp_growth: '%',
-      gdp_per_capita: 'USD',
-      exports: 'USD',
-      imports: 'USD',
-      trade_openness: '%',
-    };
-
-    const rowsWithRanks = peerList
-      .map((peer) => ({
-        ...peer,
-        rank: computeRank(values, peer.value) || 0,
-        percentile: percentileRank(values, peer.value) || 0,
-      }))
-      .sort((a, b) => a.rank - b.rank);
-
-    const summary = {
-      metric,
-      metricLabel,
-      metricUnit: metricUnits[metric] || '',
-      groupType,
-      groupName: groupTypeLabel(groupType, groupType === 'income' ? selectedMeta.incomeLevel : selectedMeta.region),
-      year,
-      peerCount: rowsWithRanks.length,
-      selectedCountryCode: countryCode,
-      selectedCountryValue: targetEntry.value,
-      selectedCountryRank: computeRank(values, targetEntry.value),
-      selectedCountryPercentile: percentileRank(values, targetEntry.value),
-      median: computeMedian(values),
-      average: computeAverage(values),
-    };
-
-    if (summary.selectedCountryRank === null || summary.selectedCountryPercentile === null) {
-      return res.status(500).json({ error: 'Failed to build peer ranking summary.' });
-    }
-
-    return res.json({
-      peers: rowsWithRanks.map((row) => ({
-        ...row,
-        isTarget: row.code === countryCode,
-      })),
-      summary,
-    });
-  } catch (e) {
-    const message = errorMessage(e, `Failed to build peer comparison for ${req.params.countryCode}`);
-    console.error(`/api/peers/${req.params.countryCode}:`, message);
-    return res.status(502).json({ error: message });
-  }
-});
 
 app.post('/api/analytics', requireAuth, apiLimiter, async (req, res) => {
   const body = validate(AnalyticsSchema, req.body, res);
@@ -3956,12 +3089,7 @@ Rules:
 //                                    "headers": { "x-mcp-key": "<MCP_API_KEY>" } } } }
 const MCP_API_KEY = process.env.MCP_API_KEY; // optional; if unset, endpoint is open
 const mcpSessions = new Map(); // sessionId → SSEServerTransport
-
-function mcpAuth(req, res, next) {
-  if (!MCP_API_KEY) return next();
-  if (req.headers['x-mcp-key'] === MCP_API_KEY) return next();
-  return res.status(401).json({ error: 'Invalid MCP API key' });
-}
+const mcpAuth = createMcpAuth(MCP_API_KEY);
 
 function createMcpServerInstance() {
   const srv = new McpServer({ name: 'econchart-economic-data', version: '1.0.0' });
@@ -4047,7 +3175,7 @@ app.post('/mcp/message', mcpAuth, express.json(), async (req, res) => {
 });
 
 // ── Static file serving ───────────────────────────────────────────────────────
-const DIST = join(__dirname, 'dist');
+const DIST = join(ROOT_DIR, 'dist');
 app.use(staticLimiter);
 app.use(express.static(DIST));
 app.use((_req, res) => res.sendFile(join(DIST, 'index.html')));

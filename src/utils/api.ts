@@ -25,6 +25,9 @@ import type {
   PeerComparisonResponse,
   PeerGroupType,
   PeerMetricKey,
+  SnapshotSummary,
+  SnapshotFull,
+  SnapshotRegenerateResponse,
 } from "../types";
 
 let authTokenGetter: null | (() => Promise<string | null>) = null;
@@ -558,6 +561,35 @@ export function deleteSessionShare(token: string, sessionId: string, shareId: st
 
 export function getSharedSession(shareToken: string): Promise<SharedSession> {
   return get<SharedSession>(`/api/share/${shareToken}`);
+}
+
+export interface SnapshotCreatePayload {
+  countryCode: string;
+  title?: string;
+  description?: string;
+  dataPayload?: unknown;
+  dataVersion?: number;
+  isPublic?: boolean;
+}
+
+export function getSnapshots(token: string): Promise<SnapshotSummary[]> {
+  return get<SnapshotSummary[]>("/api/snapshots", token);
+}
+
+export function createSnapshot(token: string, payload: SnapshotCreatePayload): Promise<SnapshotFull> {
+  return post<SnapshotFull>("/api/snapshots", payload, token);
+}
+
+export function getSnapshot(token: string, id: string): Promise<SnapshotFull> {
+  return get<SnapshotFull>(`/api/snapshots/${id}`, token);
+}
+
+export function regenerateSnapshot(token: string, id: string, forceRefresh = false): Promise<SnapshotRegenerateResponse> {
+  return post<SnapshotRegenerateResponse>(`/api/snapshots/${id}/regenerate`, { forceRefresh }, token);
+}
+
+export function getSharedSnapshot(shareToken: string): Promise<SnapshotFull> {
+  return get<SnapshotFull>(`/api/snapshot/${shareToken}`);
 }
 
 export interface CustomMetric {

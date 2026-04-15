@@ -132,6 +132,39 @@ export interface PublicApiBatchFailure {
   error: string;
 }
 
+// ── Snapshot types ───────────────────────────────────────────────────────────
+
+export interface SnapshotSummary {
+  id: string;
+  countryCode: string;
+  sessionId: string | null;
+  title: string;
+  description: string;
+  isPublic: boolean;
+  shareToken: string | null;
+  dataVersion: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SnapshotFull extends SnapshotSummary {
+  dataPayload: Record<string, unknown> | null;
+  citation?: string;
+}
+
+export interface SnapshotDiff {
+  beforeVersion: number;
+  afterVersion: number;
+  forceRefresh: boolean;
+  changedSections: string[];
+  changed: boolean;
+}
+
+export interface SnapshotRegenerateResponse {
+  snapshot: SnapshotFull;
+  diff: SnapshotDiff;
+}
+
 export interface PublicApiSeriesResponse {
   period: {
     startYear: number;

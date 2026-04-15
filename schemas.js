@@ -155,3 +155,20 @@ export const ApiKeyCreateSchema = z.object({
 export const ApiKeyDeleteSchema = z.object({
   id: z.string().min(1, 'id is required'),
 });
+
+export const SnapshotCreateSchema = z.object({
+  countryCode: z
+    .string()
+    .trim()
+    .min(2, 'countryCode is required')
+    .max(3, 'countryCode must be 2 or 3 letters'),
+  title: z.string().trim().max(160, 'title is too long').optional(),
+  description: z.string().trim().max(1000, 'description is too long').optional(),
+  dataPayload: z.record(z.unknown()).optional(),
+  dataVersion: z.number().int().positive().optional(),
+  isPublic: z.boolean().optional(),
+});
+
+export const SnapshotRegenerateSchema = z.object({
+  forceRefresh: z.boolean().optional(),
+});
