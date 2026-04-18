@@ -6,6 +6,46 @@ import { InlineMath, BlockMath } from "react-katex";
 import { CheckCircle2, AlertTriangle, BookOpen, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+function normalizeMathInput(input: string): string {
+  const trimmed = String(input ?? "").trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("$$") && trimmed.endsWith("$$")) return trimmed.slice(2, -2).trim();
+  if (trimmed.startsWith("$") && trimmed.endsWith("$")) return trimmed.slice(1, -1).trim();
+  if (trimmed.startsWith("\\[") && trimmed.endsWith("\\]")) return trimmed.slice(2, -2).trim();
+  return trimmed;
+}
+
+function looksLikeMath(input: string): boolean {
+  const value = String(input ?? "").trim();
+  if (!value) return false;
+  if (/[\\{}_^]/.test(value)) return true;
+  if (/^\$.*\$$/.test(value) || /^\\\[.*\\\]$/.test(value)) return true;
+  if (/\|?[a-zA-Z]+\|?\s*[<>]=?\s*-?\d/.test(value)) return true;
+  return false;
+}
+
+function SafeBlockMath({ math }: { math: string }) {
+  const normalized = normalizeMathInput(math);
+  return (
+    <BlockMath
+      math={normalized}
+      errorColor="#EF4444"
+      renderError={() => <pre className="text-[11px] text-memphis-black whitespace-pre-wrap">{math}</pre>}
+    />
+  );
+}
+
+function SafeInlineMath({ math }: { math: string }) {
+  const normalized = normalizeMathInput(math);
+  return (
+    <InlineMath
+      math={normalized}
+      errorColor="#EF4444"
+      renderError={() => <span className="text-[11px]">{math}</span>}
+    />
+  );
+}
+
 function AlgoCard({ algo, isOpen, toggle }: { algo: AlgoMethod; isOpen: boolean; toggle: () => void }) {
   return (
     <div
@@ -34,7 +74,7 @@ function AlgoCard({ algo, isOpen, toggle }: { algo: AlgoMethod; isOpen: boolean;
             <div>
               <h4 className="text-[11px] font-black uppercase tracking-wider text-memphis-black/50 mb-2">Formula</h4>
               <div className="bg-memphis-offwhite border-2 border-memphis-black/10 px-4 py-3 overflow-x-auto">
-                <BlockMath math={algo.formula} />
+                <SafeBlockMath math={algo.formula} />
               </div>
             </div>
 
@@ -48,7 +88,7 @@ function AlgoCard({ algo, isOpen, toggle }: { algo: AlgoMethod; isOpen: boolean;
                         <span className="text-[12px] font-bold text-memphis-black">{p.name}</span>
                         <span className="text-[11px] font-mono text-memphis-black/70">=</span>
                         <span className="text-[11px] font-mono text-memphis-black/80">
-                          {p.value.includes("\\") ? <InlineMath math={p.value} /> : p.value}
+                          {looksLikeMath(p.value) ? <SafeInlineMath math={p.value} /> : p.value}
                         </span>
                       </div>
                       <p className="text-[10px] text-memphis-black/50 leading-relaxed">{p.rationale}</p>
