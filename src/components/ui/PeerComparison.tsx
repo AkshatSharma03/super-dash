@@ -89,7 +89,7 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
 
   function topStatement() {
     if (!data || !target) return null;
-    const top = Math.max(0, Math.min(100, 100 - target.percentile));
+    const top = Math.max(0, Math.min(100, (target.rank / data.summary.peerCount) * 100));
     const topText = `${top.toFixed(0)}%`; 
     const medianText = data.summary.median == null ? "—" : formatMetric(data.summary.median, data.summary.metricUnit);
     const avgText = data.summary.average == null ? "—" : formatMetric(data.summary.average, data.summary.metricUnit);

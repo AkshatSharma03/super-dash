@@ -477,8 +477,8 @@ export function getApiDataByCountry(
 ): Promise<PublicApiCountryPayload | string> {
   const q = stringifyApiParams({
     indicators: options.indicators,
-    startYear: options.startYear,
-    endYear: options.endYear,
+    start_year: options.startYear,
+    end_year: options.endYear,
     years: options.years,
     format: options.format,
   });
@@ -496,8 +496,8 @@ export function getApiDataBatch(
   const q = stringifyApiParams({
     countries: options.countries,
     indicators: options.indicators,
-    startYear: options.startYear,
-    endYear: options.endYear,
+    start_year: options.startYear,
+    end_year: options.endYear,
     years: options.years,
     format: options.format,
   });

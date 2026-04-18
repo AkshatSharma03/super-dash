@@ -49,10 +49,6 @@ export function createPeersRouter(deps) {
       const peers = resolvePeerGroupMembers(selectedMeta, groupType, catalog);
       const limit = checkPlanLimit(req.user.id, 'peers');
 
-      if (limit.limit !== Number.POSITIVE_INFINITY && peers.length > limit.limit) {
-        return res.status(402).json({ error: `Peer comparison limit reached (${limit.limit}). Upgrade your plan for more.` });
-      }
-
       const peerCodes = peers.map((p) => p.code);
       const peerCodesSet = new Set(peerCodes);
 
@@ -85,6 +81,10 @@ export function createPeersRouter(deps) {
 
       if (!peerList.length) {
         return res.status(404).json({ error: `No peers found for metric ${metric} in ${year}` });
+      }
+
+      if (limit.limit !== Number.POSITIVE_INFINITY && peerList.length > limit.limit) {
+        return res.status(402).json({ error: `Peer comparison limit reached (${limit.limit}). Upgrade your plan for more.` });
       }
 
       const metricLabel = API_INDICATOR_LABELS[metric] || metric;
