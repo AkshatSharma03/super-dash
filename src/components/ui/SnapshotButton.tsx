@@ -34,7 +34,9 @@ export default function SnapshotButton({
   const [snapshot, setSnapshot] = useState<SnapshotFull | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const shareUrl = snapshot?.shareToken ? `${window.location.origin}/api/snapshot/${snapshot.shareToken}` : null;
+  const shareUrl = snapshot?.shareToken
+    ? `${window.location.origin}/api/snapshot/${snapshot.shareToken}`
+    : null;
 
   const ensurePayload = () => {
     if (existingSnapshotId) return;
@@ -101,46 +103,77 @@ export default function SnapshotButton({
 
   return (
     <div className="flex items-center gap-2">
-      <Button variant="outline" size="sm" onClick={handleClick} disabled={loading || isGuest}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleClick}
+        disabled={loading || isGuest}
         className="text-xs gap-1.5"
       >
-        {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : existingSnapshotId ? <RefreshCw className="w-3.5 h-3.5" /> : <Save className="w-3.5 h-3.5" />}
+        {loading ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        ) : existingSnapshotId ? (
+          <RefreshCw className="w-3.5 h-3.5" />
+        ) : (
+          <Save className="w-3.5 h-3.5" />
+        )}
         {label}
       </Button>
 
       {shareUrl && (
-        <div className="flex items-center gap-1.5 bg-white border-3 border-memphis-black px-2 py-1 shadow-hard-sm max-w-[280px]">
-          <span className="text-[10px] text-memphis-black/70 truncate flex-1">{shareUrl}</span>
+        <div
+          className={[
+            "flex items-center gap-1.5 bg-white border-3 border-memphis-black",
+            "px-2 py-1 shadow-hard-sm max-w-[280px]",
+          ].join(" ")}
+        >
+          <span className="text-[10px] text-memphis-black/70 truncate flex-1">
+            {shareUrl}
+          </span>
           <button
             onClick={copyLink}
             className="text-memphis-black hover:text-memphis-pink transition-colors shrink-0"
             title="Copy snapshot link"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
           </button>
         </div>
       )}
 
       {isGuest && (
-        <span className="text-[10px] text-amber-600">Sign in to save snapshots</span>
+        <span className="text-[10px] text-amber-600">
+          Sign in to save snapshots
+        </span>
       )}
 
       {error && <span className="text-[10px] text-red-600">{error}</span>}
 
       {!shareUrl && !loading && !existingSnapshotId && !isGuest && (
-        <span className="text-[10px] text-slate-500">Snapshot saved privately</span>
+        <span className="text-[10px] text-slate-500">
+          Snapshot saved privately
+        </span>
       )}
 
       {existingSnapshotId && snapshot && !snapshot.isPublic && (
-        <span className="text-[10px] text-slate-500">This snapshot is private</span>
+        <span className="text-[10px] text-slate-500">
+          This snapshot is private
+        </span>
       )}
 
       {snapshot && (
-        <span className="text-[10px] text-slate-500">v{snapshot.dataVersion}</span>
+        <span className="text-[10px] text-slate-500">
+          v{snapshot.dataVersion}
+        </span>
       )}
 
       {snapshot?.shareToken ? (
-        <span className="text-[10px] text-slate-500 inline-flex items-center gap-1"><Link2 className="w-3 h-3" /> Shareable</span>
+        <span className="text-[10px] text-slate-500 inline-flex items-center gap-1">
+          <Link2 className="w-3 h-3" /> Shareable
+        </span>
       ) : null}
     </div>
   );

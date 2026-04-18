@@ -1,7 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// PEER COMPARISON UI — benchmark one country against peers.
-// Added to dashboard below KPI row.
-// ─────────────────────────────────────────────────────────────────────────────
+// Peer comparison UI to benchmark a country against peers.
 
 import { useEffect, useId, useMemo, useState } from "react";
 import {
@@ -14,9 +11,14 @@ import {
   ResponsiveContainer,
   Cell,
 } from "recharts";
+import { cn } from "@/lib/utils";
 import { Card } from ".";
 import { getPeerComparison } from "../../utils/api";
-import type { PeerComparisonResponse, PeerGroupType, PeerMetricKey } from "../../types";
+import type {
+  PeerComparisonResponse,
+  PeerGroupType,
+  PeerMetricKey,
+} from "../../types";
 import { PEER_GROUP_OPTIONS, PEER_METRIC_OPTIONS } from "../../data/peerGroups";
 
 interface PeerComparisonProps {
@@ -52,7 +54,9 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
       })
       .catch((e) => {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Failed to load peer comparison");
+        setError(
+          e instanceof Error ? e.message : "Failed to load peer comparison",
+        );
         setData(null);
       })
       .finally(() => {
@@ -65,7 +69,10 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
   }, [countryCode, groupType, metric, token]);
 
   const peers = data?.peers ?? [];
-  const target = useMemo(() => peers.find((peer) => peer.isTarget) ?? null, [peers]);
+  const target = useMemo(
+    () => peers.find((peer) => peer.isTarget) ?? null,
+    [peers],
+  );
 
   function formatMetric(value: number, unit: string) {
     if (!Number.isFinite(value)) return "—";
@@ -84,18 +91,33 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
       }
     }
 
-    return `${new Intl.NumberFormat("en-US", { maximumFractionDigits: withDecimals }).format(value)}${unit ? ` ${unit}` : ""}`;
+    const formatted = new Intl.NumberFormat("en-US", {
+      maximumFractionDigits: withDecimals,
+    }).format(value);
+    return `${formatted}${unit ? ` ${unit}` : ""}`;
   }
 
   function topStatement() {
     if (!data || !target) return null;
-    const top = Math.max(0, Math.min(100, (target.rank / data.summary.peerCount) * 100));
-    const topText = `${top.toFixed(0)}%`; 
-    const medianText = data.summary.median == null ? "—" : formatMetric(data.summary.median, data.summary.metricUnit);
-    const avgText = data.summary.average == null ? "—" : formatMetric(data.summary.average, data.summary.metricUnit);
+    const top = Math.max(
+      0,
+      Math.min(100, (target.rank / data.summary.peerCount) * 100),
+    );
+    const topText = `${top.toFixed(0)}%`;
+    const medianText =
+      data.summary.median == null
+        ? "—"
+        : formatMetric(data.summary.median, data.summary.metricUnit);
+    const avgText =
+      data.summary.average == null
+        ? "—"
+        : formatMetric(data.summary.average, data.summary.metricUnit);
 
-    return `${target.name}: rank ${target.rank} of ${data.summary.peerCount} in ${data.summary.groupName}, top ${topText}.
-      Median for group: ${medianText} · Average: ${avgText}`;
+    return [
+      `${target.name}: rank ${target.rank} of ${data.summary.peerCount} in`,
+      `${data.summary.groupName}, top ${topText}.`,
+      `Median for group: ${medianText} · Average: ${avgText}`,
+    ].join(" ");
   }
 
   const rankedPeers = useMemo(
@@ -113,13 +135,21 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
   return (
     <Card title="Peer Benchmarking">
       <div className="grid gap-2 md:grid-cols-2 mb-4">
-        <label htmlFor={groupId} className="text-[12px] text-slate-700 font-semibold flex items-center gap-2">
+        <label
+          htmlFor={groupId}
+          className="text-[12px] text-slate-700 font-semibold flex items-center gap-2"
+        >
           Group
           <select
             id={groupId}
             value={groupType}
-            onChange={(event) => setGroupType(event.target.value as PeerGroupType)}
-            className="ml-auto border border-slate-300 px-2 py-1.5 text-xs text-slate-900 bg-white rounded"
+            onChange={(event) =>
+              setGroupType(event.target.value as PeerGroupType)
+            }
+            className={cn(
+              "ml-auto border border-slate-300 px-2 py-1.5",
+              "text-xs text-slate-900 bg-white rounded",
+            )}
           >
             {PEER_GROUP_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -129,13 +159,19 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
           </select>
         </label>
 
-        <label htmlFor={metricId} className="text-[12px] text-slate-700 font-semibold flex items-center gap-2">
+        <label
+          htmlFor={metricId}
+          className="text-[12px] text-slate-700 font-semibold flex items-center gap-2"
+        >
           Metric
           <select
             id={metricId}
             value={metric}
             onChange={(event) => setMetric(event.target.value as PeerMetricKey)}
-            className="ml-auto border border-slate-300 px-2 py-1.5 text-xs text-slate-900 bg-white rounded"
+            className={cn(
+              "ml-auto border border-slate-300 px-2 py-1.5",
+              "text-xs text-slate-900 bg-white rounded",
+            )}
           >
             {PEER_METRIC_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -146,16 +182,22 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
         </label>
       </div>
 
-      {loading && <div className="text-sm text-slate-600">Loading peer ranking…</div>}
+      {loading && (
+        <div className="text-sm text-slate-600">Loading peer ranking…</div>
+      )}
       {error && <div className="text-sm text-destructive">{error}</div>}
 
       {!loading && !error && !data && (
-        <div className="text-sm text-slate-600">Select a country to view peer comparison.</div>
+        <div className="text-sm text-slate-600">
+          Select a country to view peer comparison.
+        </div>
       )}
 
       {data && (
         <>
-          <div className="text-xs text-slate-700 whitespace-pre-wrap mb-4">{topStatement()}</div>
+          <div className="text-xs text-slate-700 whitespace-pre-wrap mb-4">
+            {topStatement()}
+          </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
@@ -163,16 +205,19 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
                 {data.summary.metricLabel} (Year {data.summary.year})
               </h4>
               <ResponsiveContainer width="100%" height={240}>
-                <BarChart data={chartData} margin={{ top: 6, right: 10, left: 0, bottom: 5 }}>
+                <BarChart
+                  data={chartData}
+                  margin={{ top: 6, right: 10, left: 0, bottom: 5 }}
+                >
                   <CartesianGrid stroke="#e5e7eb" />
                   <XAxis dataKey="name" interval={0} tick={{ fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip
-                  formatter={(value: number) => [
-                    formatMetric(value, data.summary.metricUnit),
-                    data.summary.metric,
-                  ]}
-                />
+                  <Tooltip
+                    formatter={(value: number) => [
+                      formatMetric(value, data.summary.metricUnit),
+                      data.summary.metric,
+                    ]}
+                  />
                   <Bar dataKey="value">
                     {chartData.map((row) => (
                       <Cell key={row.name} fill={row.color} />
@@ -183,28 +228,44 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
             </div>
 
             <div>
-                <h4 className="text-[11px] text-slate-600 uppercase tracking-[0.6px] mb-2">
-                  Peers ({data.peers.length})
-                </h4>
-                <div className="overflow-x-auto border border-slate-200 rounded">
-                  <table className="w-full text-xs min-w-[400px]">
-                    <thead>
+              <h4 className="text-[11px] text-slate-600 uppercase tracking-[0.6px] mb-2">
+                Peers ({data.peers.length})
+              </h4>
+              <div className="overflow-x-auto border border-slate-200 rounded">
+                <table className="w-full text-xs min-w-[400px]">
+                  <thead>
                     <tr className="bg-slate-100">
                       <th className="text-left px-2 py-2 font-semibold">#</th>
-                      <th className="text-left px-2 py-2 font-semibold">Country</th>
-                      <th className="text-right px-2 py-2 font-semibold">Value</th>
-                      <th className="text-right px-2 py-2 font-semibold">Percentile</th>
+                      <th className="text-left px-2 py-2 font-semibold">
+                        Country
+                      </th>
+                      <th className="text-right px-2 py-2 font-semibold">
+                        Value
+                      </th>
+                      <th className="text-right px-2 py-2 font-semibold">
+                        Percentile
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {rankedPeers.map((row) => (
-                      <tr key={row.code} className={row.isTarget ? "bg-pink-100/40" : ""}>
-                       <td className="px-2 py-1">{row.rank}</td>
-                       <td className="px-2 py-1 truncate max-w-[150px]" title={`${row.flag} ${row.name}`}>
-                         {row.flag} {row.name}
-                       </td>
-                        <td className="px-2 py-1 text-right">{formatMetric(row.value, data.summary.metricUnit)}</td>
-                        <td className="px-2 py-1 text-right">{row.percentile.toFixed(1)}%</td>
+                      <tr
+                        key={row.code}
+                        className={row.isTarget ? "bg-pink-100/40" : ""}
+                      >
+                        <td className="px-2 py-1">{row.rank}</td>
+                        <td
+                          className="px-2 py-1 truncate max-w-[150px]"
+                          title={`${row.flag} ${row.name}`}
+                        >
+                          {row.flag} {row.name}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {formatMetric(row.value, data.summary.metricUnit)}
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {row.percentile.toFixed(1)}%
+                        </td>
                       </tr>
                     ))}
                   </tbody>

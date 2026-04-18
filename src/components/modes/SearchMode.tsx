@@ -1,7 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// SEARCH MODE  —  live web search backed by /api/search.
-// Includes Trie-powered O(m) autocomplete from a weighted economic term corpus.
-// ─────────────────────────────────────────────────────────────────────────────
+// Search mode with web results and trie-based autocomplete.
 import { useEffect, useState } from "react";
 import { useMobile } from "../../utils/useMobile";
 import { SEARCH_SUGGESTIONS } from "../../data/suggestions";
@@ -16,12 +13,17 @@ import {
   updateSearchSession,
 } from "../../utils/api";
 import { getSearchTrie } from "../../algorithms/trie";
-import type { SearchHistoryEntry, SearchResult, SearchSession, SearchSessionTurn } from "../../types";
+import type {
+  SearchHistoryEntry,
+  SearchResult,
+  SearchSession,
+  SearchSessionTurn,
+} from "../../types";
 import { MarkdownText } from "../ui";
-import { Button }  from "@/components/ui/button";
-import { Input }   from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge }   from "@/components/ui/badge";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { AlertTriangle, Globe2, BookOpen, Menu, X, Plus } from "lucide-react";
@@ -36,22 +38,25 @@ interface SearchModeProps {
   isGuest?: boolean;
 }
 
-export default function SearchMode({ token, isGuest = false }: SearchModeProps) {
+export default function SearchMode({
+  token,
+  isGuest = false,
+}: SearchModeProps) {
   const isMobile = useMobile();
-  const [query,           setQuery]           = useState("");
-  const [loading,         setLoading]         = useState(false);
-  const [result,          setResult]          = useState<SearchResult | null>(null);
-  const [error,           setError]           = useState<string | null>(null);
-  const [searched,        setSearched]        = useState("");
-  const [followQuery,     setFollowQuery]     = useState("");
-  const [suggestions,     setSuggestions]     = useState<string[]>([]);
+  const [query, setQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<SearchResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [searched, setSearched] = useState("");
+  const [followQuery, setFollowQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [history,         setHistory]         = useState<SearchHistoryEntry[]>([]);
-  const [threads,         setThreads]         = useState<SearchSession[]>([]);
-  const [activeThreadId,  setActiveThreadId]  = useState<string | null>(null);
-  const [sidebarOpen,     setSidebarOpen]     = useState(false);
-  const [sidebarTab,      setSidebarTab]      = useState<SearchSidebarTab>("history");
-  const [threadsLoading,  setThreadsLoading]  = useState(true);
+  const [history, setHistory] = useState<SearchHistoryEntry[]>([]);
+  const [threads, setThreads] = useState<SearchSession[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<SearchSidebarTab>("history");
+  const [threadsLoading, setThreadsLoading] = useState(true);
   const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
 
   const trie = getSearchTrie();
@@ -71,7 +76,7 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
       return;
     }
     getSearchHistory(token)
-      .then(rows => {
+      .then((rows) => {
         if (cancelled) return;
         setHistory(rows.slice(0, MAX_SEARCH_HISTORY));
       })
@@ -96,7 +101,7 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
 
     setThreadsLoading(true);
     getSearchSessions(token)
-      .then(rows => {
+      .then((rows) => {
         if (cancelled) return;
         setThreads(rows.slice(0, 25));
       })
@@ -119,9 +124,16 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
     if (!normalized) return;
     if (isGuest) return;
     saveSearchHistory(token, normalized)
-      .then(saved => {
-        setHistory(prev => {
-          const next = [saved, ...prev.filter(h => h.id !== saved.id && h.query.toLowerCase() !== saved.query.toLowerCase())];
+      .then((saved) => {
+        setHistory((prev) => {
+          const next = [
+            saved,
+            ...prev.filter(
+              (h) =>
+                h.id !== saved.id &&
+                h.query.toLowerCase() !== saved.query.toLowerCase(),
+            ),
+          ];
           return next.slice(0, MAX_SEARCH_HISTORY);
         });
       })
@@ -144,7 +156,8 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
     text.replace(/\s+/g, " ").trim().slice(0, 1200);
 
   const makeThreadId = (): string => {
-    if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      return crypto.randomUUID();
     return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   };
 
@@ -161,10 +174,15 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
     if (!q?.trim() || loading) return;
     const { followUp = false } = opts;
     const trimmed = q.trim();
-    const activeThread = activeThreadId ? threads.find(t => t.id === activeThreadId) : null;
-    const contextForRequest = followUp && activeThread
-      ? activeThread.turns.slice(-MAX_SEARCH_CONTEXT_TURNS).map(turn => ({ query: turn.query, summary: turn.summary }))
-      : [];
+    const activeThread = activeThreadId
+      ? threads.find((t) => t.id === activeThreadId)
+      : null;
+    const contextForRequest =
+      followUp && activeThread
+        ? activeThread.turns
+            .slice(-MAX_SEARCH_CONTEXT_TURNS)
+            .map((turn) => ({ query: turn.query, summary: turn.summary }))
+        : [];
     setShowSuggestions(false);
     setSuggestions([]);
     setLoading(true);
@@ -185,15 +203,17 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
         result: res,
       };
       if (followUp && activeThreadId) {
-        const active = threads.find(t => t.id === activeThreadId);
+        const active = threads.find((t) => t.id === activeThreadId);
         if (!active) {
           setLoading(false);
           return;
         }
-        const updatedTurns = [...active.turns, nextTurn].slice(-MAX_SEARCH_CONTEXT_TURNS);
+        const updatedTurns = [...active.turns, nextTurn].slice(
+          -MAX_SEARCH_CONTEXT_TURNS,
+        );
         const now = new Date().toISOString();
-        setThreads(prev => {
-          const idx = prev.findIndex(t => t.id === activeThreadId);
+        setThreads((prev) => {
+          const idx = prev.findIndex((t) => t.id === activeThreadId);
           if (idx < 0) return prev;
           const current = prev[idx];
           const updated: SearchSession = {
@@ -201,20 +221,33 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
             turns: updatedTurns,
             updatedAt: now,
           };
-          return [updated, ...prev.filter(t => t.id !== activeThreadId)];
+          return [updated, ...prev.filter((t) => t.id !== activeThreadId)];
         });
         if (!isGuest) {
-          updateSearchSession(token, activeThreadId, { turns: updatedTurns, title: active.title }).catch(() => {});
+          updateSearchSession(token, activeThreadId, {
+            turns: updatedTurns,
+            title: active.title,
+          }).catch(() => {});
         }
       } else {
-        const title = trimmed.length > 60 ? `${trimmed.slice(0, 60)}…` : trimmed;
+        const title =
+          trimmed.length > 60 ? `${trimmed.slice(0, 60)}…` : trimmed;
         const now = new Date().toISOString();
 
         if (isGuest) {
           const id = makeThreadId();
-          const guestThread: SearchSession = { id, title, turns: [nextTurn], createdAt: now, updatedAt: now };
+          const guestThread: SearchSession = {
+            id,
+            title,
+            turns: [nextTurn],
+            createdAt: now,
+            updatedAt: now,
+          };
           setActiveThreadId(id);
-          setThreads(prev => [guestThread, ...prev.filter(t => t.id !== id)]);
+          setThreads((prev) => [
+            guestThread,
+            ...prev.filter((t) => t.id !== id),
+          ]);
         } else {
           try {
             const created = await createSearchSession(token, title);
@@ -226,13 +259,27 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
               title,
               updatedAt: now,
             };
-            setThreads(prev => [persistedThread, ...prev.filter(t => t.id !== id)]);
-            updateSearchSession(token, id, { turns: [nextTurn], title }).catch(() => {});
+            setThreads((prev) => [
+              persistedThread,
+              ...prev.filter((t) => t.id !== id),
+            ]);
+            updateSearchSession(token, id, { turns: [nextTurn], title }).catch(
+              () => {},
+            );
           } catch {
             const id = makeThreadId();
-            const fallbackThread: SearchSession = { id, title, turns: [nextTurn], createdAt: now, updatedAt: now };
+            const fallbackThread: SearchSession = {
+              id,
+              title,
+              turns: [nextTurn],
+              createdAt: now,
+              updatedAt: now,
+            };
             setActiveThreadId(id);
-            setThreads(prev => [fallbackThread, ...prev.filter(t => t.id !== id)]);
+            setThreads((prev) => [
+              fallbackThread,
+              ...prev.filter((t) => t.id !== id),
+            ]);
           }
         }
       }
@@ -243,7 +290,7 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
   };
 
   const loadThread = (threadId: string) => {
-    const thread = threads.find(t => t.id === threadId);
+    const thread = threads.find((t) => t.id === threadId);
     if (!thread || thread.turns.length === 0) return;
     const lastTurn = thread.turns[thread.turns.length - 1];
     setActiveThreadId(threadId);
@@ -258,48 +305,82 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
   const removeThread = async (e: React.MouseEvent, threadId: string) => {
     e.stopPropagation();
     if (!isGuest) await deleteSearchSession(token, threadId).catch(() => {});
-    setThreads(prev => prev.filter(t => t.id !== threadId));
+    setThreads((prev) => prev.filter((t) => t.id !== threadId));
     if (activeThreadId === threadId) resetSearchView();
   };
 
   const exportSearch = async () => {
     if (!result) return;
-    const { buildSearchReportHTML, printHTML } = await import("../../utils/export");
+    const { buildSearchReportHTML, printHTML } =
+      await import("../../utils/export");
     const opened = printHTML(buildSearchReportHTML(searched, result));
-    if (!opened) toast.error("Popup blocked. Enable popups, then retry export.");
+    if (!opened)
+      toast.error("Popup blocked. Enable popups, then retry export.");
   };
 
   return (
     <div className="flex min-h-0 gap-0">
       {isMobile && sidebarOpen && (
-        <div onClick={() => setSidebarOpen(false)} className="fixed inset-0 bg-black/67 z-[99]" />
+        <div
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 bg-black/67 z-[99]"
+        />
       )}
 
-      <div className={cn(
-        "flex flex-col",
-        isMobile
-          ? cn("fixed top-0 h-full w-[85vw] max-w-[320px] bg-popover border-r border-muted z-[100] p-3 transition-[left] duration-250 ease-in-out", sidebarOpen ? "left-0" : "left-[-85vw]")
-          : "w-[230px] shrink-0 border-r border-muted mr-4"
-      )}>
+      <div
+        className={cn(
+          "flex flex-col",
+          isMobile
+            ? cn(
+                "fixed top-0 h-full w-[85vw] max-w-[320px] bg-popover",
+                "border-r border-muted z-[100] p-3 transition-[left]",
+                "duration-250 ease-in-out",
+                sidebarOpen ? "left-0" : "left-[-85vw]",
+              )
+            : "w-[230px] shrink-0 border-r border-muted mr-4",
+        )}
+      >
         <div className="flex gap-1.5 mb-2.5">
-          <Button variant="outline" size="sm" onClick={resetSearchView} className="flex-1 justify-start gap-1.5 text-xs">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={resetSearchView}
+            className="flex-1 justify-start gap-1.5 text-xs"
+          >
             <Plus className="w-3.5 h-3.5" /> New search
           </Button>
           {isMobile && (
-            <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(false)} className="text-muted-foreground text-base"><X className="w-4 h-4" /></Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setSidebarOpen(false)}
+              className="text-muted-foreground text-base"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           )}
         </div>
 
         <div className="grid grid-cols-1 gap-1 mb-2.5">
           <button
             onClick={() => setSidebarTab("history")}
-            className={cn("text-left px-2.5 py-2 text-xs border rounded-md transition-all", sidebarTab === "history" ? "bg-accent/15 border-accent/25 text-foreground" : "bg-transparent border-transparent text-slate-400 hover:bg-muted")}
+            className={cn(
+              "text-left px-2.5 py-2 text-xs border rounded-md transition-all",
+              sidebarTab === "history"
+                ? "bg-accent/15 border-accent/25 text-foreground"
+                : "bg-transparent border-transparent text-slate-400 hover:bg-muted",
+            )}
           >
             Search history
           </button>
           <button
             onClick={() => setSidebarTab("chats")}
-            className={cn("text-left px-2.5 py-2 text-xs border rounded-md transition-all", sidebarTab === "chats" ? "bg-accent/15 border-accent/25 text-foreground" : "bg-transparent border-transparent text-slate-400 hover:bg-muted")}
+            className={cn(
+              "text-left px-2.5 py-2 text-xs border rounded-md transition-all",
+              sidebarTab === "chats"
+                ? "bg-accent/15 border-accent/25 text-foreground"
+                : "bg-transparent border-transparent text-slate-400 hover:bg-muted",
+            )}
           >
             Search chats
           </button>
@@ -313,21 +394,32 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
                   variant="outline"
                   size="sm"
                   className="w-full mb-2 text-[10px] h-7 px-2"
-                  onClick={() => clearSearchHistory(token).then(() => setHistory([])).catch(() => {})}
+                  onClick={() =>
+                    clearSearchHistory(token)
+                      .then(() => setHistory([]))
+                      .catch(() => {})
+                  }
                 >
                   Clear history
                 </Button>
               )}
               {history.length === 0 ? (
                 <p className="text-[11px] text-border px-0.5 py-1 leading-relaxed">
-                  {isGuest ? "Guest mode: search history not saved." : "No recent searches yet."}
+                  {isGuest
+                    ? "Guest mode: search history not saved."
+                    : "No recent searches yet."}
                 </p>
               ) : (
-                history.map(h => (
+                history.map((h) => (
                   <button
                     key={h.id}
                     onClick={() => doSearch(h.query)}
-                    className="w-full text-left px-2.5 py-2 mb-0.5 rounded-md cursor-pointer transition-all duration-100 border bg-transparent border-transparent hover:bg-muted text-xs text-slate-400"
+                    className={cn(
+                      "w-full text-left px-2.5 py-2 mb-0.5 rounded-md",
+                      "cursor-pointer transition-all duration-100 border",
+                      "bg-transparent border-transparent hover:bg-muted",
+                      "text-xs text-slate-400",
+                    )}
                     title={h.query}
                   >
                     {h.query}
@@ -338,9 +430,11 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
           ) : threadsLoading ? (
             <p className="text-[11px] text-border px-0.5 py-1">Loading…</p>
           ) : threads.length === 0 ? (
-            <p className="text-[11px] text-border px-0.5 py-1 leading-relaxed">No search chats yet. New search creates one.</p>
+            <p className="text-[11px] text-border px-0.5 py-1 leading-relaxed">
+              No search chats yet. New search creates one.
+            </p>
           ) : (
-            threads.map(thread => {
+            threads.map((thread) => {
               const isActive = thread.id === activeThreadId;
               const isHovered = thread.id === hoveredThreadId;
               return (
@@ -350,19 +444,37 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
                   onMouseEnter={() => setHoveredThreadId(thread.id)}
                   onMouseLeave={() => setHoveredThreadId(null)}
                   className={cn(
-                    "w-full text-left px-2.5 py-2 mb-0.5 rounded-md cursor-pointer transition-all duration-100 border flex items-start gap-1.5",
-                    isActive ? "bg-accent/15 border-accent/25" : "bg-transparent border-transparent hover:bg-muted"
+                    "w-full text-left px-2.5 py-2 mb-0.5 rounded-md",
+                    "cursor-pointer transition-all duration-100 border",
+                    "flex items-start gap-1.5",
+                    isActive
+                      ? "bg-accent/15 border-accent/25"
+                      : "bg-transparent border-transparent hover:bg-muted",
                   )}
                   title={thread.title}
                 >
                   <div className="flex-1 min-w-0">
-                    <span className={cn("block text-xs truncate", isActive ? "text-foreground" : "text-slate-400")}>{thread.title}</span>
-                    <span className="block text-[10px] text-border mt-0.5">{thread.turns.length} turn{thread.turns.length > 1 ? "s" : ""}</span>
+                    <span
+                      className={cn(
+                        "block text-xs truncate",
+                        isActive ? "text-foreground" : "text-slate-400",
+                      )}
+                    >
+                      {thread.title}
+                    </span>
+                    <span className="block text-[10px] text-border mt-0.5">
+                      {thread.turns.length} turn
+                      {thread.turns.length > 1 ? "s" : ""}
+                    </span>
                   </div>
                   {isHovered && (
                     <button
-                      onClick={e => removeThread(e, thread.id)}
-                      className="bg-transparent border-none text-muted-foreground cursor-pointer text-sm px-0.5 leading-none shrink-0 hover:text-destructive transition-colors"
+                      onClick={(e) => removeThread(e, thread.id)}
+                      className={cn(
+                        "bg-transparent border-none text-muted-foreground",
+                        "cursor-pointer text-sm px-0.5 leading-none shrink-0",
+                        "hover:text-destructive transition-colors",
+                      )}
                       title="Delete search chat"
                     >
                       ×
@@ -381,39 +493,85 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
           <div className="relative mb-4">
             <div className={cn("flex gap-2", isMobile && "flex-col")}>
               {isMobile && (
-                <Button variant="outline" size="icon" onClick={() => setSidebarOpen(true)} title="Search sidebar" className="min-h-11 min-w-11"><Menu className="w-4 h-4" /></Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setSidebarOpen(true)}
+                  title="Search sidebar"
+                  className="min-h-11 min-w-11"
+                >
+                  <Menu className="w-4 h-4" />
+                </Button>
               )}
               <Input
                 value={query}
-                onChange={e => handleQueryChange(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === "Enter")  doSearch(query);
+                onChange={(e) => handleQueryChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") doSearch(query);
                   if (e.key === "Escape") setShowSuggestions(false);
                 }}
-                onBlur={e => { e.currentTarget.blur(); setTimeout(() => setShowSuggestions(false), 150); }}
-                onFocus={() => query.trim().length >= 2 && suggestions.length > 0 && setShowSuggestions(true)}
+                onBlur={(e) => {
+                  e.currentTarget.blur();
+                  setTimeout(() => setShowSuggestions(false), 150);
+                }}
+                onFocus={() =>
+                  query.trim().length >= 2 &&
+                  suggestions.length > 0 &&
+                  setShowSuggestions(true)
+                }
                 disabled={loading}
                 placeholder="Search for US, China, EU, Japan economic data, trade stats, news…"
-                className="flex-1 h-11 text-sm focus-visible:ring-emerald-500 focus-visible:border-emerald-500"
+                className={cn(
+                  "flex-1 h-11 text-sm",
+                  "focus-visible:ring-emerald-500 focus-visible:border-emerald-500",
+                )}
               />
-              <Button onClick={() => doSearch(query)} disabled={loading || !query.trim()}
-                className="h-11 min-h-11 px-6 whitespace-nowrap bg-gradient-to-br from-[#10B981] to-[#059669] shadow-[0_2px_10px_#10B98144] font-bold">
+              <Button
+                onClick={() => doSearch(query)}
+                disabled={loading || !query.trim()}
+                className={cn(
+                  "h-11 min-h-11 px-6 whitespace-nowrap bg-gradient-to-br",
+                  "from-[#10B981] to-[#059669]",
+                  "shadow-[0_2px_10px_#10B98144] font-bold",
+                )}
+              >
                 {loading ? "…" : "Search →"}
               </Button>
             </div>
 
             {showSuggestions && suggestions.length > 0 && (
-              <div className={cn("absolute top-[calc(100%+4px)] left-0 bg-white border-3 border-memphis-cyan z-[100] overflow-hidden shadow-hard", isMobile ? "right-0" : "right-[54px]")}>
-                <div className="px-3 py-1.5 text-[10px] text-memphis-cyan font-black uppercase tracking-[0.8px] border-b-3 border-memphis-black bg-memphis-cyan/10">
+              <div
+                className={cn(
+                  "absolute top-[calc(100%+4px)] left-0 bg-white",
+                  "border-3 border-memphis-cyan z-[100] overflow-hidden",
+                  "shadow-hard",
+                  isMobile ? "right-0" : "right-[54px]",
+                )}
+              >
+                <div
+                  className={cn(
+                    "px-3 py-1.5 text-[10px] text-memphis-cyan font-black",
+                    "uppercase tracking-[0.8px] border-b-3",
+                    "border-memphis-black bg-memphis-cyan/10",
+                  )}
+                >
                   Trie Suggestions — O(m) prefix match
                 </div>
                 {suggestions.map((s, i) => (
-                  <button key={i} onPointerDown={() => doSearch(s)}
+                  <button
+                    key={i}
+                    onPointerDown={() => doSearch(s)}
                     className={cn(
-                      "block w-full text-left bg-transparent border-none px-3.5 py-2.5 text-[13px] text-memphis-black/70 cursor-pointer transition-snap hover:bg-memphis-cyan/10 hover:text-memphis-black",
-                      i < suggestions.length - 1 && "border-b-2 border-memphis-black/10"
-                    )}>
-                    <span className="text-memphis-cyan mr-2 font-black">↳</span>{s}
+                      "block w-full text-left bg-transparent border-none",
+                      "px-3.5 py-2.5 text-[13px] text-memphis-black/70",
+                      "cursor-pointer transition-snap",
+                      "hover:bg-memphis-cyan/10 hover:text-memphis-black",
+                      i < suggestions.length - 1 &&
+                        "border-b-2 border-memphis-black/10",
+                    )}
+                  >
+                    <span className="text-memphis-cyan mr-2 font-black">↳</span>
+                    {s}
                   </button>
                 ))}
               </div>
@@ -422,11 +580,32 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
 
           {!result && !loading && !error && (
             <>
-              <p className="text-[10px] text-muted-foreground mb-2 font-semibold uppercase tracking-[0.6px]">Suggested searches</p>
-              <div className={cn("grid gap-1.5 mb-6", isMobile ? "grid-cols-1" : "grid-cols-2")}>
+              <p
+                className={cn(
+                  "text-[10px] text-muted-foreground mb-2 font-semibold",
+                  "uppercase tracking-[0.6px]",
+                )}
+              >
+                Suggested searches
+              </p>
+              <div
+                className={cn(
+                  "grid gap-1.5 mb-6",
+                  isMobile ? "grid-cols-1" : "grid-cols-2",
+                )}
+              >
                 {SEARCH_SUGGESTIONS.map((s, i) => (
-                  <button key={i} onClick={() => doSearch(s)}
-                    className="bg-card border border-border rounded-lg px-3.5 py-3 min-h-11 text-xs text-muted-foreground cursor-pointer text-left leading-[1.45] transition-all hover:border-emerald-500/40 hover:text-slate-300 hover:bg-emerald-500/5">
+                  <button
+                    key={i}
+                    onClick={() => doSearch(s)}
+                    className={cn(
+                      "bg-card border border-border rounded-lg px-3.5 py-3",
+                      "min-h-11 text-xs text-muted-foreground cursor-pointer",
+                      "text-left leading-[1.45] transition-all",
+                      "hover:border-emerald-500/40 hover:text-slate-300",
+                      "hover:bg-emerald-500/5",
+                    )}
+                  >
                     {s}
                   </button>
                 ))}
@@ -435,11 +614,28 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
           )}
 
           {loading && (
-            <div className="bg-card border border-emerald-500/20 border-l-[3px] border-l-emerald-500 rounded-[0_12px_12px_0] px-5 py-4 flex items-center gap-3.5" style={{ animation: "fadeInUp .2s ease-out" }}>
-              <div className="w-8 h-8 rounded-full border-[2.5px] border-muted border-t-emerald-500 animate-spin shrink-0" />
+            <div
+              className={cn(
+                "bg-card border border-emerald-500/20 border-l-[3px]",
+                "border-l-emerald-500 rounded-[0_12px_12px_0]",
+                "px-5 py-4 flex items-center gap-3.5",
+              )}
+              style={{ animation: "fadeInUp .2s ease-out" }}
+            >
+              <div
+                className={cn(
+                  "w-8 h-8 rounded-full border-[2.5px] border-muted",
+                  "border-t-emerald-500 animate-spin shrink-0",
+                )}
+              />
               <div>
-                <p className="text-sm text-foreground font-semibold mb-0.5">Searching the web…</p>
-                <p className="text-xs text-muted-foreground">Querying World Bank, IMF, Reuters, Bloomberg and authoritative sources</p>
+                <p className="text-sm text-foreground font-semibold mb-0.5">
+                  Searching the web…
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Querying World Bank, IMF, Reuters, Bloomberg and authoritative
+                  sources
+                </p>
               </div>
             </div>
           )}
@@ -447,7 +643,9 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
           {error && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertDescription><strong>Search error:</strong> {error}</AlertDescription>
+              <AlertDescription>
+                <strong>Search error:</strong> {error}
+              </AlertDescription>
             </Alert>
           )}
 
@@ -457,14 +655,25 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
                 <Badge variant={result.webSearchUsed ? "success" : "warning"}>
                   {result.webSearchUsed ? "Live Web Search" : "Model Knowledge"}
                 </Badge>
-                <span className="text-xs text-muted-foreground italic">"{searched}"</span>
+                <span className="text-xs text-muted-foreground italic">
+                  "{searched}"
+                </span>
                 <div className="ml-auto flex gap-2">
-                  <Button variant="outline" size="sm" className="text-xs"
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
                     onClick={exportSearch}
-                    title="Export research summary with cited sources as PDF/HTML">
+                    title="Export research summary with cited sources as PDF/HTML"
+                  >
                     Export ↓
                   </Button>
-                  <Button variant="outline" size="sm" className="text-xs" onClick={resetSearchView}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                    onClick={resetSearchView}
+                  >
                     Clear
                   </Button>
                 </div>
@@ -473,13 +682,26 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
               <div
                 className={cn(
                   "bg-card rounded-[0_12px_12px_0] p-5 mb-3.5 border border-l-[3px]",
-                  result.webSearchUsed ? "border-emerald-500/20 border-l-emerald-500" : "border-amber-500/20 border-l-amber-500"
+                  result.webSearchUsed
+                    ? "border-emerald-500/20 border-l-emerald-500"
+                    : "border-amber-500/20 border-l-amber-500",
                 )}
                 style={{ animation: "fadeInUp .25s ease-out" }}
               >
                 <div className="flex gap-2 items-center mb-3.5">
-                  {result.webSearchUsed ? <Globe2 className="w-4 h-4 text-emerald-500" /> : <BookOpen className="w-4 h-4 text-amber-500" />}
-                  <span className={cn("text-[10px] font-bold uppercase tracking-[0.7px]", result.webSearchUsed ? "text-emerald-500" : "text-amber-500")}>
+                  {result.webSearchUsed ? (
+                    <Globe2 className="w-4 h-4 text-emerald-500" />
+                  ) : (
+                    <BookOpen className="w-4 h-4 text-amber-500" />
+                  )}
+                  <span
+                    className={cn(
+                      "text-[10px] font-bold uppercase tracking-[0.7px]",
+                      result.webSearchUsed
+                        ? "text-emerald-500"
+                        : "text-amber-500",
+                    )}
+                  >
                     Research Summary
                   </span>
                 </div>
@@ -493,32 +715,71 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
                   </p>
                   <div className="flex flex-col gap-1.5">
                     {result.sources.slice(0, 12).map((s, i) =>
-                      s.url
-                        ? <a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
-                            className="text-[13px] text-memphis-black no-underline flex items-start gap-1.5 hover:underline">
-                            <span className="text-memphis-black/50 shrink-0">↗</span>{s.title}
-                          </a>
-                        : <span key={i} className="text-[13px] text-memphis-black/70 flex items-center gap-1.5">
-                            <BookOpen className="w-3.5 h-3.5" />{s.title}
+                      s.url ? (
+                        <a
+                          key={i}
+                          href={s.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={cn(
+                            "text-[13px] text-memphis-black no-underline",
+                            "flex items-start gap-1.5 hover:underline",
+                          )}
+                        >
+                          <span className="text-memphis-black/50 shrink-0">
+                            ↗
                           </span>
+                          {s.title}
+                        </a>
+                      ) : (
+                        <span
+                          key={i}
+                          className="text-[13px] text-memphis-black/70 flex items-center gap-1.5"
+                        >
+                          <BookOpen className="w-3.5 h-3.5" />
+                          {s.title}
+                        </span>
+                      ),
                     )}
                   </div>
                   {result.sources.length > 12 && (
-                    <p className="mt-2 text-[11px] text-memphis-black/60">+ {result.sources.length - 12} more sources available in export</p>
+                    <p className="mt-2 text-[11px] text-memphis-black/60">
+                      + {result.sources.length - 12} more sources available in
+                      export
+                    </p>
                   )}
                 </div>
               )}
 
               <div className="bg-card border border-border rounded-xl p-3.5">
-                <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-[0.6px] mb-2">Refine or follow up</p>
+                <p
+                  className={cn(
+                    "text-[10px] text-muted-foreground font-semibold uppercase",
+                    "tracking-[0.6px] mb-2",
+                  )}
+                >
+                  Refine or follow up
+                </p>
                 <div className={cn("flex gap-2", isMobile && "flex-col")}>
-                  <Input value={followQuery} onChange={e => setFollowQuery(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && doSearch(followQuery, { followUp: true })}
+                  <Input
+                    value={followQuery}
+                    onChange={(e) => setFollowQuery(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" &&
+                      doSearch(followQuery, { followUp: true })
+                    }
                     disabled={loading}
                     placeholder="Enter a follow-up or related search…"
-                    className="flex-1 focus-visible:ring-emerald-500 focus-visible:border-emerald-500" />
-                  <Button onClick={() => doSearch(followQuery, { followUp: true })} disabled={loading || !followQuery.trim()}
-                    className="bg-[#10B981] hover:bg-[#059669] font-bold min-h-11">
+                    className={cn(
+                      "flex-1",
+                      "focus-visible:ring-emerald-500 focus-visible:border-emerald-500",
+                    )}
+                  />
+                  <Button
+                    onClick={() => doSearch(followQuery, { followUp: true })}
+                    disabled={loading || !followQuery.trim()}
+                    className="bg-[#10B981] hover:bg-[#059669] font-bold min-h-11"
+                  >
                     Search
                   </Button>
                 </div>
@@ -527,7 +788,8 @@ export default function SearchMode({ token, isGuest = false }: SearchModeProps) 
           )}
 
           <p className="text-center text-[10px] text-border mt-5">
-            Powered by Kagi FastGPT · Sources: World Bank · IMF · Reuters · Bloomberg
+            Powered by Kagi FastGPT · Sources: World Bank · IMF · Reuters ·
+            Bloomberg
           </p>
         </div>
       </div>

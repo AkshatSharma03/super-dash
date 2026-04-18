@@ -74,7 +74,9 @@ const PLANS = [
 ];
 
 export default function BillingPanel({ token, onClose }: Props) {
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
+  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,14 +87,21 @@ export default function BillingPanel({ token, onClose }: Props) {
   }, []);
 
   useEffect(() => {
-    fetch("/api/billing/subscription", { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(data => {
+    fetch("/api/billing/subscription", {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => r.json())
+      .then((data) => {
         setSubscription(data);
         setLoading(false);
       })
       .catch(() => {
-        setSubscription({ plan: "free", status: "active", currentPeriodEnd: null, stripeCustomerId: null });
+        setSubscription({
+          plan: "free",
+          status: "active",
+          currentPeriodEnd: null,
+          stripeCustomerId: null,
+        });
         setLoading(false);
       });
   }, [token]);
@@ -103,7 +112,10 @@ export default function BillingPanel({ token, onClose }: Props) {
     try {
       const res = await fetch("/api/billing/create-checkout", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
       const data = await res.json();
       if (data.url) {
@@ -123,7 +135,10 @@ export default function BillingPanel({ token, onClose }: Props) {
     try {
       const res = await fetch("/api/billing/portal", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
       const data = await res.json();
       if (data.url) {
@@ -143,17 +158,33 @@ export default function BillingPanel({ token, onClose }: Props) {
   if (!mounted) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[130] bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-[130] bg-black/50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
       <div
-        className="bg-white border-3 border-memphis-black shadow-hard-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto"
-        onClick={e => e.stopPropagation()}
+        className={cn(
+          "bg-white border-3 border-memphis-black shadow-hard-lg max-w-4xl",
+          "w-full max-h-[90vh] overflow-y-auto",
+        )}
+        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-labelledby="billing-plans-title"
       >
         <div className="px-6 py-4 border-b-3 border-memphis-black flex items-center justify-between">
-          <h2 id="billing-plans-title" className="text-lg font-black uppercase tracking-wide">Billing & Plans</h2>
-          <button onClick={onClose} className="text-memphis-black/50 hover:text-memphis-black text-xl font-bold">×</button>
+          <h2
+            id="billing-plans-title"
+            className="text-lg font-black uppercase tracking-wide"
+          >
+            Billing & Plans
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-memphis-black/50 hover:text-memphis-black text-xl font-bold"
+          >
+            ×
+          </button>
         </div>
 
         {loading ? (
@@ -164,46 +195,80 @@ export default function BillingPanel({ token, onClose }: Props) {
           <div className="p-6">
             <div className="text-center mb-6">
               <p className="text-sm text-memphis-black/60">
-                You're currently on the <span className="font-bold text-memphis-black">{currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}</span> plan
+                You're currently on the{" "}
+                <span className="font-bold text-memphis-black">
+                  {currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)}
+                </span>{" "}
+                plan
                 {subscription?.currentPeriodEnd && (
-                  <span> · Renews {new Date(subscription.currentPeriodEnd * 1000).toLocaleDateString()}</span>
+                  <span>
+                    {" "}
+                    · Renews{" "}
+                    {new Date(
+                      subscription.currentPeriodEnd * 1000,
+                    ).toLocaleDateString()}
+                  </span>
                 )}
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {PLANS.map(plan => {
+              {PLANS.map((plan) => {
                 const Icon = plan.icon;
                 const isCurrentPlan = currentPlan === plan.id;
                 const isUpgrade = plan.id === "pro" && currentPlan === "free";
-                const isDowngrade = plan.id === "free" && currentPlan !== "free";
+                const isDowngrade =
+                  plan.id === "free" && currentPlan !== "free";
 
                 return (
                   <div
                     key={plan.id}
                     className={cn(
                       "border-3 p-5 flex flex-col",
-                      isCurrentPlan ? "border-memphis-black bg-memphis-offwhite shadow-hard" : "border-memphis-black/20 bg-white"
+                      isCurrentPlan
+                        ? "border-memphis-black bg-memphis-offwhite shadow-hard"
+                        : "border-memphis-black/20 bg-white",
                     )}
-                    style={isCurrentPlan ? { borderTopColor: plan.color, borderTopWidth: 4 } : undefined}
+                    style={
+                      isCurrentPlan
+                        ? { borderTopColor: plan.color, borderTopWidth: 4 }
+                        : undefined
+                    }
                   >
                     <div className="flex items-center gap-2 mb-3">
                       <Icon className="w-5 h-5" style={{ color: plan.color }} />
-                      <h3 className="font-black text-sm uppercase tracking-wide">{plan.name}</h3>
+                      <h3 className="font-black text-sm uppercase tracking-wide">
+                        {plan.name}
+                      </h3>
                       {isCurrentPlan && (
-                        <span className="text-[9px] font-bold bg-memphis-black text-white px-2 py-0.5 uppercase">Current</span>
+                        <span
+                          className={cn(
+                            "text-[9px] font-bold bg-memphis-black text-white",
+                            "px-2 py-0.5 uppercase",
+                          )}
+                        >
+                          Current
+                        </span>
                       )}
                     </div>
 
                     <div className="mb-4">
                       <span className="text-2xl font-black">{plan.price}</span>
-                      <span className="text-xs text-memphis-black/50">{plan.period}</span>
+                      <span className="text-xs text-memphis-black/50">
+                        {plan.period}
+                      </span>
                     </div>
 
                     <ul className="space-y-1.5 mb-6 flex-1">
                       {plan.features.map((f, i) => (
-                        <li key={i} className="flex items-start gap-1.5 text-[11px] text-memphis-black/70">
-                          <Check className="w-3 h-3 shrink-0 mt-0.5" style={{ color: plan.color }} />
+                        <li
+                          key={i}
+                          className="flex items-start gap-1.5 text-[11px] text-memphis-black/70"
+                        >
+                          <Check
+                            className="w-3 h-3 shrink-0 mt-0.5"
+                            style={{ color: plan.color }}
+                          />
                           <span>{f}</span>
                         </li>
                       ))}
@@ -212,7 +277,12 @@ export default function BillingPanel({ token, onClose }: Props) {
                     {plan.id === "enterprise" ? (
                       <a
                         href="mailto:sales@econchart.com?subject=Enterprise%20Plan"
-                        className="w-full py-2 text-center text-xs font-black uppercase tracking-wide border-2 border-memphis-black bg-white hover:bg-memphis-black hover:text-white transition-colors"
+                        className={cn(
+                          "w-full py-2 text-center text-xs font-black uppercase",
+                          "tracking-wide border-2 border-memphis-black bg-white",
+                          "hover:bg-memphis-black hover:text-white",
+                          "transition-colors",
+                        )}
                       >
                         Contact Sales
                       </a>
@@ -233,10 +303,19 @@ export default function BillingPanel({ token, onClose }: Props) {
                         className="w-full text-xs font-bold"
                         style={{ background: plan.color }}
                       >
-                        {checkoutLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : "Upgrade to Pro"}
+                        {checkoutLoading ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          "Upgrade to Pro"
+                        )}
                       </Button>
                     ) : (
-                      <div className="w-full py-2 text-center text-xs text-memphis-black/40 font-bold uppercase">
+                      <div
+                        className={cn(
+                          "w-full py-2 text-center text-xs text-memphis-black/40",
+                          "font-bold uppercase",
+                        )}
+                      >
                         {isDowngrade ? "Downgrade in portal" : "Current plan"}
                       </div>
                     )}
@@ -254,6 +333,6 @@ export default function BillingPanel({ token, onClose }: Props) {
         )}
       </div>
     </div>,
-    document.body
+    document.body,
   );
 }

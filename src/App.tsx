@@ -1,15 +1,27 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// APP SHELL — Memphis Design Edition — Bold colors, thick borders, geometric patterns
-// ─────────────────────────────────────────────────────────────────────────────
-import { useState, useEffect, useCallback, useRef, lazy, Suspense, type ComponentType } from "react";
+// App shell: mode navigation, auth state, and shared dataset loading.
+import {
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  lazy,
+  Suspense,
+  type MutableRefObject,
+} from "react";
 import { useAuth, useClerk, useUser } from "@clerk/react";
 import type { Mode, User, CountryDataset } from "./types";
 import { useMobile } from "./utils/useMobile";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { getCountryData, refreshCountryData, logoutApi, setAuthTokenGetter } from "./utils/api";
+import {
+  getCountryData,
+  refreshCountryData,
+  logoutApi,
+  setAuthTokenGetter,
+} from "./utils/api";
 import { identifyUser, resetUser, track } from "./analytics";
-import { BarChart3, MessageSquare, Search, Database, LineChart, Download, Menu, X, ChevronDown, BookOpen } from "lucide-react";
+import { BarChart3, ChevronDown, Download, Menu, X } from "lucide-react";
+import { MOBILE_PRIMARY_MODES, MODE_META, MODES } from "./config/modes";
 
 const AuthPage = lazy(() => import("./components/auth/AuthPage"));
 const SettingsPanel = lazy(() => import("./components/auth/SettingsPanel"));
@@ -19,28 +31,142 @@ const SearchMode = lazy(() => import("./components/modes/SearchMode"));
 const DataMode = lazy(() => import("./components/modes/DataMode"));
 const AnalyticsMode = lazy(() => import("./components/modes/AnalyticsMode"));
 const ExportMode = lazy(() => import("./components/modes/ExportMode"));
-const MethodologyMode = lazy(() => import("./components/modes/MethodologyMode"));
+const MethodologyMode = lazy(
+  () => import("./components/modes/MethodologyMode"),
+);
 
-const MODES: { mode: Mode; label: string; Icon: ComponentType<{ className?: string }> }[] = [
-  { mode: "chat", label: "AI Chat", Icon: MessageSquare },
-  { mode: "search", label: "Search", Icon: Search },
-  { mode: "data", label: "Data", Icon: Database },
-  { mode: "analytics", label: "Analytics", Icon: LineChart },
-  { mode: "dashboard", label: "Country Data", Icon: BarChart3 },
-  { mode: "methodology", label: "Methodology", Icon: BookOpen },
-  { mode: "export", label: "Export", Icon: Download },
-];
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
 
-/* Unified Memphis Color Palette for all modes */
-const MODE_META: Record<Mode, { label: string; desc: string; color: string; bg: string }> = {
-  chat:      { label: "AI Chat",       color: "#FF006E", bg: "#FF006E", desc: "Ask any economic question — Kagi FastGPT generates analysis from your query" },
-  search:    { label: "Web Search",    color: "#00D9FF", bg: "#00D9FF", desc: "Live web search · Kagi FastGPT · cited economic sources" },
-  data:      { label: "Data Upload",   color: "#FB5607", bg: "#FB5607", desc: "Upload a CSV file · Claude analyses your data and creates charts automatically" },
-  analytics: { label: "Analytics",     color: "#FFBE0B", bg: "#FFBE0B", desc: "Algorithms from scratch: OLS Regression · HHI Concentration · K-Means Clustering · Z-Score Anomaly Detection" },
-  dashboard: { label: "Country Data",  color: "#8338EC", bg: "#8338EC", desc: "Select any country — real GDP & trade data from World Bank, cached locally · sector breakdown AI-estimated" },
-  methodology: { label: "Methodology",  color: "#10B981", bg: "#10B981", desc: "Explore how each algorithm works — formulas, parameters, assumptions, and references" },
-  export:    { label: "Export",        color: "#00F5D4", bg: "#00F5D4", desc: "Download data as CSV / JSON · Generate standalone HTML reports with embedded SVG charts · Print to PDF" },
-};
+async function runDatasetRequest(params: {
+  nextRequestId: number;
+  latestRequestIdRef: MutableRefObject<number>;
+  setLoading: (value: boolean) => void;
+  setError: (value: string | null) => void;
+  setData: (value: CountryDataset) => void;
+  request: () => Promise<CountryDataset>;
+  fallbackError: string;
+}) {
+  const {
+    nextRequestId,
+    latestRequestIdRef,
+    setLoading,
+    setError,
+    setData,
+    request,
+    fallbackError,
+  } = params;
+
+  setLoading(true);
+  setError(null);
+
+  try {
+    const data = await request();
+    if (nextRequestId !== latestRequestIdRef.current) return;
+    setData(data);
+  } catch (error) {
+    if (nextRequestId !== latestRequestIdRef.current) return;
+    setError(getErrorMessage(error, fallbackError));
+  } finally {
+    if (nextRequestId !== latestRequestIdRef.current) return;
+    setLoading(false);
+  }
+}
+
+interface ModeContentParams {
+  mode: Mode;
+  token: string;
+  user: User;
+  countryData: CountryDataset | null;
+  countryLoading: boolean;
+  countryError: string | null;
+  analyticsData: CountryDataset | null;
+  analyticsLoading: boolean;
+  analyticsError: string | null;
+  loadCountry: (code: string, token: string) => Promise<void>;
+  loadAnalyticsCountry: (code: string, token: string) => Promise<void>;
+  handleRefreshCountry: (token: string, countryCode: string) => Promise<void>;
+}
+
+function renderModeContent(params: ModeContentParams) {
+  const {
+    mode,
+    token,
+    user,
+    countryData,
+    countryLoading,
+    countryError,
+    analyticsData,
+    analyticsLoading,
+    analyticsError,
+    loadCountry,
+    loadAnalyticsCountry,
+    handleRefreshCountry,
+  } = params;
+
+  if (mode === "chat") {
+    return (
+      <div className="max-w-[1060px] mx-auto h-full flex flex-col">
+        <ChatMode token={token} isGuest={user.isGuest ?? false} />
+      </div>
+    );
+  }
+
+  if (mode === "search") {
+    return <SearchMode token={token} isGuest={user.isGuest ?? false} />;
+  }
+
+  if (mode === "data") {
+    return <DataMode />;
+  }
+
+  if (mode === "analytics") {
+    return (
+      <AnalyticsMode
+        token={token}
+        dataset={analyticsData}
+        loading={analyticsLoading}
+        error={analyticsError}
+        onSelectCountry={(code) => loadAnalyticsCountry(code, token)}
+      />
+    );
+  }
+
+  if (mode === "dashboard") {
+    return (
+      <div className="max-w-[1100px] mx-auto">
+        <DashboardMode
+          token={token}
+          dataset={countryData}
+          loading={countryLoading}
+          error={countryError}
+          onSelectCountry={(code) => loadCountry(code, token)}
+          onRefresh={() =>
+            countryData && handleRefreshCountry(token, countryData.code)
+          }
+        />
+      </div>
+    );
+  }
+
+  if (mode === "export") {
+    return (
+      <div className="max-w-[1100px] mx-auto">
+        <ExportMode
+          dashDataset={countryData}
+          analyticsDataset={analyticsData}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-[1100px] mx-auto">
+      <MethodologyMode />
+    </div>
+  );
+}
 
 export default function App() {
   const { isLoaded: clerkLoaded, isSignedIn, getToken } = useAuth();
@@ -55,75 +181,72 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isMobile = useMobile();
 
-  const MOBILE_PRIMARY_MODES: Mode[] = ["chat", "search", "data", "analytics", "dashboard", "methodology"];
-
   const switchMode = (nextMode: Mode) => {
     setMode(nextMode);
     setMobileMenuOpen(false);
     track("mode_viewed", { mode: nextMode });
   };
 
-  // ── Country data — lives here so fetches survive tab switches ───────────────
+  // Country data lives in App so it survives mode switches.
   const [countryData, setCountryData] = useState<CountryDataset | null>(null);
   const [countryLoading, setCountryLoading] = useState(false);
   const [countryError, setCountryError] = useState<string | null>(null);
 
-  const [analyticsData, setAnalyticsData] = useState<CountryDataset | null>(null);
+  const [analyticsData, setAnalyticsData] = useState<CountryDataset | null>(
+    null,
+  );
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const countryReqIdRef = useRef(0);
   const analyticsReqIdRef = useRef(0);
 
   const loadCountry = useCallback(async (code: string, tok: string) => {
-    const reqId = ++countryReqIdRef.current;
-    setCountryLoading(true);
-    setCountryError(null);
-    try {
-      const data = await getCountryData(code, tok);
-      if (reqId !== countryReqIdRef.current) return;
-      setCountryData(data);
-    } catch (e) {
-      if (reqId !== countryReqIdRef.current) return;
-      setCountryError(e instanceof Error ? e.message : "Failed to load country data");
-    } finally {
-      if (reqId !== countryReqIdRef.current) return;
-      setCountryLoading(false);
-    }
+    const nextRequestId = ++countryReqIdRef.current;
+
+    await runDatasetRequest({
+      nextRequestId,
+      latestRequestIdRef: countryReqIdRef,
+      setLoading: setCountryLoading,
+      setError: setCountryError,
+      setData: setCountryData,
+      request: () => getCountryData(code, tok),
+      fallbackError: "Failed to load country data",
+    });
   }, []);
 
-  const loadAnalyticsCountry = useCallback(async (code: string, tok: string) => {
-    const reqId = ++analyticsReqIdRef.current;
-    setAnalyticsLoading(true);
-    setAnalyticsError(null);
-    try {
-      const data = await getCountryData(code, tok);
-      if (reqId !== analyticsReqIdRef.current) return;
-      setAnalyticsData(data);
-    } catch (e) {
-      if (reqId !== analyticsReqIdRef.current) return;
-      setAnalyticsError(e instanceof Error ? e.message : "Failed to load country data");
-    } finally {
-      if (reqId !== analyticsReqIdRef.current) return;
-      setAnalyticsLoading(false);
-    }
-  }, []);
+  const loadAnalyticsCountry = useCallback(
+    async (code: string, tok: string) => {
+      const nextRequestId = ++analyticsReqIdRef.current;
 
-  const handleRefreshCountry = useCallback(async (tok: string, currentCode: string) => {
-    const reqId = ++countryReqIdRef.current;
-    setCountryLoading(true);
-    setCountryError(null);
-    try {
-      const data = await refreshCountryData(currentCode, tok);
-      if (reqId !== countryReqIdRef.current) return;
-      setCountryData(data);
-    } catch (e) {
-      if (reqId !== countryReqIdRef.current) return;
-      setCountryError(e instanceof Error ? e.message : "Refresh failed");
-    } finally {
-      if (reqId !== countryReqIdRef.current) return;
-      setCountryLoading(false);
-    }
-  }, []);
+      await runDatasetRequest({
+        nextRequestId,
+        latestRequestIdRef: analyticsReqIdRef,
+        setLoading: setAnalyticsLoading,
+        setError: setAnalyticsError,
+        setData: setAnalyticsData,
+        request: () => getCountryData(code, tok),
+        fallbackError: "Failed to load country data",
+      });
+    },
+    [],
+  );
+
+  const handleRefreshCountry = useCallback(
+    async (tok: string, currentCode: string) => {
+      const nextRequestId = ++countryReqIdRef.current;
+
+      await runDatasetRequest({
+        nextRequestId,
+        latestRequestIdRef: countryReqIdRef,
+        setLoading: setCountryLoading,
+        setError: setCountryError,
+        setData: setCountryData,
+        request: () => refreshCountryData(currentCode, tok),
+        fallbackError: "Refresh failed",
+      });
+    },
+    [],
+  );
 
   // Restore guest session on mount
   useEffect(() => {
@@ -162,7 +285,8 @@ export default function App() {
 
     if (isSignedIn && clerkUser) {
       const primaryEmail = clerkUser.primaryEmailAddress?.emailAddress ?? "";
-      const fullName = clerkUser.fullName || clerkUser.firstName || primaryEmail || "User";
+      const fullName =
+        clerkUser.fullName || clerkUser.firstName || primaryEmail || "User";
       const mappedUser: User = {
         id: clerkUser.id,
         email: primaryEmail,
@@ -211,27 +335,43 @@ export default function App() {
   };
 
   if (!authReady) return null;
-  if (!user) return (
-    <Suspense fallback={null}>
-      <AuthPage onGuestAuth={handleGuestAuth} />
-    </Suspense>
-  );
+  if (!user)
+    return (
+      <Suspense fallback={null}>
+        <AuthPage onGuestAuth={handleGuestAuth} />
+      </Suspense>
+    );
 
   const { label, desc } = MODE_META[mode];
-  const ActiveModeIcon = MODES.find(m => m.mode === mode)?.Icon ?? BarChart3;
+  const ActiveModeIcon = MODES.find((m) => m.mode === mode)?.Icon ?? BarChart3;
   const fetchingInBg = countryLoading && mode !== "dashboard";
 
   return (
-    <div className="bg-memphis-offwhite h-[100dvh] flex flex-col text-memphis-black" style={{ fontFamily: "Inter,sans-serif" }}>
-
+    <div
+      className="bg-memphis-offwhite h-[100dvh] flex flex-col text-memphis-black"
+      style={{ fontFamily: "Inter,sans-serif" }}
+    >
       {isMobile && mobileMenuOpen && (
-        <div className="fixed inset-0 z-[120] bg-black/55" onClick={() => setMobileMenuOpen(false)} />
+        <div
+          className="fixed inset-0 z-[120] bg-black/55"
+          onClick={() => setMobileMenuOpen(false)}
+        />
       )}
 
       {/* ── Memphis Header with Zigzag Pattern ── */}
-      <header className="ec-header px-3 sm:px-6 py-3 sm:py-4 border-b-4 sm:border-b-4 border-b-3 border-memphis-black flex items-center gap-2 sm:gap-4 shrink-0 flex-wrap bg-white relative">
+      <header
+        className={cn(
+          "ec-header px-3 sm:px-6 py-3 sm:py-4 border-b-4 sm:border-b-4",
+          "border-b-3 border-memphis-black flex items-center gap-2 sm:gap-4",
+          "shrink-0 flex-wrap bg-white relative",
+        )}
+      >
         {/* Zigzag decoration at bottom - hidden on mobile */}
-        <div className="absolute bottom-0 left-0 right-0 h-3 bg-repeating-linear-gradient pattern-zigzag hidden sm:block" 
+        <div
+          className={cn(
+            "absolute bottom-0 left-0 right-0 h-3 bg-repeating-linear-gradient",
+            "pattern-zigzag hidden sm:block",
+          )}
           style={{
             background: `repeating-linear-gradient(
               45deg,
@@ -239,17 +379,30 @@ export default function App() {
               #FF006E 6px,
               transparent 6px,
               transparent 12px
-            )`
+            )`,
           }}
         />
 
         {/* Brand — Bold Memphis Style */}
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 border-2 sm:border-3 border-memphis-black flex items-center justify-center text-base sm:text-lg font-black shadow-hard-sm sm:shadow-hard"
-            style={{ background: "#FF006E" }}>
+          <div
+            className={cn(
+              "w-8 h-8 sm:w-10 sm:h-10 border-2 sm:border-3 border-memphis-black",
+              "flex items-center justify-center text-base sm:text-lg font-black",
+              "shadow-hard-sm sm:shadow-hard",
+            )}
+            style={{ background: "#FF006E" }}
+          >
             <BarChart3 className="w-4 h-4 sm:w-5 sm:h-5" />
           </div>
-          <span className="text-base sm:text-lg font-black text-memphis-black tracking-tight uppercase">EconChart</span>
+          <span
+            className={cn(
+              "text-base sm:text-lg font-black text-memphis-black",
+              "tracking-tight uppercase",
+            )}
+          >
+            EconChart
+          </span>
         </div>
 
         {isMobile && (
@@ -257,7 +410,7 @@ export default function App() {
             variant="outline"
             size="icon"
             className="ml-auto"
-            onClick={() => setMobileMenuOpen(v => !v)}
+            onClick={() => setMobileMenuOpen((v) => !v)}
             aria-label="Open mobile menu"
           >
             <Menu className="w-4 h-4" />
@@ -265,7 +418,13 @@ export default function App() {
         )}
 
         {/* Mode tabs — Memphis Bold Tabs */}
-        <nav className={cn("ec-tabs ml-4 flex bg-memphis-offwhite border-3 border-memphis-black shadow-hard p-1 gap-1 flex-nowrap", isMobile && "hidden")}>
+        <nav
+          className={cn(
+            "ec-tabs ml-4 flex bg-memphis-offwhite border-3 border-memphis-black",
+            "shadow-hard p-1 gap-1 flex-nowrap",
+            isMobile && "hidden",
+          )}
+        >
           {MODES.map(({ mode: m, label: modeLabel, Icon }) => {
             const isBgFetch = m === "dashboard" && fetchingInBg;
             const isActive = mode === m;
@@ -274,16 +433,27 @@ export default function App() {
                 key={m}
                 onClick={() => switchMode(m)}
                 className={cn(
-                  "border-3 px-4 py-2 text-xs font-black uppercase tracking-wide transition-snap whitespace-nowrap flex items-center gap-2 shadow-hard-sm",
+                  "border-3 px-4 py-2 text-xs font-black uppercase tracking-wide",
+                  "transition-snap whitespace-nowrap flex items-center gap-2",
+                  "shadow-hard-sm",
                   isActive
                     ? "bg-memphis-black text-white border-memphis-black shadow-hard"
-                    : "bg-white text-memphis-black border-memphis-black hover:-translate-x-px hover:-translate-y-px hover:shadow-hard"
+                    : cn(
+                        "bg-white text-memphis-black border-memphis-black",
+                        "hover:-translate-x-px hover:-translate-y-px",
+                        "hover:shadow-hard",
+                      ),
                 )}
               >
                 <Icon className="w-4 h-4" />
-                <span className={cn("ec-tab-text", isMobile ? "hidden" : "")}>{modeLabel}</span>
+                <span className={cn("ec-tab-text", isMobile ? "hidden" : "")}>
+                  {modeLabel}
+                </span>
                 {isBgFetch && (
-                  <span className="w-2 h-2 border-2 border-white inline-block" style={{ animation: "ecPulse 1s steps(1) infinite" }} />
+                  <span
+                    className="w-2 h-2 border-2 border-white inline-block"
+                    style={{ animation: "ecPulse 1s steps(1) infinite" }}
+                  />
                 )}
               </button>
             );
@@ -291,22 +461,47 @@ export default function App() {
         </nav>
 
         {/* User chip */}
-        <div className={cn("ec-user-chip ml-auto items-center gap-3", isMobile ? "hidden" : "flex")}>
+        <div
+          className={cn(
+            "ec-user-chip ml-auto items-center gap-3",
+            isMobile ? "hidden" : "flex",
+          )}
+        >
           {user.isGuest ? (
             <>
-              <span className="text-xs font-bold text-memphis-black/60 uppercase tracking-wide">Guest</span>
+              <span className="text-xs font-bold text-memphis-black/60 uppercase tracking-wide">
+                Guest
+              </span>
               <Button size="sm" onClick={logout}>
                 Sign Up
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" size="sm" onClick={() => setSettingsOpen(true)} className="gap-2">
-                <div className="w-7 h-7 border-2 border-memphis-black flex items-center justify-center text-xs font-black text-white shrink-0 shadow-hard-sm"
-                  style={{ background: "#FF006E" }}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSettingsOpen(true)}
+                className="gap-2"
+              >
+                <div
+                  className={cn(
+                    "w-7 h-7 border-2 border-memphis-black flex items-center",
+                    "justify-center text-xs font-black text-white shrink-0",
+                    "shadow-hard-sm",
+                  )}
+                  style={{ background: "#FF006E" }}
+                >
                   {user.name.charAt(0).toUpperCase()}
                 </div>
-                <span className="ec-user-name max-w-[120px] overflow-hidden text-ellipsis whitespace-nowrap font-bold">{user.name}</span>
+                <span
+                  className={cn(
+                    "ec-user-name max-w-[120px] overflow-hidden text-ellipsis",
+                    "whitespace-nowrap font-bold",
+                  )}
+                >
+                  {user.name}
+                </span>
                 <ChevronDown className="w-3.5 h-3.5" />
               </Button>
               <Button variant="outline" size="sm" onClick={logout}>
@@ -320,34 +515,63 @@ export default function App() {
       {isMobile && (
         <aside
           className={cn(
-            "fixed top-0 right-0 h-[100dvh] w-[82vw] max-w-[320px] z-[130] bg-white border-l-3 border-memphis-black shadow-hard-lg p-4 transition-transform duration-150",
-            mobileMenuOpen ? "translate-x-0" : "translate-x-full"
+            "fixed top-0 right-0 h-[100dvh] w-[82vw] max-w-[320px]",
+            "z-[130] bg-white border-l-3 border-memphis-black shadow-hard-lg",
+            "p-4 transition-transform duration-150",
+            mobileMenuOpen ? "translate-x-0" : "translate-x-full",
           )}
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-black uppercase tracking-wide">Menu</span>
-            <Button variant="outline" size="icon" onClick={() => setMobileMenuOpen(false)} aria-label="Close mobile menu"><X className="w-4 h-4" /></Button>
+            <span className="text-xs font-black uppercase tracking-wide">
+              Menu
+            </span>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="Close mobile menu"
+            >
+              <X className="w-4 h-4" />
+            </Button>
           </div>
 
           <div className="border-3 border-memphis-black bg-memphis-offwhite p-1 mb-4">
             <button
               onClick={() => switchMode("export")}
               className={cn(
-                "w-full min-h-11 text-left px-3 py-2 border-3 font-black text-xs uppercase tracking-wide transition-snap",
-                mode === "export" ? "bg-memphis-black text-white border-memphis-black" : "bg-white text-memphis-black border-memphis-black"
+                "w-full min-h-11 text-left px-3 py-2 border-3 font-black",
+                "text-xs uppercase tracking-wide transition-snap",
+                mode === "export"
+                  ? "bg-memphis-black text-white border-memphis-black"
+                  : "bg-white text-memphis-black border-memphis-black",
               )}
             >
-              <span className="inline-flex items-center gap-2"><Download className="w-4 h-4" /> Export Center</span>
+              <span className="inline-flex items-center gap-2">
+                <Download className="w-4 h-4" /> Export Center
+              </span>
             </button>
           </div>
 
           <div className="flex flex-col gap-2">
             {!user.isGuest && (
-              <Button variant="outline" size="sm" className="justify-start" onClick={() => { setSettingsOpen(true); setMobileMenuOpen(false); }}>
+              <Button
+                variant="outline"
+                size="sm"
+                className="justify-start"
+                onClick={() => {
+                  setSettingsOpen(true);
+                  setMobileMenuOpen(false);
+                }}
+              >
                 Settings
               </Button>
             )}
-            <Button variant="outline" size="sm" className="justify-start" onClick={logout}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="justify-start"
+              onClick={logout}
+            >
               {user.isGuest ? "Sign Up" : "Log Out"}
             </Button>
           </div>
@@ -355,9 +579,16 @@ export default function App() {
       )}
 
       {/* ── Mode badge + description with Stripe Pattern ── */}
-      <div className="px-3 sm:px-6 py-2 sm:py-3 border-b-3 sm:border-b-4 border-memphis-black shrink-0 flex items-center gap-2 sm:gap-3 bg-memphis-yellow relative">
+      <div
+        className={cn(
+          "px-3 sm:px-6 py-2 sm:py-3 border-b-3 sm:border-b-4",
+          "border-memphis-black shrink-0 flex items-center gap-2 sm:gap-3",
+          "bg-memphis-yellow relative",
+        )}
+      >
         {/* Stripe decoration - thinner on mobile */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 sm:h-2"
+        <div
+          className="absolute top-0 left-0 right-0 h-1.5 sm:h-2"
           style={{
             background: `repeating-linear-gradient(
               90deg,
@@ -367,87 +598,101 @@ export default function App() {
               #00D9FF 16px,
               #FB5607 16px,
               #FB5607 24px
-            )`
+            )`,
           }}
         />
         <div className="w-1 h-5 sm:h-6 bg-memphis-black mt-1.5 sm:mt-2" />
-        <span className="mt-2 text-xs border-3 border-memphis-black px-3 py-1 font-black uppercase tracking-wider bg-white shadow-hard-sm">
-          <span className="inline-flex items-center gap-2"><ActiveModeIcon className="w-3.5 h-3.5" /> {label}</span>
+        <span
+          className={cn(
+            "mt-2 text-xs border-3 border-memphis-black px-3 py-1",
+            "font-black uppercase tracking-wider bg-white shadow-hard-sm",
+          )}
+        >
+          <span className="inline-flex items-center gap-2">
+            <ActiveModeIcon className="w-3.5 h-3.5" /> {label}
+          </span>
         </span>
-        <span className="ec-mode-desc mt-2 text-xs font-semibold text-memphis-black/70">{desc}</span>
+        <span className="ec-mode-desc mt-2 text-xs font-semibold text-memphis-black/70">
+          {desc}
+        </span>
         {fetchingInBg && (
-          <span className="mt-2 ml-auto text-xs font-bold text-memphis-pink flex items-center gap-2 uppercase">
-            <span className="w-2 h-2 bg-memphis-pink border-2 border-memphis-black inline-block" style={{ animation: "ecPulse 1s steps(1) infinite" }} />
+          <span
+            className={cn(
+              "mt-2 ml-auto text-xs font-bold text-memphis-pink",
+              "flex items-center gap-2 uppercase",
+            )}
+          >
+            <span
+              className="w-2 h-2 bg-memphis-pink border-2 border-memphis-black inline-block"
+              style={{ animation: "ecPulse 1s steps(1) infinite" }}
+            />
             Loading Data…
           </span>
         )}
       </div>
 
       {/* ── Main content with Dot Pattern ── */}
-      <main className={cn(
-        "flex-1 relative",
-        mode === "chat"
-          ? "overflow-hidden p-3 sm:p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-0"
-          : "overflow-y-auto p-3 sm:p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-6"
-      )}>
+      <main
+        className={cn(
+          "flex-1 relative",
+          mode === "chat"
+            ? "overflow-hidden p-3 sm:p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-0"
+            : "overflow-y-auto p-3 sm:p-6 pb-[calc(5rem+env(safe-area-inset-bottom))] sm:pb-6",
+        )}
+      >
         {/* Dot pattern background */}
-        <div className="absolute inset-0 opacity-30 pointer-events-none"
+        <div
+          className="absolute inset-0 opacity-30 pointer-events-none"
           style={{
             backgroundImage: `radial-gradient(#00D9FF 2px, transparent 2px)`,
-            backgroundSize: '24px 24px'
+            backgroundSize: "24px 24px",
           }}
         />
         <div className={cn("relative z-10", mode === "chat" && "h-full")}>
           <Suspense
             fallback={
               <div className="max-w-[1100px] mx-auto py-10 text-center">
-                <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-wide text-memphis-black/60">
-                  <span className="w-2 h-2 bg-memphis-pink border-2 border-memphis-black inline-block" style={{ animation: "ecPulse 1s steps(1) infinite" }} />
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-2 text-xs font-black",
+                    "uppercase tracking-wide text-memphis-black/60",
+                  )}
+                >
+                  <span
+                    className="w-2 h-2 bg-memphis-pink border-2 border-memphis-black inline-block"
+                    style={{ animation: "ecPulse 1s steps(1) infinite" }}
+                  />
                   Loading view
                 </span>
               </div>
             }
           >
-            {mode === "chat" && <div className="max-w-[1060px] mx-auto h-full flex flex-col"><ChatMode token={token} isGuest={user.isGuest ?? false} /></div>}
-            {mode === "search" && <SearchMode token={token} isGuest={user.isGuest ?? false} />}
-            {mode === "data" && <DataMode />}
-            {mode === "analytics" && (
-              <AnalyticsMode
-                token={token}
-                dataset={analyticsData}
-                loading={analyticsLoading}
-                error={analyticsError}
-                onSelectCountry={code => loadAnalyticsCountry(code, token)}
-              />
-            )}
-            {mode === "dashboard" && (
-              <div className="max-w-[1100px] mx-auto">
-                <DashboardMode
-                  token={token}
-                  dataset={countryData}
-                  loading={countryLoading}
-                  error={countryError}
-                  onSelectCountry={code => loadCountry(code, token)}
-                  onRefresh={() => countryData && handleRefreshCountry(token, countryData.code)}
-                />
-              </div>
-            )}
-            {mode === "export" && (
-              <div className="max-w-[1100px] mx-auto">
-                <ExportMode dashDataset={countryData} analyticsDataset={analyticsData} />
-              </div>
-            )}
-            {mode === "methodology" && (
-              <div className="max-w-[1100px] mx-auto">
-                <MethodologyMode />
-              </div>
-            )}
+            {renderModeContent({
+              mode,
+              token,
+              user,
+              countryData,
+              countryLoading,
+              countryError,
+              analyticsData,
+              analyticsLoading,
+              analyticsError,
+              loadCountry,
+              loadAnalyticsCountry,
+              handleRefreshCountry,
+            })}
           </Suspense>
         </div>
       </main>
 
       {isMobile && (
-        <nav className="fixed bottom-0 left-0 right-0 z-[110] bg-white border-t-3 border-memphis-black px-1 pt-1 pb-[max(8px,env(safe-area-inset-bottom))]">
+        <nav
+          className={cn(
+            "fixed bottom-0 left-0 right-0 z-[110] bg-white border-t-3",
+            "border-memphis-black px-1 pt-1",
+            "pb-[max(8px,env(safe-area-inset-bottom))]",
+          )}
+        >
           <div className="grid grid-cols-3 gap-1">
             {MOBILE_PRIMARY_MODES.map((m) => {
               const def = MODES.find((modeDef) => modeDef.mode === m);
@@ -458,13 +703,19 @@ export default function App() {
                   key={m}
                   onClick={() => switchMode(m)}
                   className={cn(
-                    "min-h-11 px-1.5 py-1 border-2 border-memphis-black flex flex-col items-center justify-center text-[10px] font-black uppercase tracking-wide",
-                    active ? "bg-memphis-black text-white" : "bg-memphis-offwhite text-memphis-black"
+                    "min-h-11 px-1.5 py-1 border-2 border-memphis-black",
+                    "flex flex-col items-center justify-center text-[10px]",
+                    "font-black uppercase tracking-wide",
+                    active
+                      ? "bg-memphis-black text-white"
+                      : "bg-memphis-offwhite text-memphis-black",
                   )}
                   aria-label={def?.label ?? m}
                 >
                   <Icon className="w-4 h-4 leading-none" />
-                  <span className="leading-none mt-1">{def?.label.split(" ")[0]}</span>
+                  <span className="leading-none mt-1">
+                    {def?.label.split(" ")[0]}
+                  </span>
                 </button>
               );
             })}

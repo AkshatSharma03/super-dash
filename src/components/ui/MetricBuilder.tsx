@@ -1,7 +1,19 @@
 import { useState, useMemo } from "react";
-import { evaluateMetric, validateExpression, KNOWN_VARIABLES } from "../../algorithms/expressionEvaluator";
+import {
+  evaluateMetric,
+  validateExpression,
+  KNOWN_VARIABLES,
+} from "../../algorithms/expressionEvaluator";
 import type { CountryDataset } from "../../types";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 import { TT, GRID, AX } from "../../config/styles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +29,13 @@ interface Props {
   isGuest: boolean;
 }
 
-export default function MetricBuilder({ dataset, savedMetrics, onSave, onDelete, isGuest }: Props) {
+export default function MetricBuilder({
+  dataset,
+  savedMetrics,
+  onSave,
+  onDelete,
+  isGuest,
+}: Props) {
   const [expression, setExpression] = useState("");
   const [metricName, setMetricName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -29,7 +47,13 @@ export default function MetricBuilder({ dataset, savedMetrics, onSave, onDelete,
   }, [expression]);
 
   const evaluated = useMemo(() => {
-    if (!dataset || !expression.trim() || !validation.valid || !validation.variables) return null;
+    if (
+      !dataset ||
+      !expression.trim() ||
+      !validation.valid ||
+      !validation.variables
+    )
+      return null;
     try {
       return evaluateMetric(expression, {
         gdpData: dataset.gdpData,
@@ -56,12 +80,16 @@ export default function MetricBuilder({ dataset, savedMetrics, onSave, onDelete,
     }
   };
 
-  const unknownVars = (validation.variables ?? []).filter(v => !KNOWN_VARIABLES[v]);
+  const unknownVars = (validation.variables ?? []).filter(
+    (v) => !KNOWN_VARIABLES[v],
+  );
 
   return (
     <div className="space-y-4">
       <div className="border-3 border-memphis-black bg-white shadow-hard-sm p-4">
-        <h4 className="text-xs font-black uppercase tracking-wider text-memphis-black/50 mb-3">Define Custom Metric</h4>
+        <h4 className="text-xs font-black uppercase tracking-wider text-memphis-black/50 mb-3">
+          Define Custom Metric
+        </h4>
 
         {isGuest && (
           <div className="mb-3 p-2.5 bg-amber-50 border-2 border-amber-200 text-[11px] text-amber-800">
@@ -73,17 +101,42 @@ export default function MetricBuilder({ dataset, savedMetrics, onSave, onDelete,
           <Input
             placeholder="Metric name"
             value={metricName}
-            onChange={e => setMetricName(e.target.value)}
+            onChange={(e) => setMetricName(e.target.value)}
             className="text-xs h-9"
           />
           <Input
             placeholder="e.g. (exports - imports) / gdp * 100"
             value={expression}
-            onChange={e => setExpression(e.target.value)}
-            className={cn("text-xs h-9 font-mono", !validation.valid && expression && "border-red-400 focus-visible:ring-red-400")}
+            onChange={(e) => setExpression(e.target.value)}
+            className={cn(
+              "text-xs h-9 font-mono",
+              !validation.valid &&
+                expression &&
+                "border-red-400 focus-visible:ring-red-400",
+            )}
           />
-          <Button onClick={handleSave} disabled={!metricName.trim() || !expression.trim() || !validation.valid || saving || isGuest} size="sm" className="h-9 gap-1.5">
-            {saving ? <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          <Button
+            onClick={handleSave}
+            disabled={
+              !metricName.trim() ||
+              !expression.trim() ||
+              !validation.valid ||
+              saving ||
+              isGuest
+            }
+            size="sm"
+            className="h-9 gap-1.5"
+          >
+            {saving ? (
+              <span
+                className={cn(
+                  "w-3 h-3 border-2 border-white border-t-transparent rounded-full",
+                  "animate-spin",
+                )}
+              />
+            ) : (
+              <Save className="w-3.5 h-3.5" />
+            )}
             Save
           </Button>
         </div>
@@ -98,7 +151,8 @@ export default function MetricBuilder({ dataset, savedMetrics, onSave, onDelete,
         {unknownVars.length > 0 && (
           <div className="flex items-center gap-1.5 text-[11px] text-amber-600 mb-2">
             <AlertTriangle className="w-3 h-3" />
-            Unknown variables: {unknownVars.join(", ")} — they will evaluate to null
+            Unknown variables: {unknownVars.join(", ")} — they will evaluate to
+            null
           </div>
         )}
 
@@ -106,18 +160,35 @@ export default function MetricBuilder({ dataset, savedMetrics, onSave, onDelete,
           {Object.entries(KNOWN_VARIABLES).map(([key, info]) => (
             <button
               key={key}
-              onClick={() => setExpression(prev => prev + (prev && !prev.endsWith(" ") && !prev.endsWith("(") ? " " : "") + key)}
-              className="text-[10px] font-mono px-2 py-0.5 border border-memphis-black/20 bg-memphis-offwhite hover:bg-memphis-black/10 transition-colors"
+              onClick={() =>
+                setExpression(
+                  (prev) =>
+                    prev +
+                    (prev && !prev.endsWith(" ") && !prev.endsWith("(")
+                      ? " "
+                      : "") +
+                    key,
+                )
+              }
+              className={cn(
+                "text-[10px] font-mono px-2 py-0.5 border",
+                "border-memphis-black/20 bg-memphis-offwhite",
+                "hover:bg-memphis-black/10 transition-colors",
+              )}
               title={`${info.label} (${info.unit}) — ${info.description}`}
             >
               {key}
             </button>
           ))}
-          {["+", "-", "*", "/", "(", ")"].map(op => (
+          {["+", "-", "*", "/", "(", ")"].map((op) => (
             <button
               key={op}
-              onClick={() => setExpression(prev => prev + op)}
-              className="text-[10px] font-mono px-2 py-0.5 border border-memphis-black/30 bg-white hover:bg-memphis-black/10 transition-colors font-bold"
+              onClick={() => setExpression((prev) => prev + op)}
+              className={cn(
+                "text-[10px] font-mono px-2 py-0.5 border",
+                "border-memphis-black/30 bg-white",
+                "hover:bg-memphis-black/10 transition-colors font-bold",
+              )}
             >
               {op}
             </button>
@@ -131,22 +202,35 @@ export default function MetricBuilder({ dataset, savedMetrics, onSave, onDelete,
             Preview: {metricName || "Untitled Metric"}
           </h4>
           <div className="flex gap-4 mb-2 text-[11px] text-memphis-black/60">
-            <span>{evaluated.values.filter(v => v.value != null).length} data points</span>
-            <span>Range: {(() => {
-              const valid = evaluated.values.filter(v => v.value != null);
-              if (!valid.length) return "—";
-              const min = Math.min(...valid.map(v => v.value!));
-              const max = Math.max(...valid.map(v => v.value!));
-              return `${min.toFixed(1)} – ${max.toFixed(1)}`;
-            })()}</span>
+            <span>
+              {evaluated.values.filter((v) => v.value != null).length} data
+              points
+            </span>
+            <span>
+              Range:{" "}
+              {(() => {
+                const valid = evaluated.values.filter((v) => v.value != null);
+                if (!valid.length) return "—";
+                const min = Math.min(...valid.map((v) => v.value!));
+                const max = Math.max(...valid.map((v) => v.value!));
+                return `${min.toFixed(1)} – ${max.toFixed(1)}`;
+              })()}
+            </span>
           </div>
           <ResponsiveContainer width="100%" height={180}>
-            <LineChart data={evaluated.values.filter(v => v.value != null)}>
+            <LineChart data={evaluated.values.filter((v) => v.value != null)}>
               <CartesianGrid {...GRID} />
               <XAxis dataKey="year" tick={AX} />
               <YAxis tick={AX} domain={["auto", "auto"]} />
               <Tooltip {...TT} />
-              <Line type="monotone" dataKey="value" stroke="#FF006E" strokeWidth={2} dot={{ r: 3 }} name={metricName || "Custom"} />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke="#FF006E"
+                strokeWidth={2}
+                dot={{ r: 3 }}
+                name={metricName || "Custom"}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -154,16 +238,31 @@ export default function MetricBuilder({ dataset, savedMetrics, onSave, onDelete,
 
       {savedMetrics.length > 0 && (
         <div className="border-3 border-memphis-black bg-white shadow-hard-sm p-4">
-          <h4 className="text-xs font-black uppercase tracking-wider text-memphis-black/50 mb-3">Saved Metrics</h4>
+          <h4 className="text-xs font-black uppercase tracking-wider text-memphis-black/50 mb-3">
+            Saved Metrics
+          </h4>
           <div className="space-y-2">
-            {savedMetrics.map(m => (
-              <div key={m.id} className="flex items-center gap-2 p-2.5 bg-memphis-offwhite border-2 border-memphis-black/15">
+            {savedMetrics.map((m) => (
+              <div
+                key={m.id}
+                className={cn(
+                  "flex items-center gap-2 p-2.5 bg-memphis-offwhite",
+                  "border-2 border-memphis-black/15",
+                )}
+              >
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs font-bold text-memphis-black">{m.name}</span>
-                  <span className="text-[10px] text-memphis-black/50 ml-2 font-mono">{m.expression}</span>
+                  <span className="text-xs font-bold text-memphis-black">
+                    {m.name}
+                  </span>
+                  <span className="text-[10px] text-memphis-black/50 ml-2 font-mono">
+                    {m.expression}
+                  </span>
                 </div>
                 <button
-                  onClick={() => { setExpression(m.expression); setMetricName(m.name); }}
+                  onClick={() => {
+                    setExpression(m.expression);
+                    setMetricName(m.name);
+                  }}
                   className="text-[10px] text-memphis-pink hover:underline"
                 >
                   Load
@@ -181,7 +280,9 @@ export default function MetricBuilder({ dataset, savedMetrics, onSave, onDelete,
       )}
 
       {error && (
-        <div className="p-2.5 bg-red-50 border-2 border-red-200 text-red-700 text-[11px]">{error}</div>
+        <div className="p-2.5 bg-red-50 border-2 border-red-200 text-red-700 text-[11px]">
+          {error}
+        </div>
       )}
     </div>
   );

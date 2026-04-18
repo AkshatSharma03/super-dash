@@ -59,7 +59,12 @@ export default function ShareButton({ token, sessionId }: Props) {
         className="text-xs gap-1.5"
       >
         {loading ? (
-          <span className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
+          <span
+            className={[
+              "w-3 h-3 border-2 border-current border-t-transparent rounded-full",
+              "animate-spin",
+            ].join(" ")}
+          />
         ) : shareUrl ? (
           <Link2 className="w-3.5 h-3.5" />
         ) : (
@@ -69,21 +74,30 @@ export default function ShareButton({ token, sessionId }: Props) {
       </Button>
 
       {shareUrl && (
-        <div className="flex items-center gap-1.5 bg-white border-3 border-memphis-black px-2 py-1 shadow-hard-sm max-w-[280px]">
-          <span className="text-[10px] text-memphis-black/70 truncate flex-1">{shareUrl}</span>
+        <div
+          className={[
+            "flex items-center gap-1.5 bg-white border-3 border-memphis-black",
+            "px-2 py-1 shadow-hard-sm max-w-[280px]",
+          ].join(" ")}
+        >
+          <span className="text-[10px] text-memphis-black/70 truncate flex-1">
+            {shareUrl}
+          </span>
           <button
             onClick={handleCopy}
             className="text-memphis-black hover:text-memphis-pink transition-colors shrink-0"
             title="Copy link"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? (
+              <Check className="w-3.5 h-3.5 text-emerald-600" />
+            ) : (
+              <Copy className="w-3.5 h-3.5" />
+            )}
           </button>
         </div>
       )}
 
-      {error && (
-        <span className="text-[10px] text-red-600">{error}</span>
-      )}
+      {error && <span className="text-[10px] text-red-600">{error}</span>}
     </div>
   );
 }
