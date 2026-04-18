@@ -7,7 +7,16 @@ import { CheckCircle2, AlertTriangle, BookOpen, ChevronDown, ChevronUp, External
 import { cn } from "@/lib/utils";
 
 function normalizeMathInput(input: string): string {
-  const trimmed = String(input ?? "").trim();
+  const repaired = String(input ?? "")
+    // Repair accidental JS escape interpretation in math strings:
+    // "\t" -> tab, "\b" -> backspace, etc. KaTeX expects literal backslash commands.
+    .replace(/\u0008/g, "\\b")
+    .replace(/\u0009/g, "\\t")
+    .replace(/\u000A/g, "\\n")
+    .replace(/\u000B/g, "\\v")
+    .replace(/\u000C/g, "\\f")
+    .replace(/\u000D/g, "\\r");
+  const trimmed = repaired.trim();
   if (!trimmed) return "";
   if (trimmed.startsWith("$$") && trimmed.endsWith("$$")) return trimmed.slice(2, -2).trim();
   if (trimmed.startsWith("$") && trimmed.endsWith("$")) return trimmed.slice(1, -1).trim();
