@@ -91,6 +91,14 @@ import {
 
 countries.registerLocale(enLocale);
 
+const APP_BUILD_ID =
+  process.env.RAILWAY_GIT_COMMIT_SHA
+  || process.env.GITHUB_SHA
+  || process.env.SOURCE_VERSION
+  || process.env.VERCEL_GIT_COMMIT_SHA
+  || process.env.RENDER_GIT_COMMIT
+  || new Date().toISOString();
+
 if (!ANTHROPIC_API_KEY) {
   console.error('ERROR: ANTHROPIC_API_KEY environment variable is not set.');
   process.exit(1);
@@ -2005,14 +2013,38 @@ function checkPlanLimit(userId, feature) {
 
 // ── Static file serving ───────────────────────────────────────────────────────
 const DIST = join(ROOT_DIR, 'dist');
+app.use((_, res, next) => {
+  res.setHeader('X-App-Build', APP_BUILD_ID);
+  next();
+});
+
+app.get('/api/version', (_req, res) => {
+  res.json({ build: APP_BUILD_ID });
+});
+
 app.use(staticLimiter);
-app.use(express.static(DIST));
-app.use((_req, res) => res.sendFile(join(DIST, 'index.html')));
+app.use(express.static(DIST, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      return;
+    }
+
+    if (filePath.includes('/assets/')) {
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    }
+  },
+}));
+app.use((_req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  return res.sendFile(join(DIST, 'index.html'));
+});
 
 const shouldStartServer = String(process.env.NODE_ENV) !== 'test' || process.env.VITEST_FORCE_LISTEN === '1';
 if (shouldStartServer) {
   app.listen(PORT, () => {
     console.log(`Economic Dashboard server running on http://localhost:${PORT}`);
+    console.log(`Build: ${APP_BUILD_ID}`);
     console.log(`Supported countries: ${countries.getNames('en').length} via i18n-iso-countries`);
   });
 }

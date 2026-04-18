@@ -7,20 +7,7 @@ import { CheckCircle2, AlertTriangle, BookOpen, ChevronDown, ChevronUp, External
 import { cn } from "@/lib/utils";
 
 function normalizeMathInput(input: string): string {
-  const repaired = String(input ?? "")
-    // Collapse accidental double-escaping, e.g. "\\hat" -> "\hat"
-    .replace(/\\\\([a-zA-Z])/g, "\\$1")
-    // Repair the most common control-char escape corruptions.
-    .replace(/\u0009op/g, "\\top")
-    .replace(/\u0009ext/g, "\\text")
-    .replace(/\u0009au/g, "\\tau")
-    .replace(/\u0009imes/g, "\\times")
-    .replace(/\u0008eta/g, "\\beta")
-    .replace(/\u0008ar/g, "\\bar")
-    .replace(/\u000Crac/g, "\\frac")
-    // Fallback: preserve a literal slash instead of an invisible control char.
-    .replace(/[\u0008\u0009\u000A\u000B\u000C\u000D]/g, "\\");
-  const trimmed = repaired.trim();
+  const trimmed = String(input ?? "").trim();
   if (!trimmed) return "";
   if (trimmed.startsWith("$$") && trimmed.endsWith("$$")) return trimmed.slice(2, -2).trim();
   if (trimmed.startsWith("$") && trimmed.endsWith("$")) return trimmed.slice(1, -1).trim();
