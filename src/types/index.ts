@@ -287,7 +287,7 @@ export interface CountryHistoryEntry { code: string; name: string; flag: string;
 
 // ── Peer comparison types ───────────────────────────────────────────────────
 
-export type PeerGroupType = "region" | "income" | "brics";
+export type PeerGroupType = "region" | "continent" | "income" | "brics";
 export type PeerMetricKey = "gdp" | "gdp_growth" | "gdp_per_capita" | "exports" | "imports" | "trade_openness";
 
 export interface PeerComparisonPeer {

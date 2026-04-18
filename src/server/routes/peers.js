@@ -20,6 +20,7 @@ export function createPeersRouter(deps) {
     computeMedian,
     computeAverage,
     groupTypeLabel,
+    continentBucket,
     errorMessage,
   } = deps;
 
@@ -104,7 +105,14 @@ export function createPeersRouter(deps) {
         metricLabel,
         metricUnit: metricUnits[metric] || '',
         groupType,
-        groupName: groupTypeLabel(groupType, groupType === 'income' ? selectedMeta.incomeLevel : selectedMeta.region),
+        groupName: groupTypeLabel(
+          groupType,
+          groupType === 'income'
+            ? selectedMeta.incomeLevel
+            : groupType === 'continent'
+              ? continentBucket(selectedMeta.code, selectedMeta.region)
+              : selectedMeta.region,
+        ),
         year,
         peerCount: rowsWithRanks.length,
         totalPeerCount: peerList.length,

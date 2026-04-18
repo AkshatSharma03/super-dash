@@ -20,6 +20,7 @@ export interface PeerMetricOption {
 
 export const PEER_GROUP_OPTIONS: PeerGroupOption[] = [
   { value: "region", label: "Region", hint: "Compare within broad world regions" },
+  { value: "continent", label: "Continent", hint: "Compare within geographic continents" },
   { value: "income", label: "Income", hint: "Compare within income bands" },
   { value: "brics", label: "BRICS", hint: "Compare with BRICS economies" },
 ];

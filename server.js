@@ -1051,6 +1051,7 @@ app.use('/api/peers', createPeersRouter({
   computeMedian,
   computeAverage,
   groupTypeLabel,
+  continentBucket,
   errorMessage,
 }));
 
@@ -1451,6 +1452,21 @@ function normalizeIncomeGroup(raw) {
   return 'Other income';
 }
 
+function continentBucket(code, region) {
+  const iso2 = String(code || '').toUpperCase();
+  const regionText = String(region || '');
+
+  if (new Set(['US', 'CA', 'MX', 'BM', 'GL']).has(iso2)) return 'North America';
+  if (regionText.includes('Latin America')) return 'Latin America';
+  if (regionText.includes('Europe')) return 'Europe';
+  if (regionText.includes('Middle East')) return 'Middle East & North Africa';
+  if (regionText.includes('South Asia') || regionText.includes('East Asia')) return 'Asia';
+  if (regionText.includes('Pacific')) return 'Oceania';
+  if (regionText.includes('Sub-Saharan Africa')) return 'Africa';
+  if (regionText.includes('North America')) return 'North America';
+  return 'Other';
+}
+
 function peerCodeFromRow(row) {
   const code = String(row?.countryCode || '').toUpperCase();
   if (code.length === 2) return code;
@@ -1505,6 +1521,11 @@ function resolvePeerGroupMembers(catalogRow, groupType, catalog) {
     return catalog.filter((item) => bricsSet.has(item.code));
   }
 
+  if (groupType === 'continent') {
+    const continent = continentBucket(catalogRow.code, catalogRow.region);
+    return catalog.filter((item) => continentBucket(item.code, item.region) === continent);
+  }
+
   if (groupType === 'income') {
     const incomeBucket = normalizeIncomeGroup(catalogRow.incomeLevel || catalogRow.income);
     return catalog.filter((item) => normalizeIncomeGroup(item.incomeLevel || item.income) === incomeBucket);
@@ -1516,6 +1537,7 @@ function resolvePeerGroupMembers(catalogRow, groupType, catalog) {
 
 function groupTypeLabel(groupType, groupValue) {
   if (groupType === 'brics') return 'BRICS';
+  if (groupType === 'continent') return `${groupValue || 'Continent'} economies`;
   if (groupType === 'income') return `${normalizeIncomeGroup(groupValue)} economies`;
   return `${groupValue || 'Region'} economies`;
 }

@@ -103,6 +103,17 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
     return `${formatted}${unit ? ` ${unit}` : ""}`;
   }
 
+  function formatAxisTick(value: number) {
+    if (!Number.isFinite(value)) return "—";
+    if (data?.summary.metricUnit === "%") return `${value.toFixed(1)}%`;
+    const abs = Math.abs(value);
+    if (abs >= 1_000_000_000_000) return `${(value / 1_000_000_000_000).toFixed(1)}T`;
+    if (abs >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1)}B`;
+    if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+    if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+    return value.toFixed(1);
+  }
+
   function topStatement() {
     if (!data || !target) return null;
     const top = Math.max(
@@ -260,7 +271,7 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
                 >
                   <CartesianGrid stroke="#e5e7eb" />
                   <XAxis dataKey="name" interval={0} tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 10 }} width={72} tickFormatter={formatAxisTick} />
                   <Tooltip
                     formatter={(value: number) => [
                       formatMetric(value, data.summary.metricUnit),

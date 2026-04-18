@@ -143,7 +143,7 @@ export const DataApiSchema = z.object({
 });
 
 export const PeerComparisonSchema = z.object({
-  groupType: z.enum(['region', 'income', 'brics']).default('region'),
+  groupType: z.enum(['region', 'continent', 'income', 'brics']).default('region'),
   metric: z.enum(['gdp', 'gdp_growth', 'gdp_per_capita', 'exports', 'imports', 'trade_openness']).default('gdp'),
   year: z.coerce.number().int().min(1960).max(2500).optional(),
 });
