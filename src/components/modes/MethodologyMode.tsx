@@ -20,30 +20,17 @@ function looksLikeMath(input: string): boolean {
   if (!value) return false;
   if (/[\\{}_^]/.test(value)) return true;
   if (/^\$.*\$$/.test(value) || /^\\\[.*\\\]$/.test(value)) return true;
-  if (/\|?[a-zA-Z]+\|?\s*[<>]=?\s*-?\d/.test(value)) return true;
   return false;
 }
 
 function SafeBlockMath({ math }: { math: string }) {
   const normalized = normalizeMathInput(math);
-  return (
-    <BlockMath
-      math={normalized}
-      errorColor="#EF4444"
-      renderError={() => <pre className="text-[11px] text-memphis-black whitespace-pre-wrap">{math}</pre>}
-    />
-  );
+  return <BlockMath math={normalized} errorColor="#EF4444" />;
 }
 
 function SafeInlineMath({ math }: { math: string }) {
   const normalized = normalizeMathInput(math);
-  return (
-    <InlineMath
-      math={normalized}
-      errorColor="#EF4444"
-      renderError={() => <span className="text-[11px]">{math}</span>}
-    />
-  );
+  return <InlineMath math={normalized} errorColor="#EF4444" />;
 }
 
 function AlgoCard({ algo, isOpen, toggle }: { algo: AlgoMethod; isOpen: boolean; toggle: () => void }) {
