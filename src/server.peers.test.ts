@@ -254,15 +254,19 @@ describe("GET /api/peers/:countryCode", () => {
     expect(res.status).toBe(400);
   });
 
-  it("enforces free peer cap for region group", async () => {
+  it("caps free peer results for region group without failing", async () => {
     if (!base) return;
     const res = await fetch(`${base}/api/peers/US?groupType=region&metric=gdp`, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
-    expect(res.status).toBe(402);
+    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.error).toContain("Peer comparison limit reached");
+    expect(body.summary.peerCount).toBe(2);
+    expect(body.summary.totalPeerCount).toBeGreaterThan(2);
+    expect(body.summary.isCapped).toBe(true);
+    expect(body.summary.planLimit).toBe(2);
+    expect(body.peers.some((p: { code: string; isTarget: boolean }) => p.code === "US" && p.isTarget)).toBe(true);
   });
 
   it("applies free peer cap to peers with metric data", async () => {
@@ -274,6 +278,7 @@ describe("GET /api/peers/:countryCode", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.summary.peerCount).toBe(2);
+    expect(body.summary.isCapped).toBe(true);
   });
 
   it("supports brics peer grouping", async () => {
@@ -287,6 +292,7 @@ describe("GET /api/peers/:countryCode", () => {
       const body = await res.json();
       expect(body.summary.groupType).toBe("brics");
       expect(body.summary.peerCount).toBe(5);
+      expect(body.summary.isCapped).toBe(false);
       expect(body.peers.some((p: { code: string; isTarget: boolean }) => p.code === "BR" && p.isTarget)).toBe(true);
     });
   });

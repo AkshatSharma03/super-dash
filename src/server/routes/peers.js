@@ -64,13 +64,11 @@ export function createPeersRouter(deps) {
         return res.status(404).json({ error: `No ${metric} value found for ${countryCode} in ${year}` });
       }
 
-      const values = [];
       const peerList = [];
 
       for (const peer of peers) {
         const item = valuesByCode.get(peer.code);
         if (!item) continue;
-        values.push(item.value);
         peerList.push({
           code: peer.code,
           name: peer.name,
@@ -83,10 +81,6 @@ export function createPeersRouter(deps) {
         return res.status(404).json({ error: `No peers found for metric ${metric} in ${year}` });
       }
 
-      if (limit.limit !== Number.POSITIVE_INFINITY && peerList.length > limit.limit) {
-        return res.status(402).json({ error: `Peer comparison limit reached (${limit.limit}). Upgrade your plan for more.` });
-      }
-
       const metricLabel = API_INDICATOR_LABELS[metric] || metric;
       const metricUnits = {
         gdp: 'USD',
@@ -97,11 +91,24 @@ export function createPeersRouter(deps) {
         trade_openness: '%',
       };
 
-      const rowsWithRanks = peerList
+      let visiblePeers = peerList;
+      if (limit.limit !== Number.POSITIVE_INFINITY && peerList.length > limit.limit) {
+        const sortedByValue = peerList.slice().sort((a, b) => b.value - a.value);
+        const targetPeer = sortedByValue.find((peer) => peer.code === countryCode);
+        if (!targetPeer) {
+          return res.status(500).json({ error: `Target peer missing for ${countryCode} in ${year}` });
+        }
+        const rest = sortedByValue.filter((peer) => peer.code !== countryCode);
+        visiblePeers = [targetPeer, ...rest].slice(0, limit.limit);
+      }
+
+      const visibleValues = visiblePeers.map((peer) => peer.value);
+
+      const rowsWithRanks = visiblePeers
         .map((peer) => ({
           ...peer,
-          rank: computeRank(values, peer.value) || 0,
-          percentile: percentileRank(values, peer.value) || 0,
+          rank: computeRank(visibleValues, peer.value) || 0,
+          percentile: percentileRank(visibleValues, peer.value) || 0,
         }))
         .sort((a, b) => a.rank - b.rank);
 
@@ -113,12 +120,15 @@ export function createPeersRouter(deps) {
         groupName: groupTypeLabel(groupType, groupType === 'income' ? selectedMeta.incomeLevel : selectedMeta.region),
         year,
         peerCount: rowsWithRanks.length,
+        totalPeerCount: peerList.length,
+        isCapped: rowsWithRanks.length < peerList.length,
+        planLimit: Number.isFinite(limit.limit) ? limit.limit : null,
         selectedCountryCode: countryCode,
         selectedCountryValue: targetEntry.value,
-        selectedCountryRank: computeRank(values, targetEntry.value),
-        selectedCountryPercentile: percentileRank(values, targetEntry.value),
-        median: computeMedian(values),
-        average: computeAverage(values),
+        selectedCountryRank: computeRank(visibleValues, targetEntry.value),
+        selectedCountryPercentile: percentileRank(visibleValues, targetEntry.value),
+        median: computeMedian(visibleValues),
+        average: computeAverage(visibleValues),
       };
 
       if (summary.selectedCountryRank === null || summary.selectedCountryPercentile === null) {

@@ -198,6 +198,12 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
           <div className="text-xs text-slate-700 whitespace-pre-wrap mb-4">
             {topStatement()}
           </div>
+          {data.summary.isCapped && (
+            <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-4">
+              Showing {data.summary.peerCount} of {data.summary.totalPeerCount} peers for your plan
+              {data.summary.planLimit ? ` (limit ${data.summary.planLimit})` : ""}.
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>

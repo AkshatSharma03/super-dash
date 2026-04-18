@@ -308,6 +308,9 @@ export interface PeerComparisonSummary {
   groupName: string;
   year: number;
   peerCount: number;
+  totalPeerCount: number;
+  isCapped: boolean;
+  planLimit: number | null;
   selectedCountryCode: string;
   selectedCountryValue: number;
   selectedCountryRank: number;
