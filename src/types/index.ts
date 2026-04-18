@@ -311,6 +311,8 @@ export interface PeerComparisonSummary {
   totalPeerCount: number;
   isCapped: boolean;
   planLimit: number | null;
+  excludedPeerCount: number;
+  excludedPeers: Array<{ code: string; name: string }>;
   selectedCountryCode: string;
   selectedCountryValue: number;
   selectedCountryRank: number;

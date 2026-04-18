@@ -29,12 +29,18 @@ interface PeerComparisonProps {
 export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
   const [groupType, setGroupType] = useState<PeerGroupType>("region");
   const [metric, setMetric] = useState<PeerMetricKey>("gdp");
+  const [year, setYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<PeerComparisonResponse | null>(null);
   const baseId = useId();
   const groupId = `${baseId}-group`;
   const metricId = `${baseId}-metric`;
+  const yearId = `${baseId}-year`;
+  const selectableYears = useMemo(() => {
+    const now = new Date().getUTCFullYear();
+    return Array.from({ length: now - 1959 }, (_, idx) => now - idx);
+  }, []);
 
   useEffect(() => {
     if (!countryCode) {
@@ -47,7 +53,7 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
     setLoading(true);
     setError(null);
 
-    getPeerComparison(token, countryCode, { groupType, metric })
+    getPeerComparison(token, countryCode, { groupType, metric, year: year ?? undefined })
       .then((payload) => {
         if (cancelled) return;
         setData(payload);
@@ -66,7 +72,7 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
     return () => {
       cancelled = true;
     };
-  }, [countryCode, groupType, metric, token]);
+  }, [countryCode, groupType, metric, token, year]);
 
   const peers = data?.peers ?? [];
   const target = useMemo(
@@ -76,18 +82,18 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
 
   function formatMetric(value: number, unit: string) {
     if (!Number.isFinite(value)) return "—";
-    const withDecimals = value % 1 === 0 ? 0 : 2;
+    const withDecimals = value % 1 === 0 ? 0 : 1;
 
     if (unit === "%") {
-      return `${value.toFixed(2)}%`;
+      return `${value.toFixed(1)}%`;
     }
 
     if (unit === "USD") {
       if (Math.abs(value) >= 1_000_000_000) {
-        return `${(value / 1_000_000_000).toFixed(2)}bn`;
+        return `${(value / 1_000_000_000).toFixed(1)}bn`;
       }
       if (Math.abs(value) >= 1_000_000) {
-        return `${(value / 1_000_000).toFixed(2)}m`;
+        return `${(value / 1_000_000).toFixed(1)}m`;
       }
     }
 
@@ -134,7 +140,7 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
 
   return (
     <Card title="Peer Benchmarking">
-      <div className="grid gap-2 md:grid-cols-2 mb-4">
+      <div className="grid gap-2 md:grid-cols-3 mb-4">
         <label
           htmlFor={groupId}
           className="text-[12px] text-slate-700 font-semibold flex items-center gap-2"
@@ -180,6 +186,32 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
             ))}
           </select>
         </label>
+
+        <label
+          htmlFor={yearId}
+          className="text-[12px] text-slate-700 font-semibold flex items-center gap-2"
+        >
+          Year
+          <select
+            id={yearId}
+            value={year == null ? "auto" : String(year)}
+            onChange={(event) => {
+              const next = event.target.value;
+              setYear(next === "auto" ? null : Number(next));
+            }}
+            className={cn(
+              "ml-auto border border-slate-300 px-2 py-1.5",
+              "text-xs text-slate-900 bg-white rounded",
+            )}
+          >
+            <option value="auto">Auto (latest)</option>
+            {selectableYears.map((yearOption) => (
+              <option key={yearOption} value={yearOption}>
+                {yearOption}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {loading && (
@@ -195,9 +227,20 @@ export function PeerComparison({ token, countryCode }: PeerComparisonProps) {
 
       {data && (
         <>
+          <div className="text-[11px] text-slate-600 mb-2">
+            Source: World Bank Open Data (via <span className="font-semibold">api.worldbank.org</span>).
+          </div>
           <div className="text-xs text-slate-700 whitespace-pre-wrap mb-4">
             {topStatement()}
           </div>
+          {data.summary.excludedPeerCount > 0 && (
+            <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-4">
+              Excluded {data.summary.excludedPeerCount} peer
+              {data.summary.excludedPeerCount > 1 ? "s" : ""} with no{" "}
+              {data.summary.metricLabel} data for {data.summary.year}:{" "}
+              {data.summary.excludedPeers.map((peer) => peer.name).join(", ")}.
+            </div>
+          )}
           {data.summary.isCapped && (
             <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-4">
               Showing {data.summary.peerCount} of {data.summary.totalPeerCount} peers for your plan

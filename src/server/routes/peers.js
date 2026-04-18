@@ -110,6 +110,10 @@ export function createPeersRouter(deps) {
         totalPeerCount: peerList.length,
         isCapped: false,
         planLimit: null,
+        excludedPeerCount: peers.length - peerList.length,
+        excludedPeers: peers
+          .filter((peer) => !valuesByCode.has(peer.code))
+          .map((peer) => ({ code: peer.code, name: peer.name })),
         selectedCountryCode: countryCode,
         selectedCountryValue: targetEntry.value,
         selectedCountryRank: computeRank(peerValues, targetEntry.value),
