@@ -20,7 +20,7 @@ export const METHODOLOGY: AlgoMethod[] = [
     color: "#FF006E",
     description:
       "Ordinary Least Squares regression with 95% prediction intervals. Fits the model y = β₀ + β₁x by minimising the sum of squared residuals, providing a linear trend line through GDP time-series data and extending it forward as a forecast.",
-    formula: "\\hat{\\beta} = (X^\\top X)^{-1} X^\\top y \\quad \\hat{y} = X\\hat{\\beta}",
+    formula: "\\hat{β} = (X^{\\mathrm{T}} X)^{-1} X^{\\mathrm{T}} y \\; \\hat{y} = X\\hat{β}",
     parameters: [
       {
         name: "Confidence Level",
@@ -30,7 +30,7 @@ export const METHODOLOGY: AlgoMethod[] = [
       },
       {
         name: "Prediction Interval",
-        value: "\\hat{y} \\pm z_{\\alpha/2} \\cdot s \\sqrt{1 + \\frac{1}{n} + \\frac{(x_0 - \\bar{x})^2}{S_{xx}}}",
+        value: "\\hat{y} \\pm z_{\\alpha/2} \\cdot s \\sqrt{1 + \\dfrac{1}{n} + \\dfrac{(x_0 - \\overline{x})^2}{S_{xx}}}",
         rationale:
           "Wider than a confidence interval because it accounts for both estimation uncertainty and individual observation variance.",
       },
@@ -64,7 +64,7 @@ export const METHODOLOGY: AlgoMethod[] = [
     color: "#00D9FF",
     description:
       "Computes the annualised growth rate between two points in time, smoothing out year-to-year volatility. Applied to GDP, exports, imports, and GDP per capita across 5-year rolling windows and the full dataset span.",
-    formula: "\\text{CAGR} = \\left(\\frac{V_{\\text{end}}}{V_{\\text{start}}}\\right)^{\\frac{1}{t}} - 1",
+    formula: "\\mathrm{CAGR} = \\left(\\dfrac{V_{\\mathrm{end}}}{V_{\\mathrm{start}}}\\right)^{\\dfrac{1}{t}} - 1",
     parameters: [
       {
         name: "Window Size",
@@ -107,7 +107,7 @@ export const METHODOLOGY: AlgoMethod[] = [
     color: "#FFBE0B",
     description:
       "Decomposes a time series into a smooth long-run trend τ and a cyclical component c = y − τ by solving a penalised least-squares problem. The smoothing parameter λ controls the trade-off between trend smoothness and cycle magnitude.",
-    formula: "\\min_{\\tau} \\sum_{t=1}^{T}(y_t - \\tau_t)^2 + \\lambda \\sum_{t=2}^{T-1}[(\\tau_{t+1} - \\tau_t) - (\\tau_t - \\tau_{t-1})]^2",
+    formula: "\\min_{τ} \\sum_{t=1}^{T}(y_t - τ_t)^2 + \\lambda \\sum_{t=2}^{T-1}[(τ_{t+1} - τ_t) - (τ_t - τ_{t-1})]^2",
     parameters: [
       {
         name: "λ (Lambda)",
@@ -146,7 +146,7 @@ export const METHODOLOGY: AlgoMethod[] = [
     color: "#FF006E",
     description:
       "Computes pairwise Pearson correlation coefficients (r) across GDP, GDP growth, GDP per capita, exports, imports, and trade balance. Identifies which economic variables move together and labels each pair by direction and strength.",
-    formula: "r_{X,Y} = \\frac{\\sum_{i=1}^{n}(x_i - \\bar{x})(y_i - \\bar{y})}{\\sqrt{\\sum_{i=1}^{n}(x_i - \\bar{x})^2 \\cdot \\sum_{i=1}^{n}(y_i - \\bar{y})^2}}",
+    formula: "r_{X,Y} = \\dfrac{\\sum_{i=1}^{n}(x_i - \\overline{x})(y_i - \\overline{y})}{\\sqrt{\\sum_{i=1}^{n}(x_i - \\overline{x})^2 \\cdot \\sum_{i=1}^{n}(y_i - \\overline{y})^2}}",
     parameters: [
       {
         name: "Strength Thresholds",
@@ -189,7 +189,7 @@ export const METHODOLOGY: AlgoMethod[] = [
     color: "#8338EC",
     description:
       "Measures market or trade concentration. For a set of components with shares s₁…sₙ, HHI = Σ(sᵢ%)². Applied to both export sectors and import partners to assess whether a country's trade is diversified or dominated by few categories/countries.",
-    formula: "\\text{HHI} = \\sum_{i=1}^{n} (s_i \\times 100)^2",
+    formula: "\\mathrm{HHI} = \\sum_{i=1}^{n} (s_i \\cdot 100)^2",
     parameters: [
       {
         name: "Classification Scale",
@@ -199,7 +199,7 @@ export const METHODOLOGY: AlgoMethod[] = [
       },
       {
         name: "Normalization",
-        value: "\\text{HHI}_{norm} = \\frac{HHI/10000 - 1/n}{1 - 1/n}",
+        value: "\\mathrm{HHI}_{norm} = \\dfrac{HHI/10000 - 1/n}{1 - 1/n}",
         rationale:
           "Removes the effect of the number of components n so that HHI values from different sectors are comparable.",
       },
@@ -232,7 +232,7 @@ export const METHODOLOGY: AlgoMethod[] = [
     color: "#FB5607",
     description:
       "Identifies statistical outliers across 6 economic metrics simultaneously. A data point is flagged as anomalous when its z-score (number of standard deviations from the mean) exceeds a threshold. Modified threshold of 1.5 is used to surface economically meaningful events.",
-    formula: "z = \\frac{x - \\mu}{\\sigma} \\quad \\text{Anomalous if } |z| > 1.5",
+    formula: "z = \\dfrac{x - \\mu}{\\sigma} \\; \\mathrm{Anomalous\\ if}\\; |z| > 1.5",
     parameters: [
       {
         name: "Threshold",
@@ -331,7 +331,7 @@ export const METHODOLOGY: AlgoMethod[] = [
     color: "#8338EC",
     description:
       "Measures economic globalisation as the ratio of total trade (exports + imports) to GDP, expressed as a percentage. Higher values indicate greater integration with the global economy.",
-    formula: "\\text{Openness} = \\frac{\\text{Exports} + \\text{Imports}}{\\text{GDP}} \\times 100",
+    formula: "\\mathrm{Openness} = \\dfrac{\\mathrm{Exports} + \\mathrm{Imports}}{\\mathrm{GDP}} \\cdot 100",
     parameters: [
       {
         name: "Numerator",
