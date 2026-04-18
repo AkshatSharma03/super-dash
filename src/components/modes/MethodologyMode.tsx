@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMobile } from "../../utils/useMobile";
 import { METHODOLOGY, type AlgoMethod } from "../../data/methodology";
 import "katex/dist/katex.min.css";
-import { InlineMath, BlockMath } from "react-katex";
+import katex from "katex";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -49,27 +49,49 @@ function looksLikeMath(input: string): boolean {
 
 function SafeBlockMath({ math }: { math: string }) {
   const normalized = normalizeMathInput(math);
-  return (
-    <BlockMath
-      math={normalized}
-      errorColor="#EF4444"
-      renderError={() => (
-        <pre className="text-[11px] text-memphis-black/80 whitespace-pre-wrap font-mono">
-          {math}
-        </pre>
-      )}
-    />
-  );
+  try {
+    const html = katex.renderToString(normalized, {
+      throwOnError: true,
+      displayMode: true,
+      output: "html",
+    });
+    return <div dangerouslySetInnerHTML={{ __html: html }} />;
+  } catch {
+    return (
+      <pre className="text-[11px] text-memphis-black/80 whitespace-pre-wrap font-mono">
+        {math}
+      </pre>
+    );
+  }
 }
 
 function SafeInlineMath({ math }: { math: string }) {
   const normalized = normalizeMathInput(math);
+  try {
+    const html = katex.renderToString(normalized, {
+      throwOnError: true,
+      displayMode: false,
+      output: "html",
+    });
+    return <span dangerouslySetInnerHTML={{ __html: html }} />;
+  } catch {
+    return <span className="text-[11px]">{math}</span>;
+  }
+}
+
+function FormulaBlock({ math }: { math: string }) {
   return (
-    <InlineMath
-      math={normalized}
-      errorColor="#EF4444"
-      renderError={() => <span className="text-[11px]">{math}</span>}
-    />
+    <div className="katex-display overflow-x-auto">
+      <SafeBlockMath math={math} />
+    </div>
+  );
+}
+
+function FormulaInline({ math }: { math: string }) {
+  return (
+    <span className="inline-block align-baseline">
+      <SafeInlineMath math={math} />
+    </span>
   );
 }
 
@@ -125,15 +147,15 @@ function AlgoCard({
               >
                 Formula
               </h4>
-              <div
-                className={cn(
-                  "bg-memphis-offwhite border-2 border-memphis-black/10",
-                  "px-4 py-3 overflow-x-auto",
-                )}
-              >
-                <SafeBlockMath math={algo.formula} />
+                <div
+                  className={cn(
+                    "bg-memphis-offwhite border-2 border-memphis-black/10",
+                    "px-4 py-3 overflow-x-auto",
+                  )}
+                >
+                  <FormulaBlock math={algo.formula} />
+                </div>
               </div>
-            </div>
 
             {algo.parameters.length > 0 && (
               <div>
@@ -160,7 +182,7 @@ function AlgoCard({
                         </span>
                         <span className="text-[11px] font-mono text-memphis-black/80">
                           {looksLikeMath(p.value) ? (
-                            <SafeInlineMath math={p.value} />
+                            <FormulaInline math={p.value} />
                           ) : (
                             p.value
                           )}
