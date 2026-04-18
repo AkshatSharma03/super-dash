@@ -1042,7 +1042,6 @@ app.use('/api/peers', createPeersRouter({
   normalizePeerMetricMetric,
   fetchWorldBankCountryCatalog,
   resolvePeerGroupMembers,
-  checkPlanLimit,
   resolvePeerComparisonYear,
   fetchPeerMetricRows,
   buildCountryValuesByCode,

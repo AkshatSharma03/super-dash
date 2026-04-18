@@ -254,7 +254,7 @@ describe("GET /api/peers/:countryCode", () => {
     expect(res.status).toBe(400);
   });
 
-  it("caps free peer results for region group without failing", async () => {
+  it("returns full region peer results for free users", async () => {
     if (!base) return;
     const res = await fetch(`${base}/api/peers/US?groupType=region&metric=gdp`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -262,14 +262,14 @@ describe("GET /api/peers/:countryCode", () => {
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.summary.peerCount).toBe(2);
-    expect(body.summary.totalPeerCount).toBeGreaterThan(2);
-    expect(body.summary.isCapped).toBe(true);
-    expect(body.summary.planLimit).toBe(2);
+    expect(body.summary.peerCount).toBe(3);
+    expect(body.summary.totalPeerCount).toBe(3);
+    expect(body.summary.isCapped).toBe(false);
+    expect(body.summary.planLimit).toBeNull();
     expect(body.peers.some((p: { code: string; isTarget: boolean }) => p.code === "US" && p.isTarget)).toBe(true);
   });
 
-  it("applies free peer cap to peers with metric data", async () => {
+  it("returns all peers with available metric data", async () => {
     if (!base) return;
     const res = await fetch(`${base}/api/peers/US?groupType=region&metric=trade_openness`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -278,7 +278,8 @@ describe("GET /api/peers/:countryCode", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.summary.peerCount).toBe(2);
-    expect(body.summary.isCapped).toBe(true);
+    expect(body.summary.totalPeerCount).toBe(2);
+    expect(body.summary.isCapped).toBe(false);
   });
 
   it("supports brics peer grouping", async () => {
@@ -297,7 +298,7 @@ describe("GET /api/peers/:countryCode", () => {
     });
   });
 
-  it("lets enterprise plan bypass peer cap", async () => {
+  it("returns full income peer set for enterprise users", async () => {
     if (!base) return;
     await withEnterprisePlan("user_1", async () => {
       const res = await fetch(`${base}/api/peers/US?groupType=income&metric=gdp`, {

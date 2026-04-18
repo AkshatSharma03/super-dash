@@ -11,7 +11,6 @@ export function createPeersRouter(deps) {
     normalizePeerMetricMetric,
     fetchWorldBankCountryCatalog,
     resolvePeerGroupMembers,
-    checkPlanLimit,
     resolvePeerComparisonYear,
     fetchPeerMetricRows,
     buildCountryValuesByCode,
@@ -47,7 +46,6 @@ export function createPeersRouter(deps) {
       }
 
       const peers = resolvePeerGroupMembers(selectedMeta, groupType, catalog);
-      const limit = checkPlanLimit(req.user.id, 'peers');
 
       const peerCodes = peers.map((p) => p.code);
       const peerCodesSet = new Set(peerCodes);
@@ -91,24 +89,13 @@ export function createPeersRouter(deps) {
         trade_openness: '%',
       };
 
-      let visiblePeers = peerList;
-      if (limit.limit !== Number.POSITIVE_INFINITY && peerList.length > limit.limit) {
-        const sortedByValue = peerList.slice().sort((a, b) => b.value - a.value);
-        const targetPeer = sortedByValue.find((peer) => peer.code === countryCode);
-        if (!targetPeer) {
-          return res.status(500).json({ error: `Target peer missing for ${countryCode} in ${year}` });
-        }
-        const rest = sortedByValue.filter((peer) => peer.code !== countryCode);
-        visiblePeers = [targetPeer, ...rest].slice(0, limit.limit);
-      }
+      const peerValues = peerList.map((peer) => peer.value);
 
-      const visibleValues = visiblePeers.map((peer) => peer.value);
-
-      const rowsWithRanks = visiblePeers
+      const rowsWithRanks = peerList
         .map((peer) => ({
           ...peer,
-          rank: computeRank(visibleValues, peer.value) || 0,
-          percentile: percentileRank(visibleValues, peer.value) || 0,
+          rank: computeRank(peerValues, peer.value) || 0,
+          percentile: percentileRank(peerValues, peer.value) || 0,
         }))
         .sort((a, b) => a.rank - b.rank);
 
@@ -121,14 +108,14 @@ export function createPeersRouter(deps) {
         year,
         peerCount: rowsWithRanks.length,
         totalPeerCount: peerList.length,
-        isCapped: rowsWithRanks.length < peerList.length,
-        planLimit: Number.isFinite(limit.limit) ? limit.limit : null,
+        isCapped: false,
+        planLimit: null,
         selectedCountryCode: countryCode,
         selectedCountryValue: targetEntry.value,
-        selectedCountryRank: computeRank(visibleValues, targetEntry.value),
-        selectedCountryPercentile: percentileRank(visibleValues, targetEntry.value),
-        median: computeMedian(visibleValues),
-        average: computeAverage(visibleValues),
+        selectedCountryRank: computeRank(peerValues, targetEntry.value),
+        selectedCountryPercentile: percentileRank(peerValues, targetEntry.value),
+        median: computeMedian(peerValues),
+        average: computeAverage(peerValues),
       };
 
       if (summary.selectedCountryRank === null || summary.selectedCountryPercentile === null) {
