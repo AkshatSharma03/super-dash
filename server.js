@@ -13,6 +13,8 @@ import {
   ANTHROPIC_API_KEY,
   KAGI_API_KEY,
   KAGI_BASE,
+  OECD_API_KEY,
+  UN_COMTRADE_API_KEY,
   IS_DEV,
   CLERK_SECRET_KEY,
   CLERK_JWT_KEY,
@@ -93,6 +95,18 @@ const APP_BUILD_ID =
 
 if (!ANTHROPIC_API_KEY && process.env.NODE_ENV !== 'test') {
   console.error('ERROR: ANTHROPIC_API_KEY environment variable is not set.');
+  process.exit(1);
+}
+if (!KAGI_API_KEY && process.env.NODE_ENV !== 'test') {
+  console.error('ERROR: KAGI_API_KEY environment variable is required and must be set.');
+  process.exit(1);
+}
+if (!OECD_API_KEY && process.env.NODE_ENV !== 'test') {
+  console.error('ERROR: OECD_API_KEY environment variable is required and must be set.');
+  process.exit(1);
+}
+if (!UN_COMTRADE_API_KEY && process.env.NODE_ENV !== 'test') {
+  console.error('ERROR: UN_COMTRADE_API_KEY environment variable is required and must be set.');
   process.exit(1);
 }
 
@@ -260,6 +274,8 @@ const {
   fetchWorldBankIndicator,
   fetchIMFIndicator,
   fetchFREDSeries,
+  fetchOECDData,
+  fetchUNComtrade,
   executeDataTool,
   DATA_TOOLS,
 } = createDataToolsService({
@@ -267,6 +283,8 @@ const {
   RAW_DATA_TTL_MS,
   IS_DEV,
   FRED_API_KEY: process.env.FRED_API_KEY,
+  OECD_API_KEY,
+  UN_COMTRADE_API_KEY,
 });
 
 function iso2ToFlag(code) {
@@ -869,6 +887,8 @@ app.use('/mcp', createMcpRouter({
   fetchWorldBankIndicator,
   fetchIMFIndicator,
   fetchFREDSeries,
+  fetchOECDData,
+  fetchUNComtrade,
 }));
 
 const staticLimiter = createStaticLimiter();

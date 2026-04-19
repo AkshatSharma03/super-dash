@@ -17,15 +17,27 @@ function toolStatusText(name, input) {
     return `Fetching IMF data (${ind}${cc ? ' · ' + cc : ''})…`;
   }
   if (name === 'fetch_fred') return `Fetching FRED data (${input.series_id ?? ''})…`;
+  if (name === 'fetch_oecd') return `Fetching OECD data (${input.dataset ?? ''})…`;
+  if (name === 'fetch_un_comtrade') return `Fetching UN Comtrade data (${input.reporter_code ?? ''})…`;
   return 'Fetching economic data…';
 }
 
 /** Build the system prompt dynamically so it reflects which tools are actually available. */
 function buildVerifiedChatSystem(fredAvailable, DATA_TOOLS) {
+  const hasOECD = DATA_TOOLS.some((t) => t.name === 'fetch_oecd');
+  const hasComtrade = DATA_TOOLS.some((t) => t.name === 'fetch_un_comtrade');
+  const toolList = [
+    'fetch_world_bank',
+    'fetch_imf',
+    fredAvailable ? 'fetch_fred' : null,
+    hasOECD ? 'fetch_oecd' : null,
+    hasComtrade ? 'fetch_un_comtrade' : null,
+  ].filter(Boolean).join(', ');
+
   return `You are SuperDash, an AI assistant for economic data analysis and visualisation.
 
 STRICT DATA RULES — NO EXCEPTIONS:
-1. Call fetch_world_bank and/or fetch_imf${fredAvailable ? ' and/or fetch_fred' : ''} BEFORE creating any chart.
+1. Call one or more data tools (${toolList}) BEFORE creating any chart.
 2. NEVER generate, estimate, or recall any numerical values. Every number must come from a tool result.
 3. If a tool returns empty rows or an error, omit that chart and note it in the analysis.
 4. Copy values exactly from tool results into chart data. Do not round, interpolate, or fill gaps.
@@ -278,23 +290,21 @@ export function createChatRouter(deps) {
     let finalText = '';
     const verifiedIndicators = new Set();
     const kagiSources = [];
-    if (KAGI_API_KEY) {
-      try {
-        const kagiPrompt = buildKagiChatPrompt(messages, fetchedNewsSources);
-        const kagi = await callKagi(KAGI_BASE, KAGI_API_KEY, '/fastgpt', {
-          method: 'POST',
-          body: { query: kagiPrompt, cache: true },
-        });
-        const refs = Array.isArray(kagi?.data?.references) ? kagi.data.references : [];
-        for (const ref of refs) {
-          if (!ref?.url) continue;
-          if (!kagiSources.find(s => s.url === ref.url)) {
-            kagiSources.push({ title: ref.title || ref.url, url: ref.url });
-          }
+    try {
+      const kagiPrompt = buildKagiChatPrompt(messages, fetchedNewsSources);
+      const kagi = await callKagi(KAGI_BASE, KAGI_API_KEY, '/fastgpt', {
+        method: 'POST',
+        body: { query: kagiPrompt, cache: true },
+      });
+      const refs = Array.isArray(kagi?.data?.references) ? kagi.data.references : [];
+      for (const ref of refs) {
+        if (!ref?.url) continue;
+        if (!kagiSources.find(s => s.url === ref.url)) {
+          kagiSources.push({ title: ref.title || ref.url, url: ref.url });
         }
-      } catch (e) {
-        console.error('/api/chat Kagi enrichment error:', e.message);
       }
+    } catch (e) {
+      console.error('/api/chat Kagi enrichment error:', e.message);
     }
 
     try {
@@ -352,7 +362,11 @@ export function createChatRouter(deps) {
             resultContent = await executeDataTool(tu.name, tu.input);
             const toolData = JSON.parse(resultContent);
             if (Array.isArray(toolData.rows) && toolData.rows.length > 0) {
-              const key = tu.input.indicator ?? tu.input.series_id ?? tu.name;
+              const key = tu.input.indicator
+                ?? tu.input.series_id
+                ?? tu.input.dataset
+                ?? tu.input.flow_code
+                ?? tu.name;
               verifiedIndicators.add(key);
             }
             if (IS_DEV) console.log(`[data tool] ${tu.name}`, tu.input, `→ ${toolData.rows?.length ?? 0} rows`);
@@ -430,7 +444,7 @@ export function createChatRouter(deps) {
       } else if (verifiedIndicators.size === 0 && (parsed.charts ?? []).length > 0) {
         console.warn('[verified-data] no real data fetched — stripping all charts');
         parsed.charts = [];
-        parsed.insight += ' ⚠ Charts are not shown because no data could be fetched from the official APIs (World Bank, IMF). Check that the APIs are reachable, or add a FRED_API_KEY environment variable for US data.';
+        parsed.insight += ' ⚠ Charts are not shown because no data could be fetched from the official APIs (World Bank, IMF, OECD, UN Comtrade, FRED). Check API reachability and credentials.';
       }
 
       // Merge Kagi + news source citations

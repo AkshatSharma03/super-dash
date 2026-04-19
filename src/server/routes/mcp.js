@@ -4,7 +4,13 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { z } from 'zod';
 
 export function createMcpServerInstance(deps) {
-  const { fetchWorldBankIndicator, fetchIMFIndicator, fetchFREDSeries } = deps;
+  const {
+    fetchWorldBankIndicator,
+    fetchIMFIndicator,
+    fetchFREDSeries,
+    fetchOECDData,
+    fetchUNComtrade,
+  } = deps;
 
   const srv = new McpServer({ name: 'superdash-economic-data', version: '1.0.0' });
 
@@ -69,6 +75,70 @@ export function createMcpServerInstance(deps) {
     }
   );
 
+  srv.tool('fetch_oecd',
+    'Fetch OECD SDMX data for OECD/member indicators and structural series.',
+    {
+      dataset:    z.string().describe('OECD dataset code, e.g. "MEI"'),
+      filter:     z.string().describe('OECD filter path, e.g. "USA.CPALTT01.IXOB.A"'),
+      start_year: z.number().int().min(1950).max(2024).default(2000),
+      end_year:   z.number().int().min(1950).max(2024).default(2024),
+    },
+    async ({ dataset, filter, start_year, end_year }) => {
+      const rows = await fetchOECDData(dataset, filter, start_year, end_year);
+      if (!rows.length) throw new Error(`No OECD data for ${dataset} / ${filter}`);
+      return { content: [{ type: 'text', text: JSON.stringify({
+        rows,
+        source: 'OECD Data',
+        dataset,
+        filter,
+        sourceUrl: 'https://stats.oecd.org/',
+        count: rows.length,
+      }) }] };
+    }
+  );
+
+  srv.tool('fetch_un_comtrade',
+    'Fetch UN Comtrade merchandise trade records (bilateral/commodity-level).',
+    {
+      reporter_code: z.string().describe('Reporter numeric code, e.g. "840" for USA'),
+      partner_code:  z.string().default('0').describe('Partner code, "0" = world'),
+      flow_code:     z.string().default('X').describe('"X" exports, "M" imports'),
+      cmd_code:      z.string().default('TOTAL').describe('Commodity code, "TOTAL" for all'),
+      period:        z.string().default('2023').describe('Year or comma-separated years'),
+      frequency:     z.string().default('A').describe('Frequency, usually "A"'),
+      type:          z.string().default('C').describe('Trade type: C commodities, S services'),
+      classification:z.string().default('HS').describe('Classification code, e.g. HS'),
+    },
+    async ({
+      reporter_code,
+      partner_code,
+      flow_code,
+      cmd_code,
+      period,
+      frequency,
+      type,
+      classification,
+    }) => {
+      const rows = await fetchUNComtrade({
+        reporterCode: reporter_code,
+        partnerCode: partner_code,
+        flowCode: flow_code,
+        cmdCode: cmd_code,
+        period,
+        frequency,
+        type,
+        classification,
+      });
+      if (!rows.length) throw new Error(`No UN Comtrade data for reporter ${reporter_code}`);
+      return { content: [{ type: 'text', text: JSON.stringify({
+        rows,
+        source: 'UN Comtrade',
+        sourceUrl: 'https://comtradeplus.un.org/',
+        count: rows.length,
+      }) }] };
+    }
+  );
+
   return srv;
 }
 
@@ -78,6 +148,8 @@ export function createMcpRouter(deps) {
     fetchWorldBankIndicator,
     fetchIMFIndicator,
     fetchFREDSeries,
+    fetchOECDData,
+    fetchUNComtrade,
   } = deps;
 
   const router = Router();
@@ -88,7 +160,13 @@ export function createMcpRouter(deps) {
     const transport = new SSEServerTransport('/mcp/message', res);
     mcpSessions.set(transport.sessionId, transport);
     req.on('close', () => mcpSessions.delete(transport.sessionId));
-    const srv = createMcpServerInstance({ fetchWorldBankIndicator, fetchIMFIndicator, fetchFREDSeries });
+    const srv = createMcpServerInstance({
+      fetchWorldBankIndicator,
+      fetchIMFIndicator,
+      fetchFREDSeries,
+      fetchOECDData,
+      fetchUNComtrade,
+    });
     await srv.connect(transport);
   });
 

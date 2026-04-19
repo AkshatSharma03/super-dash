@@ -1,6 +1,13 @@
 import countries from 'i18n-iso-countries';
 
-export function createDataToolsService({ rawDataCache, RAW_DATA_TTL_MS, IS_DEV, FRED_API_KEY }) {
+export function createDataToolsService({
+  rawDataCache,
+  RAW_DATA_TTL_MS,
+  IS_DEV,
+  FRED_API_KEY,
+  OECD_API_KEY,
+  UN_COMTRADE_API_KEY,
+}) {
   async function fetchWithRetry(url, options, retries = 2, baseDelay = 1000, retryStatuses = [429, 503], timeoutMs = null) {
     for (let i = 0; i <= retries; i += 1) {
       try {
@@ -89,6 +96,127 @@ export function createDataToolsService({ rawDataCache, RAW_DATA_TTL_MS, IS_DEV, 
       .sort((a, b) => a.year - b.year);
   }
 
+  async function fetchOECDData(dataset, filter, startYear = 2000, endYear = 2024) {
+    if (!OECD_API_KEY) throw new Error('OECD_API_KEY environment variable is not set');
+    const url = `https://stats.oecd.org/SDMX-JSON/data/${dataset}/${filter}/all?startTime=${startYear}&endTime=${endYear}&dimensionAtObservation=AllDimensions`;
+    const ck = `oecd:${url}`;
+    const hit = rawDataCache.get(ck);
+    if (hit) return hit;
+
+    const res = await fetchWithRetry(
+      url,
+      {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${OECD_API_KEY}`,
+          'X-API-Key': OECD_API_KEY,
+        },
+      },
+      2,
+      1500,
+      [429, 503],
+      20000
+    );
+    const json = await res.json();
+    const dataSet = json?.dataSets?.[0];
+    const obsDims = json?.structure?.dimensions?.observation ?? [];
+    const obsValues = obsDims.map((d) => d?.values ?? []);
+    if (!dataSet?.observations || !obsDims.length) return [];
+
+    const rows = [];
+    for (const [obsKey, obsValue] of Object.entries(dataSet.observations)) {
+      if (!Array.isArray(obsValue) || obsValue[0] == null) continue;
+      const idx = String(obsKey).split(':').map((v) => Number.parseInt(v, 10));
+      const dimensions = {};
+      obsDims.forEach((dim, i) => {
+        const val = obsValues[i]?.[idx[i]];
+        const dimId = dim?.id || `dim_${i}`;
+        dimensions[dimId] = val?.id ?? val?.name ?? null;
+      });
+      const period = dimensions.TIME_PERIOD || dimensions.time_period || null;
+      const year = period ? Number.parseInt(String(period).slice(0, 4), 10) : null;
+      rows.push({
+        ...dimensions,
+        period,
+        year: Number.isFinite(year) ? year : null,
+        value: Number(obsValue[0]),
+      });
+    }
+
+    const result = rows
+      .filter((r) => Number.isFinite(r.value))
+      .sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+
+    rawDataCache.put(ck, result, RAW_DATA_TTL_MS);
+    return result;
+  }
+
+  async function fetchUNComtrade({
+    reporterCode,
+    partnerCode = '0',
+    flowCode = 'X',
+    cmdCode = 'TOTAL',
+    period = '2023',
+    frequency = 'A',
+    type = 'C',
+    classification = 'HS',
+  }) {
+    if (!UN_COMTRADE_API_KEY) throw new Error('UN_COMTRADE_API_KEY environment variable is not set');
+    const url = new URL(`https://api.uncomtrade.org/data/v1/get/${type}/${frequency}/${classification}`);
+    url.searchParams.set('reporterCode', String(reporterCode));
+    url.searchParams.set('partnerCode', String(partnerCode));
+    url.searchParams.set('flowCode', String(flowCode));
+    url.searchParams.set('cmdCode', String(cmdCode));
+    url.searchParams.set('period', String(period));
+    url.searchParams.set('format', 'json');
+
+    const ck = `comtrade:${url.toString()}`;
+    const hit = rawDataCache.get(ck);
+    if (hit) return hit;
+
+    const res = await fetchWithRetry(
+      url.toString(),
+      {
+        headers: {
+          Accept: 'application/json',
+          'Ocp-Apim-Subscription-Key': UN_COMTRADE_API_KEY,
+          'X-API-Key': UN_COMTRADE_API_KEY,
+        },
+      },
+      2,
+      1500,
+      [429, 503],
+      25000
+    );
+    const json = await res.json();
+    const records = Array.isArray(json?.data) ? json.data : [];
+
+    const rows = records
+      .map((r) => {
+        const periodStr = String(r.period ?? '');
+        const year = Number.parseInt(periodStr.slice(0, 4), 10);
+        const value = r.primaryValue ?? r.tradeValue ?? r.TradeValue ?? null;
+        return {
+          year: Number.isFinite(year) ? year : null,
+          period: r.period ?? null,
+          flowCode: r.flowCode ?? flowCode,
+          flow: r.flowDesc ?? null,
+          reporterCode: r.reporterCode ?? reporterCode,
+          reporter: r.reporterDesc ?? null,
+          partnerCode: r.partnerCode ?? partnerCode,
+          partner: r.partnerDesc ?? null,
+          cmdCode: r.cmdCode ?? cmdCode,
+          commodity: r.cmdDesc ?? null,
+          value: value != null ? Number(value) : null,
+        };
+      })
+      .filter((r) => Number.isFinite(r.value))
+      .sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+
+    rawDataCache.put(ck, rows, RAW_DATA_TTL_MS);
+    return rows;
+  }
+
   const WB_TO_IMF_INDICATOR = {
     'NY.GDP.MKTP.KD.ZG': 'NGDP_RPCH',
     'NY.GDP.MKTP.CD': 'NGDPD',
@@ -154,6 +282,49 @@ export function createDataToolsService({ rawDataCache, RAW_DATA_TTL_MS, IS_DEV, 
       return JSON.stringify({ rows, source: 'FRED (Federal Reserve Bank of St. Louis)', series_id, sourceUrl });
     }
 
+    if (name === 'fetch_oecd') {
+      const { dataset, filter, start_year = 2000, end_year = 2024 } = input;
+      const rows = await fetchOECDData(dataset, filter, start_year, end_year);
+      if (rows.length === 0) throw new Error('OECD returned no data for this query');
+      const sourceUrl = `https://stats.oecd.org/`;
+      return JSON.stringify({ rows, source: 'OECD Data', dataset, filter, sourceUrl });
+    }
+
+    if (name === 'fetch_un_comtrade') {
+      const {
+        reporter_code,
+        partner_code = '0',
+        flow_code = 'X',
+        cmd_code = 'TOTAL',
+        period = '2023',
+        frequency = 'A',
+        type = 'C',
+        classification = 'HS',
+      } = input;
+      const rows = await fetchUNComtrade({
+        reporterCode: reporter_code,
+        partnerCode: partner_code,
+        flowCode: flow_code,
+        cmdCode: cmd_code,
+        period,
+        frequency,
+        type,
+        classification,
+      });
+      if (rows.length === 0) throw new Error('UN Comtrade returned no data for this query');
+      const sourceUrl = `https://comtradeplus.un.org/`;
+      return JSON.stringify({
+        rows,
+        source: 'UN Comtrade',
+        reporter_code,
+        partner_code,
+        flow_code,
+        cmd_code,
+        period,
+        sourceUrl,
+      });
+    }
+
     throw new Error(`Unknown tool: ${name}`);
   }
 
@@ -216,6 +387,68 @@ OTHER: BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), 
         required: ['series_id'],
       },
     },
+    {
+      name: 'fetch_oecd',
+      description: 'Fetch verified OECD SDMX data. Best for OECD economies and structural indicators when World Bank/IMF series are not sufficient.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          dataset: {
+            type: 'string',
+            description: 'OECD SDMX dataset code (e.g. "MEI", "QNA").',
+          },
+          filter: {
+            type: 'string',
+            description: 'OECD SDMX filter path segment (e.g. "USA.CPALTT01.IXOB.A").',
+          },
+          start_year: { type: 'number', description: 'Start year (default 2000)' },
+          end_year: { type: 'number', description: 'End year (default 2024)' },
+        },
+        required: ['dataset', 'filter'],
+      },
+    },
+    {
+      name: 'fetch_un_comtrade',
+      description: 'Fetch verified merchandise trade data from UN Comtrade. Use for bilateral trade flows and commodity-level trade values.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          reporter_code: {
+            type: 'string',
+            description: 'UN Comtrade reporter numeric code, e.g. "840" (USA), "156" (China), "276" (Germany).',
+          },
+          partner_code: {
+            type: 'string',
+            description: 'Partner numeric code. Use "0" for world aggregate. Default "0".',
+          },
+          flow_code: {
+            type: 'string',
+            description: 'Trade flow: "X" exports, "M" imports. Default "X".',
+          },
+          cmd_code: {
+            type: 'string',
+            description: 'Commodity code, e.g. "TOTAL" for all products or HS code. Default "TOTAL".',
+          },
+          period: {
+            type: 'string',
+            description: 'Year(s), e.g. "2023" or "2020,2021,2022,2023". Default "2023".',
+          },
+          frequency: {
+            type: 'string',
+            description: 'Frequency, usually "A" for annual. Default "A".',
+          },
+          type: {
+            type: 'string',
+            description: 'Trade type: "C" commodities (default) or "S" services.',
+          },
+          classification: {
+            type: 'string',
+            description: 'Commodity classification, default "HS".',
+          },
+        },
+        required: ['reporter_code'],
+      },
+    },
   ];
 
   return {
@@ -223,6 +456,8 @@ OTHER: BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), 
     fetchWorldBankIndicator,
     fetchIMFIndicator,
     fetchFREDSeries,
+    fetchOECDData,
+    fetchUNComtrade,
     executeDataTool,
     DATA_TOOLS,
   };

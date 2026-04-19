@@ -18,7 +18,7 @@ export interface ChartSeries {
 
 /** Provenance metadata attached to charts produced by the verified data pipeline. */
 export interface ChartSource {
-  api: "worldbank" | "imf" | "fred";
+  api: "worldbank" | "imf" | "fred" | "oecd" | "uncomtrade";
   indicator: string;
   indicatorName: string;
   countries?: string[];
