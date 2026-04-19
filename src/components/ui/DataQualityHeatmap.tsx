@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type {
   CountryDataset,
   DataQualityCell,
@@ -18,11 +18,6 @@ const QUALITY_COLORS: QualityColorMap = {
     label: "Complete",
   },
   partial: { bg: "bg-amber-100", text: "text-amber-800", label: "Partial" },
-  estimated: {
-    bg: "bg-orange-200",
-    text: "text-orange-800",
-    label: "Estimated",
-  },
   missing: { bg: "bg-red-100", text: "text-red-800", label: "Missing" },
 };
 
@@ -88,7 +83,7 @@ function deriveQuality(dataset: CountryDataset): DataQualityCell[] {
         const e = expMap.get(y);
         if (!e) return { status: "missing", display: "—" };
         if (typeof e.total !== "number")
-          return { status: "estimated", display: "est." };
+          return { status: "missing", display: "—" };
         return { status: "complete", display: `$${e.total}B` };
       },
     },
@@ -99,7 +94,7 @@ function deriveQuality(dataset: CountryDataset): DataQualityCell[] {
         const im = impMap.get(y);
         if (!im) return { status: "missing", display: "—" };
         if (typeof im.total !== "number")
-          return { status: "estimated", display: "est." };
+          return { status: "missing", display: "—" };
         return { status: "complete", display: `$${im.total}B` };
       },
     },
@@ -113,7 +108,7 @@ function deriveQuality(dataset: CountryDataset): DataQualityCell[] {
         if (filled === 0) return { status: "missing", display: "—" };
         if (filled < sectors.length)
           return { status: "partial", display: `${filled}/${sectors.length}` };
-        return { status: "estimated", display: `${filled}/${sectors.length}` };
+        return { status: "complete", display: `${filled}/${sectors.length}` };
       },
     },
     {
@@ -126,7 +121,7 @@ function deriveQuality(dataset: CountryDataset): DataQualityCell[] {
         if (filled === 0) return { status: "missing", display: "—" };
         if (filled < partners.length)
           return { status: "partial", display: `${filled}/${partners.length}` };
-        return { status: "estimated", display: `${filled}/${partners.length}` };
+        return { status: "complete", display: `${filled}/${partners.length}` };
       },
     },
   ];
@@ -177,15 +172,11 @@ export default function DataQualityHeatmap({ dataset }: Props) {
   const stats = useMemo(() => {
     const total = qualityData.length;
     const complete = qualityData.filter((c) => c.status === "complete").length;
-    const estimated = qualityData.filter(
-      (c) => c.status === "estimated",
-    ).length;
     const partial = qualityData.filter((c) => c.status === "partial").length;
     const missing = qualityData.filter((c) => c.status === "missing").length;
     return {
       total,
       complete: Math.round((complete / total) * 100),
-      estimated: Math.round((estimated / total) * 100),
       partial: Math.round((partial / total) * 100),
       missing: Math.round((missing / total) * 100),
     };
@@ -209,8 +200,8 @@ export default function DataQualityHeatmap({ dataset }: Props) {
           Data Coverage
         </h3>
         <p className="text-[10px] text-memphis-black/50 mt-0.5">
-          {stats.complete}% complete · {stats.estimated}% estimated ·{" "}
-          {stats.partial}% partial · {stats.missing}% missing
+          {stats.complete}% complete · {stats.partial}% partial ·{" "}
+          {stats.missing}% missing
         </p>
       </div>
 
@@ -267,9 +258,7 @@ export default function DataQualityHeatmap({ dataset }: Props) {
                         ? "●"
                         : status === "missing"
                           ? "—"
-                          : status === "estimated"
-                            ? "≈"
-                            : "◐"}
+                          : "◐"}
                     </span>
                   </div>
                 );
@@ -328,5 +317,3 @@ export default function DataQualityHeatmap({ dataset }: Props) {
     </div>
   );
 }
-
-import { useState } from "react";

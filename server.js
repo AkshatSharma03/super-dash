@@ -540,80 +540,30 @@ async function buildCountryDataset(isoCode) {
     gdp_per_capita: perCapMap[year] ? +perCapMap[year].toFixed(0) : null,
   })).filter(d => d.gdp_bn !== null);
 
-  // Trade data handling (IMF may return growth rates, not absolute values)
+  // Trade data handling: only keep source-backed absolute USD totals.
   const tradeYears = [...new Set([...Object.keys(expMap), ...Object.keys(impMap)].map(Number))]
     .filter(y => y >= 2010 && y <= 2024).sort((a, b) => a - b);
 
-  // Detect if we have absolute values (World Bank) or growth rates (IMF)
-  const isAbsoluteValues = tradeYears.length > 0 && 
-    (Object.values(expMap).some(v => v > 100) || Object.values(impMap).some(v => v > 100));
-
-  const exportTotals = isAbsoluteValues 
-    ? Object.fromEntries(tradeYears.filter(y => expMap[y]).map(y => [y, +(expMap[y] / 1e9).toFixed(1)]))
-    : Object.fromEntries(tradeYears.filter(y => expMap[y]).map(y => [y, `${expMap[y]}%`]));
-
-  const importTotals = isAbsoluteValues
-    ? Object.fromEntries(tradeYears.filter(y => impMap[y]).map(y => [y, +(impMap[y] / 1e9).toFixed(1)]))
-    : Object.fromEntries(tradeYears.filter(y => impMap[y]).map(y => [y, `${impMap[y]}%`]));
-
-  // Claude breakdown prompt (generic, no hardcoded country)
-  const breakdownPrompt = `Generate trade composition breakdown for ${countryName} (ISO-2: ${code}).
-
-${isAbsoluteValues ? `Real World Bank total exports (USD billions):
-${JSON.stringify(exportTotals)}
-
-Real World Bank total imports (USD billions):
-${JSON.stringify(importTotals)}` : `IMF trade volume growth rates (%):
-Exports: ${JSON.stringify(exportTotals)}
-Imports: ${JSON.stringify(importTotals)}
-
-Note: IMF provides growth rates, not absolute values. Estimate relative proportions based on typical trade patterns for ${countryName}.`}
-
-Return ONLY this JSON (no markdown, no explanation):
-{
-  "exportSectors": [{"key":"snake_key","label":"Label","color":"#hex"}, ...],
-  "importPartners": [{"key":"snake_key","label":"Label","color":"#hex"}, ...],
-  "exportData": [{"year":2010,"total":X,"<sector_key>":X,...}, ...],
-  "importData": [{"year":2010,"total":X,"<partner_key>":X,...}, ...],
-  "pieExports": [{"name":"Label","value":X}, ...],
-  "pieImports": [{"name":"Label","value":X}, ...]
-}
-
-Rules:
-1. 5–6 export sectors; last key must be "other".
-2. 5–6 import partners/regions; last key must be "other".
-3. Values must SUM to match totals for each year (±0.2 rounding OK).
-4. "total" field = exactly the provided value.
-5. Include ONLY years present in the provided totals.
-6. Export sector colors: #F59E0B #94a3b8 #10B981 #8B5CF6 #06B6D4 #64748b
-7. Import partner colors: #EF4444 #F59E0B #10B981 #F97316 #8B5CF6 #64748b
-8. pieExports/pieImports use the most recent year available.`;
-
-  const bdRes = await callAnthropic({
-    model: MODEL, max_tokens: 4000, temperature: 0,
-    system: 'Return only valid JSON matching the schema given. No markdown, no explanation.',
-    messages: [{ role: 'user', content: breakdownPrompt }],
-  });
-  const bdText = bdRes.content?.map(b => b.text || '').join('') || '{}';
-  let bd;
-  try { bd = JSON.parse(bdText.replace(/```json|```/g, '').trim()); }
-  catch { throw new Error(`Claude breakdown parse failed for ${code}: ${bdText.slice(0, 200)}`); }
+  const exportData = tradeYears
+    .filter((year) => typeof expMap[year] === 'number')
+    .map((year) => ({ year, total: +(expMap[year] / 1e9).toFixed(1) }));
+  const importData = tradeYears
+    .filter((year) => typeof impMap[year] === 'number')
+    .map((year) => ({ year, total: +(impMap[year] / 1e9).toFixed(1) }));
 
   const gdpDataFinal = gdpData;
 
   // Build KPIs
   const lastGDP  = gdpDataFinal[gdpDataFinal.length - 1];
   const prevGDP  = gdpDataFinal[gdpDataFinal.length - 2];
-  const sortedExpYears = Object.entries(exportTotals).sort((a, b) => +b[0] - +a[0]);
-  const sortedImpYears = Object.entries(importTotals).sort((a, b) => +b[0] - +a[0]);
-  const expTotal = sortedExpYears[0] ? +sortedExpYears[0][1] : 0;
-  const impTotal = sortedImpYears[0] ? +sortedImpYears[0][1] : 0;
-  const expYear  = sortedExpYears[0]?.[0] ?? '';
-  const balance  = isAbsoluteValues ? +(expTotal - impTotal).toFixed(1) : null;
+  const latestExport = [...exportData].sort((a, b) => b.year - a.year)[0] ?? null;
+  const latestImport = [...importData].sort((a, b) => b.year - a.year)[0] ?? null;
+  const expTotal = latestExport?.total ?? null;
+  const impTotal = latestImport?.total ?? null;
+  const expYear  = latestExport?.year ?? '';
+  const impYear  = latestImport?.year ?? '';
+  const balance  = expTotal != null && impTotal != null ? +(expTotal - impTotal).toFixed(1) : null;
   const gdpDelta = lastGDP && prevGDP ? +(lastGDP.gdp_bn - prevGDP.gdp_bn).toFixed(1) : null;
-  const topPartner = (bd.importPartners ?? []).find(p => p.key !== 'other');
-  const topPie     = (bd.pieImports   ?? []).find(p => p.name !== 'Other' && p.name !== 'other');
-  const topPct     = topPie && isAbsoluteValues && impTotal > 0 ? Math.round((topPie.value / impTotal) * 100) : null;
 
   const kpis = [
     { label: `GDP ${lastGDP?.year ?? ''}`, value: `$${lastGDP?.gdp_bn}B`,
@@ -621,17 +571,17 @@ Rules:
     { label: 'GDP Growth', value: `${lastGDP?.gdp_growth ?? 'N/A'}%`,
       sub: `Real ${lastGDP?.year ?? ''}`, trend: null, color: '#10B981' },
     { label: 'GDP/Capita', value: lastGDP?.gdp_per_capita ? `$${Number(lastGDP.gdp_per_capita).toLocaleString()}` : 'N/A',
-      sub: `${lastGDP?.year ?? ''} estimate`, trend: null, color: '#8B5CF6' },
-    { label: 'Total Exports', value: isAbsoluteValues ? `$${expTotal}B` : `${expTotal}`,
-      sub: isAbsoluteValues ? expYear : 'volume growth %', trend: null, color: '#F59E0B' },
-    { label: 'Total Imports', value: isAbsoluteValues ? `$${impTotal}B` : `${impTotal}`,
-      sub: isAbsoluteValues ? expYear : 'volume growth %', trend: null, color: '#EF4444' },
-    ...(isAbsoluteValues ? [{
+      sub: `${lastGDP?.year ?? ''}`, trend: null, color: '#8B5CF6' },
+    { label: 'Total Exports', value: expTotal != null ? `$${expTotal}B` : 'N/A',
+      sub: expYear ? String(expYear) : 'Unavailable', trend: null, color: '#F59E0B' },
+    { label: 'Total Imports', value: impTotal != null ? `$${impTotal}B` : 'N/A',
+      sub: impYear ? String(impYear) : 'Unavailable', trend: null, color: '#EF4444' },
+    ...(balance != null ? [{
       label: 'Trade Balance', value: `${balance >= 0 ? '+' : ''}$${balance}B`, sub: expYear,
       trend: balance >= 0 ? '↑ Surplus' : '↓ Deficit', color: '#06B6D4'
     }] : []),
-    { label: '#1 Importer', value: topPartner?.label ?? 'N/A',
-      sub: topPie && topPct != null ? `$${topPie.value}B · ${topPct}% share` : '',
+    { label: '#1 Importer', value: 'Unavailable',
+      sub: 'Granular partner data not fetched from official source',
       trend: null, color: '#EF4444' },
   ];
 
@@ -641,19 +591,20 @@ Rules:
     flag: iso2ToFlag(code),
     region,
     gdpData: gdpDataFinal,
-    exportData:    bd.exportData    ?? [],
-    importData:    bd.importData    ?? [],
-    exportSectors: bd.exportSectors ?? [],
-    importPartners:bd.importPartners?? [],
+    exportData,
+    importData,
+    exportSectors: [],
+    importPartners: [],
     kpis,
-    pieExports: bd.pieExports ?? [],
-    pieImports: bd.pieImports ?? [],
+    pieExports: [],
+    pieImports: [],
     _meta: {
       sources: Array.from(sourcesUsed).map(s => {
         const src = Object.values(DATA_SOURCES).find(ds => ds.name.toLowerCase().replace(/\s/g, '') === s);
         return src ? src.name : s;
       }),
       fallbackUsed: sourcesUsed.has('imf') || sourcesUsed.has('oecd'),
+      noEstimatedTradeBreakdown: true,
       dataQuality: sourcesUsed.has('worldbank') ? 'high' : sourcesUsed.has('imf') ? 'good' : 'limited',
       cachedAt: Date.now(),
     },

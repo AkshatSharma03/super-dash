@@ -238,7 +238,7 @@ Open [http://localhost:5173](http://localhost:5173) in development or [http://lo
 | FRED (optional, env-gated) | US-focused macro time series in chat tools |
 | Kagi FastGPT | Search summaries with references |
 
-> **Note:** Sector-level trade breakdowns are AI-estimated from published aggregate sources. All AI Chat and Search responses cite live sources at query time.
+> **Note:** Country dashboard values are source-backed only. If granular trade breakdowns are unavailable from official sources, they are shown as missing (not estimated). AI Chat and Search responses cite live sources at query time.
 
 ---
 

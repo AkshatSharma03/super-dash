@@ -80,7 +80,7 @@ export const MODE_META: Record<Mode, ModeMeta> = {
     bg: "#8338EC",
     desc:
       "Select any country — real GDP & trade data from World Bank, cached " +
-      "locally · sector breakdown AI-estimated",
+      "locally · no AI-estimated country values",
   },
   methodology: {
     label: "Methodology",

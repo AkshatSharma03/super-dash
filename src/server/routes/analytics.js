@@ -22,7 +22,9 @@ Respond ONLY with a valid JSON object matching this exact shape (no markdown wra
 }
 Rules:
 - 1-2 targeted charts that directly address the user's question using the provided data
-- Use real values from the country data context wherever possible
+- Use only values that are explicitly present in the provided country data context or cited news context
+- Do not infer, estimate, impute, or invent any number
+- If the data needed to answer a part is missing, state that clearly instead of guessing
 - Colors: #00AAFF #F59E0B #10B981 #EF4444 #8B5CF6 #F97316
 - sources: always include deep links — use these patterns:
   * World Bank indicator: https://data.worldbank.org/indicator/<INDICATOR_CODE>?locations=<ISO2>

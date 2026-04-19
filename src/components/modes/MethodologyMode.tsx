@@ -386,8 +386,9 @@ export default function MethodologyMode() {
                 Transparent data sources.
               </strong>{" "}
               Country data comes from the World Bank API with IMF/OECD fallback.
-              Sector-level breakdowns are AI-estimated when granular data is
-              unavailable. All sources are cited in each chart.
+              When granular trade breakdown data is unavailable, it is shown as
+              missing rather than estimated. All sources are cited in each
+              chart.
             </span>
           </li>
           <li className="flex gap-2">

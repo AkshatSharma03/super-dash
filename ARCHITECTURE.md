@@ -309,7 +309,7 @@ If `KIMI_API_KEY` is not set, or if the Kimi call fails (network error, timeout,
 ### Phase 1: MVP + Monetization — SHIPPED
 
 - **Methodology Mode** (`MethodologyMode.tsx`): Full documentation for all 8 algorithms — LaTeX formulas, parameters, assumptions, data quality notes, and paper references. Uses `react-katex`.
-- **Data Quality Heatmap** (`DataQualityHeatmap.tsx`): Years-vs-indicators grid in Dashboard Mode showing data completeness (complete/partial/estimated/missing) with tooltips and stats.
+- **Data Quality Heatmap** (`DataQualityHeatmap.tsx`): Years-vs-indicators grid in Dashboard Mode showing data completeness (complete/partial/missing) with tooltips and stats.
 - **Shareable Session Links**: `session_shares` table, `POST/GET/DELETE /api/sessions/:id/share`, `GET /api/share/:token` (public), `ShareButton.tsx` component in ChatMode.
 - **Stripe Billing**: `subscriptions` table, checkout/portal/cancel/webhook endpoints, `BillingPanel.tsx` with Free/Pro/Enterprise pricing cards. `SettingsPanel.tsx` has "Manage Plan & Billing" button. Graceful fallback if Stripe is not configured. Plan limit enforcement via `checkPlanLimit()`.
 

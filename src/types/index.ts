@@ -252,7 +252,7 @@ export interface CountryGDPEntry {
 export interface CountryPieEntry { name: string; value: number; }
 export interface CountryKPIEntry { label: string; value: string; sub: string; trend: string | null; color: string; }
 
-export type DataQualityStatus = "complete" | "partial" | "missing" | "estimated";
+export type DataQualityStatus = "complete" | "partial" | "missing";
 
 export interface DataQualityCell {
   year: number;

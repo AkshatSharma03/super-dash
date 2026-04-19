@@ -282,7 +282,7 @@ export default function DashboardMode({
           <Loader2 className="w-7 h-7 mb-3 mx-auto animate-spin" />
           <div className="text-sm">Fetching data from World Bank…</div>
           <div className="text-xs mt-1.5 text-slate-700">
-            GDP, trade totals + AI-estimated sector breakdown
+            GDP and trade totals only (source-backed)
           </div>
         </div>
       )}
@@ -496,7 +496,13 @@ export default function DashboardMode({
           {/* ── Exports tab ── */}
           {tab === "Exports" && (
             <>
-              <Card title="Export Composition by Sector ($B)">
+              <Card
+                title={
+                  dataset.exportSectors.length
+                    ? "Export Composition by Sector ($B)"
+                    : "Export Totals ($B) — Sector Breakdown Unavailable"
+                }
+              >
                 <ResponsiveContainer width="100%" height={isMobile ? 220 : 270}>
                   <BarChart
                     data={exp}
@@ -524,38 +530,44 @@ export default function DashboardMode({
               </Card>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Card title="Export Breakdown (latest year)">
-                  <ResponsiveContainer
-                    width="100%"
-                    height={isMobile ? 190 : 220}
-                  >
-                    <PieChart>
-                      <Pie
-                        data={dataset.pieExports}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={isMobile ? 62 : 80}
-                        label={
-                          !isMobile
-                            ? ({
-                                name,
-                                value,
-                              }: {
-                                name: string;
-                                value: number;
-                              }) => `${name}: $${value}B`
-                            : false
-                        }
-                        labelLine={!isMobile}
-                      >
-                        {dataset.pieExports.map((_, i) => (
-                          <Cell key={i} fill={P[i % P.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip {...TT} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  {dataset.pieExports.length ? (
+                    <ResponsiveContainer
+                      width="100%"
+                      height={isMobile ? 190 : 220}
+                    >
+                      <PieChart>
+                        <Pie
+                          data={dataset.pieExports}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={isMobile ? 62 : 80}
+                          label={
+                            !isMobile
+                              ? ({
+                                  name,
+                                  value,
+                                }: {
+                                  name: string;
+                                  value: number;
+                                }) => `${name}: $${value}B`
+                              : false
+                          }
+                          labelLine={!isMobile}
+                        >
+                          {dataset.pieExports.map((_, i) => (
+                            <Cell key={i} fill={P[i % P.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip {...TT} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[190px] sm:h-[220px] flex items-center justify-center text-xs text-memphis-black/60">
+                      No source-backed sector split available.
+                    </div>
+                  )}
                 </Card>
                 <Card title="Total Exports Over Time ($B)">
                   <ResponsiveContainer
@@ -588,7 +600,13 @@ export default function DashboardMode({
           {/* ── Imports tab ── */}
           {tab === "Imports" && (
             <>
-              <Card title="Imports by Partner ($B) — Stacked">
+              <Card
+                title={
+                  dataset.importPartners.length
+                    ? "Imports by Partner ($B) — Stacked"
+                    : "Import Totals ($B) — Partner Breakdown Unavailable"
+                }
+              >
                 <ResponsiveContainer width="100%" height={isMobile ? 220 : 270}>
                   <AreaChart
                     data={imp}
@@ -644,38 +662,44 @@ export default function DashboardMode({
                   </ResponsiveContainer>
                 </Card>
                 <Card title="Import Share by Partner (latest year)">
-                  <ResponsiveContainer
-                    width="100%"
-                    height={isMobile ? 190 : 220}
-                  >
-                    <PieChart>
-                      <Pie
-                        data={dataset.pieImports}
-                        dataKey="value"
-                        nameKey="name"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={isMobile ? 62 : 80}
-                        label={
-                          !isMobile
-                            ? ({
-                                name,
-                                value,
-                              }: {
-                                name: string;
-                                value: number;
-                              }) => `${name}: $${value}B`
-                            : false
-                        }
-                        labelLine={!isMobile}
-                      >
-                        {dataset.pieImports.map((_, i) => (
-                          <Cell key={i} fill={P[i % P.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip {...TT} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  {dataset.pieImports.length ? (
+                    <ResponsiveContainer
+                      width="100%"
+                      height={isMobile ? 190 : 220}
+                    >
+                      <PieChart>
+                        <Pie
+                          data={dataset.pieImports}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={isMobile ? 62 : 80}
+                          label={
+                            !isMobile
+                              ? ({
+                                  name,
+                                  value,
+                                }: {
+                                  name: string;
+                                  value: number;
+                                }) => `${name}: $${value}B`
+                              : false
+                          }
+                          labelLine={!isMobile}
+                        >
+                          {dataset.pieImports.map((_, i) => (
+                            <Cell key={i} fill={P[i % P.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip {...TT} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[190px] sm:h-[220px] flex items-center justify-center text-xs text-memphis-black/60">
+                      No source-backed partner split available.
+                    </div>
+                  )}
                 </Card>
               </div>
             </>

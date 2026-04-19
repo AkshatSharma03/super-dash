@@ -210,7 +210,7 @@ export const METHODOLOGY: AlgoMethod[] = [
       "Shares sum to 100% of total trade value",
     ],
     dataQualityNotes: [
-      "Sector/partner breakdowns are AI-estimated from published aggregate sources when granular data is unavailable",
+      "Only source-backed sector/partner values are used; missing granular data is left missing",
       "The 'Other' bucket may contain many small components that look concentrated but are individually diverse",
       "HHI is insensitive to the distribution *within* 'Other'",
     ],
