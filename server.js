@@ -91,7 +91,7 @@ const APP_BUILD_ID =
   || process.env.RENDER_GIT_COMMIT
   || new Date().toISOString();
 
-if (!ANTHROPIC_API_KEY) {
+if (!ANTHROPIC_API_KEY && process.env.NODE_ENV !== 'test') {
   console.error('ERROR: ANTHROPIC_API_KEY environment variable is not set.');
   process.exit(1);
 }
