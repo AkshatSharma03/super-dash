@@ -1,4 +1,4 @@
-# EconChart — Feature Roadmap & Implementation Log
+# SuperDash — Feature Roadmap & Implementation Log
 
 > Living document. Update status as features ship.
 
@@ -277,7 +277,7 @@ function checkPlanLimit(userId, feature) {
 | `ANTHROPIC_API_KEY` | Yes | Claude API key (server-side only) |
 | `JWT_SECRET` | Yes (prod) | Secret for signing JWTs |
 | `PORT` | No | Server port (default 3000) |
-| `DB_PATH` | No | SQLite file path (default `data/econChart.db`) |
+| `DB_PATH` | No | SQLite file path (default `data/superdash.db`) |
 | `KIMI_API_KEY` | No | Kimi 2.5 API key for query canonicalization |
 | `KIMI_MODEL` | No | Kimi model override |
 | `KAGI_API_KEY` | No | Kagi FastGPT for search |

@@ -126,7 +126,7 @@ describe("GET /api/peers/:countryCode", () => {
     const sqlite = (await import("better-sqlite3" as string)) as {
       default: new (...args: [string]) => { prepare(sql: string): { run(...values: any[]): void }; close(): void };
     };
-    const DB_PATH = `${process.cwd()}/data/econChart.db`;
+    const DB_PATH = `${process.cwd()}/data/superdash.db`;
     const db = new sqlite.default(DB_PATH);
 
     const now = new Date().toISOString();

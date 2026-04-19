@@ -171,9 +171,9 @@ export function createAuthRouter(deps) {
           auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
         });
         await transporter.sendMail({
-          from: process.env.SMTP_FROM || `"EconChart" <noreply@${smtpHost}>`,
+          from: process.env.SMTP_FROM || `"SuperDash" <noreply@${smtpHost}>`,
           to: em,
-          subject: 'Reset your EconChart password',
+          subject: 'Reset your SuperDash password',
           text: `Click the link below to reset your password (valid for 1 hour):\n\n${resetUrl}\n\nIf you didn't request this, you can ignore this email.`,
           html: `<p>Click the link below to reset your password (valid for 1 hour):</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>If you didn't request this, you can ignore this email.</p>`,
         });

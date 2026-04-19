@@ -6,7 +6,7 @@ import { z } from 'zod';
 export function createMcpServerInstance(deps) {
   const { fetchWorldBankIndicator, fetchIMFIndicator, fetchFREDSeries } = deps;
 
-  const srv = new McpServer({ name: 'econchart-economic-data', version: '1.0.0' });
+  const srv = new McpServer({ name: 'superdash-economic-data', version: '1.0.0' });
 
   srv.tool('fetch_world_bank',
     'Fetch verified economic indicator data from the World Bank Open Data API for any country. ' +

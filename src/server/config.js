@@ -49,7 +49,7 @@ export const KAGI_TIMEOUT_MS = 25_000;
 export const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
 export const BCRYPT_ROUNDS = 10;
 
-export const DB_PATH = process.env.DB_PATH || join(ROOT_DIR, 'data', 'econChart.db');
+export const DB_PATH = process.env.DB_PATH || join(ROOT_DIR, 'data', 'superdash.db');
 
 export const COUNTRY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const RAW_DATA_TTL_MS = 7 * 24 * 60 * 60 * 1000;

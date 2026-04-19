@@ -401,7 +401,7 @@ export default function App() {
               "tracking-tight uppercase",
             )}
           >
-            EconChart
+            SuperDash
           </span>
         </div>
 

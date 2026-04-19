@@ -43,7 +43,7 @@ function buildSnapshotCitation(snapshot, payload) {
   const version = Number(snapshot.data_version) || Date.now();
   const publishedYear = new Date(snapshot.created_at || Date.now()).getFullYear();
   const title = snapshot.title || `Snapshot of ${snapshot.country_code}`;
-  return `${name}. (${publishedYear}). ${title} [Data set]. EconChart. Data version ${version}.`;
+  return `${name}. (${publishedYear}). ${title} [Data set]. SuperDash. Data version ${version}.`;
 }
 
 function buildSnapshotDiff(previousPayload, nextPayload) {

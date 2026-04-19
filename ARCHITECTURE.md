@@ -1,8 +1,8 @@
-# EconChart — Architecture & Interview Reference
+# SuperDash — Architecture & Interview Reference
 
 ## What the App Does
 
-**EconChart** is a full-stack economic intelligence dashboard. Users can:
+**SuperDash** is a full-stack economic intelligence dashboard. Users can:
 
 - Ask natural language questions about the global economy and receive AI-generated interactive charts and insights
 - Search live economic data via Kagi FastGPT-backed research summaries with source references
@@ -406,7 +406,7 @@ npm run test:coverage
 | `ANTHROPIC_API_KEY` | Yes | Claude API key (server-side only) |
 | `JWT_SECRET` | Yes (prod) | Secret for signing JWTs |
 | `PORT` | No | Server port (default 3000) |
-| `DB_PATH` | No | SQLite file path (default `data/econChart.db`) |
+| `DB_PATH` | No | SQLite file path (default `data/superdash.db`) |
 | `NEWS_API_KEY` | No | NewsAPI.org for live news context |
 | `KAGI_API_KEY` | No | Kagi FastGPT key for `/api/search` |
 | `KIMI_API_KEY` | No | Kimi 2.5 API key for LLM query canonicalization; falls back to built-in normaliser if absent |

@@ -1356,7 +1356,7 @@ function sendApiDataResponse(res, req, payload, format) {
   applyApiRateHeaders(res, req.apiKey);
 
   if (requestedFormat === 'csv') {
-    const filename = `econchart_data_${Date.now()}.csv`;
+    const filename = `superdash_data_${Date.now()}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     return res.send(payload);
@@ -1456,7 +1456,7 @@ app.use('/api/chat', createChatRouter({
 /** Build the system prompt dynamically so it reflects which tools are actually available. */
 function buildVerifiedChatSystem() {
   const fredAvailable = !!process.env.FRED_API_KEY;
-  return `You are EconChart, an AI assistant for economic data analysis and visualisation.
+  return `You are SuperDash, an AI assistant for economic data analysis and visualisation.
 
 STRICT DATA RULES — NO EXCEPTIONS:
 1. Call fetch_world_bank and/or fetch_imf${fredAvailable ? ' and/or fetch_fred' : ''} BEFORE creating any chart.

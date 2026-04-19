@@ -12,7 +12,7 @@ if (!email) {
   process.exit(1);
 }
 
-const dbPath = resolve(process.argv[3] || process.env.DB_PATH || join(process.cwd(), 'data', 'econChart.db'));
+const dbPath = resolve(process.argv[3] || process.env.DB_PATH || join(process.cwd(), 'data', 'superdash.db'));
 if (!existsSync(dbPath)) {
   console.error(`Database file not found: ${dbPath}`);
   process.exit(1);

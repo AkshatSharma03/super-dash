@@ -1,4 +1,4 @@
-# EconChart — Economic Intelligence Dashboard
+# SuperDash — Economic Intelligence Dashboard
 
 > A full-stack economic research platform: AI-driven visualisation, eight algorithms implemented from scratch, live country data, and a modular Express backend. Mobile-responsive.
 

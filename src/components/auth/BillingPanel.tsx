@@ -276,7 +276,7 @@ export default function BillingPanel({ token, onClose }: Props) {
 
                     {plan.id === "enterprise" ? (
                       <a
-                        href="mailto:sales@econchart.com?subject=Enterprise%20Plan"
+                        href="mailto:sales@superdash.app?subject=Enterprise%20Plan"
                         className={cn(
                           "w-full py-2 text-center text-xs font-black uppercase",
                           "tracking-wide border-2 border-memphis-black bg-white",

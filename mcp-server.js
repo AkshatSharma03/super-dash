@@ -1,5 +1,5 @@
 /**
- * EconChart MCP Server
+ * SuperDash MCP Server
  *
  * Exposes World Bank, IMF DataMapper, and FRED economic data as Model Context
  * Protocol (MCP) tools.  Run with:
@@ -7,7 +7,7 @@
  *   node mcp-server.js
  *
  * Or register in .mcp.json:
- *   { "mcpServers": { "econchart": { "command": "node", "args": ["mcp-server.js"] } } }
+ *   { "mcpServers": { "superdash": { "command": "node", "args": ["mcp-server.js"] } } }
  *
  * Tools exposed:
  *   fetch_world_bank  – verified indicator data for any country (ISO2 codes)
@@ -183,7 +183,7 @@ async function getCountryData(iso2Code, startYear = 2010, endYear = 2024) {
 
 // ── MCP Server ─────────────────────────────────────────────────────────────────
 const server = new McpServer({
-  name: 'econchart-economic-data',
+  name: 'superdash-economic-data',
   version: '1.0.0',
 });
 
