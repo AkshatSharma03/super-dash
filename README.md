@@ -1,6 +1,6 @@
 # EconChart — Economic Intelligence Dashboard
 
-> A full-stack economic research platform: AI-driven visualisation, eight algorithms implemented from scratch, live World Bank data for any country, and a production-grade Express backend. Mobile-responsive.
+> A full-stack economic research platform: AI-driven visualisation, eight algorithms implemented from scratch, live country data, and a modular Express backend. Mobile-responsive.
 
 ---
 
@@ -9,7 +9,7 @@
 | Mode | Description |
 |------|-------------|
 | 💬 **AI Chat** | Conversational interface — Claude generates interactive Recharts visualisations and expert analysis from any natural-language prompt. Persistent session history. |
-| 🔍 **Search** | Live web search with **Kagi FastGPT** as primary summarizer (Claude web-search fallback); returns sourced, cited summaries from World Bank, IMF, Reuters, and Bloomberg. Trie-powered O(m) autocomplete. |
+| 🔍 **Search** | Live web research via **Kagi FastGPT** with source citations and follow-up context support. Trie-powered O(m) autocomplete. |
 | 📁 **Data Upload** | Drag-and-drop any CSV → auto-parsed → Claude generates tailored charts and insights for your own dataset. |
 | 🧮 **Analytics** | Eight-algorithm panel (regression, CAGR, HP filter, correlation, HHI, anomaly, K-Means, trade openness) on live data for any country. |
 | 🌍 **Country Data** | Real GDP and trade data from the World Bank for any country — cached locally, with dual-handle year-range filtering and sector-level breakdowns. |
@@ -76,22 +76,22 @@ Every algorithm is written from first principles with **zero ML libraries**.
 └───────────────────────────┬──────────────────────────────────────┘
                             │ fetch /api/*
 ┌───────────────────────────▼──────────────────────────────────────┐
-│                     Express 5  (server.js)                       │
+│             Express 5  (modular monolith, server.js)             │
 │  ┌────────────┐  ┌──────────────┐  ┌──────────┐  ┌──────────┐  │
 │  │ LRU Cache  │  │ Rate Limiter │  │ Helmet   │  │ SQLite   │  │
 │  │ (DLL+Map)  │  │  20 req/15m  │  │ security │  │ sessions │  │
 │  └────────────┘  └──────────────┘  └──────────┘  └──────────┘  │
 │                                                                  │
-│       Claude API (tool-use loop) · World Bank REST API           │
+│      Route modules + service modules + provider integrations      │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
 ### Backend (`server.js`)
-- **Custom LRU Cache** — doubly-linked list + `Map` for O(1) get/put; 1-hour TTL for country data, 30-min TTL for search
-- **LLM Query Canonicalization** — Kimi 2.5 (`moonshot-v1-8k`) converts any user query to a structured JSON canonical form `{countries, indicators, timeframe, question_type}` before hashing it into a cache key, so semantically identical but differently-worded queries always share the same cache entry. Falls back to a built-in keyword normaliser if `KIMI_API_KEY` is not set.
-- **World Bank API proxy** — fetches GDP, growth, trade, and per-capita data for any ISO country code; merges into a unified `CountryDataset`
-- **Agentic tool-use loop** — up to 8 turns of `web_search_20250305` calls before returning a single response
-- **Auth** — Clerk-managed authentication (email/OAuth/session tokens) plus optional guest JWT access for try-without-signup flows
+- **Modular monolith structure** — `server.js` composes routers from `src/server/routes/*` and shared services from `src/server/services/*`
+- **Custom LRU caches** — in-memory caches for API responses, canonical query payloads, and raw provider data
+- **Query canonicalization service** — optional Kimi 2.5 (`moonshot-v1-8k`) canonicalization + deterministic fallback normalizer for semantic cache keys
+- **Provider service layer** — shared AI clients (Anthropic/Kagi) and data tools (World Bank/IMF/FRED) used across routes
+- **Auth** — Clerk-managed authentication plus guest/local JWT flows
 - **Rate limiting** — `express-rate-limit` at 20 requests / 15 minutes per IP
 - **Security** — `helmet()` middleware; API key is server-side only, never in the client bundle
 
@@ -168,6 +168,17 @@ src/
     └── suggestions.ts            # Suggestion chips + popular countries + search corpus
 
 server.js                         # Express 5 API + World Bank proxy + auth
+
+src/server/
+├── routes/                       # API surface area (auth/chat/search/country/...)
+├── services/
+│   ├── aiClients.js              # Anthropic + Kagi client wrappers
+│   ├── cacheKey.js               # Query canonicalization + semantic cache keys
+│   ├── dataTools.js              # World Bank/IMF/FRED fetchers + tool execution
+│   └── telemetry.js              # PostHog server telemetry
+├── auth/                         # Auth middleware + rate limiters
+├── db/                           # SQLite schema + prepared statements
+└── cache/                        # LRU cache implementation + instances
 ```
 
 ---
@@ -205,15 +216,15 @@ Open [http://localhost:5173](http://localhost:5173) in development or [http://lo
 | Layer | Technology |
 |-------|-----------|
 | Frontend | React 18 · TypeScript 5 (strict) |
-| Build | Vite 5 |
+| Build | Vite 8 |
 | Styling | Tailwind CSS 3 · shadcn/ui · Radix UI primitives |
 | Markdown | react-markdown 10 · remark-gfm |
 | Icons | lucide-react |
 | Charts | Recharts 2 |
 | Toasts | Sonner |
-| Backend | Express 5 · Node ≥ 20 |
+| Backend | Express 5 modular monolith · Node ≥ 20 |
 | Database | better-sqlite3 |
-| AI | Anthropic Claude API (chat, analytics, CSV; search fallback) · Kagi FastGPT API (search + summarization primary) · Kimi 2.5 (query canonicalization) |
+| AI | Anthropic Messages API · Kagi FastGPT API · Kimi 2.5 (optional canonicalization) |
 | Security | Helmet.js · express-rate-limit · Clerk auth |
 
 ---
@@ -223,9 +234,9 @@ Open [http://localhost:5173](http://localhost:5173) in development or [http://lo
 | Source | Used for |
 |--------|---------|
 | [World Bank Open Data](https://data.worldbank.org) | GDP, growth rates, GDP per capita — any country |
-| [UN Comtrade](https://comtrade.un.org) | Trade flows by partner and sector |
-| [IMF](https://www.imf.org/en/Data) | Macro indicators, forecasts |
-| Kagi FastGPT + Claude web search fallback | Live news, current economic analysis |
+| IMF DataMapper | Macro indicator fallback and cross-source tool queries |
+| FRED (optional, env-gated) | US-focused macro time series in chat tools |
+| Kagi FastGPT | Search summaries with references |
 
 > **Note:** Sector-level trade breakdowns are AI-estimated from published aggregate sources. All AI Chat and Search responses cite live sources at query time.
 

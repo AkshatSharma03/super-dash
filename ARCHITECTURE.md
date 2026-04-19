@@ -5,7 +5,7 @@
 **EconChart** is a full-stack economic intelligence dashboard. Users can:
 
 - Ask natural language questions about the global economy and receive AI-generated interactive charts and insights
-- Search live economic data via an agentic Claude loop that browses the web in real time
+- Search live economic data via Kagi FastGPT-backed research summaries with source references
 - Upload CSV datasets for AI-powered analysis and visualization
 - Explore pre-built country dashboards (200+ countries) with GDP, trade, and sector data sourced from World Bank, IMF, and OECD
 - Run 8 custom-built statistical algorithms (regression, clustering, anomaly detection, etc.) on country data
@@ -19,16 +19,16 @@ The app supports two tiers: **guest users** (instant access, in-memory sessions)
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18, TypeScript 5, Vite 5 |
+| Frontend | React 18, TypeScript 5, Vite 8 |
 | Styling | Tailwind CSS 3 (dark mode), shadcn/ui, Radix UI primitives |
 | Markdown | react-markdown 10, remark-gfm 4 |
 | Icons | lucide-react |
 | Toasts | Sonner |
 | Charts | Recharts 2 |
-| Backend | Express 5, Node.js ≥ 20 |
+| Backend | Express 5 modular monolith, Node.js ≥ 20 |
 | Database | SQLite via better-sqlite3 |
 | Auth | JWT (jsonwebtoken), bcryptjs |
-| AI | Anthropic Claude API (claude-sonnet-4-6) |
+| AI | Anthropic Messages API, Kagi FastGPT API, Kimi 2.5 (optional canonicalization) |
 | Analytics | PostHog (client + server) |
 | Testing | Vitest, v8 coverage |
 | CI/CD | GitHub Actions (Node 20 & 22) |
@@ -39,7 +39,7 @@ The app supports two tiers: **guest users** (instant access, in-memory sessions)
 
 ```
 super-dash/
-├── server.js                   # Express 5 API (~1400 lines)
+├── server.js                   # Express 5 composition root (~1600 lines)
 ├── src/
 │   ├── App.tsx                 # Auth gate, header, mode router
 │   ├── types/index.ts          # All shared TypeScript interfaces
@@ -92,6 +92,16 @@ super-dash/
 │       ├── csv.ts              # RFC 4180 CSV parser (state machine)
 │       ├── export.ts           # Download/clipboard/HTML report builder
 │       └── useMobile.ts        # Viewport-reactive mobile breakpoint hook
+├── src/server/
+│   ├── routes/                 # API endpoints (auth/chat/search/country/...)
+│   ├── services/
+│   │   ├── aiClients.js        # Anthropic + Kagi client wrappers
+│   │   ├── cacheKey.js         # Query canonicalization + semantic cache keys
+│   │   ├── dataTools.js        # World Bank/IMF/FRED fetchers + tool execution
+│   │   └── telemetry.js        # PostHog server telemetry
+│   ├── auth/                   # Auth middleware + rate limiting
+│   ├── db/                     # SQLite schema + prepared statements
+│   └── cache/                  # LRU cache implementation + instances
 └── .github/workflows/ci.yml    # Typecheck + test + build on PR
 ```
 
@@ -146,7 +156,7 @@ CREATE INDEX idx_sessions_user_id ON chat_sessions(user_id);
 | Method | Route | Description |
 |---|---|---|
 | POST | `/api/chat` | Send message history → structured AI response (insight + charts) |
-| POST | `/api/search` | Agentic web search loop (up to 8 Claude tool-use turns) |
+| POST | `/api/search` | Kagi FastGPT-backed research summary with citations |
 | POST | `/api/analyze-csv` | Upload CSV → AI insights and charts |
 | POST | `/api/analytics` | Run algorithms on country + query Claude |
 
@@ -198,10 +208,10 @@ Claude auto-generates missing sector/partner breakdowns when the APIs don't retu
 
 **Why**: No single API covers all 200+ countries completely. Graceful degradation beats an error page.
 
-### 5. Agentic Web Search Loop
-The `/api/search` endpoint runs Claude in a tool-use loop. Claude decides when to call `web_search_20250305`, inspects results, and may search again (up to 8 turns) before composing a final answer.
+### 5. Search Provider Separation
+The `/api/search` endpoint is handled by a dedicated search route that calls Kagi FastGPT and normalizes references for the frontend response shape.
 
-**Why**: A single search query often yields insufficient depth. The agentic loop lets Claude iteratively refine its research — closer to how a human analyst would work.
+**Why**: Keeps live web research concerns isolated from chart-generation chat flows and reduces coupling between providers.
 
 ### 6. Guest-First UX, Zero Friction
 `POST /api/auth/guest` issues a 24-hour JWT in one request with no DB write. Guest sessions live in memory only. On registration, the user seamlessly upgrades to persistent storage.
@@ -219,7 +229,7 @@ The CSV parser in `src/utils/csv.ts` is a hand-written state machine that handle
 **Why**: Avoids redundant API calls. Country data is expensive to fetch; fetching it once and sharing it is the right tradeoff.
 
 ### 9. Server-Side API Key Isolation
-The Anthropic API key, NewsAPI key, and external data source calls all live in `server.js`. The Vite client bundle never sees these secrets.
+Anthropic/Kagi/provider credentials are used only in backend route/service modules (`src/server/routes/*`, `src/server/services/*`). The Vite client bundle never sees these secrets.
 
 **Why**: Basic security hygiene — API keys in client bundles get scraped.
 
@@ -236,7 +246,7 @@ This worked for simple cases but had three fundamental failure modes:
 2. **Cross-concept equivalences** — `cpi = inflation`, `britain = uk`, `economic growth = gdp growth` cannot be expressed as simple token substitutions without domain knowledge. The old approach handled these inconsistently.
 3. **Morphological coverage** — verb forms had to be enumerated one by one (`shifted`, `shift`, `shifting`, `shifts` → `change`). Missing a form meant a cache miss.
 
-**The solution**: `canonicalizeQuery(text)` calls the Kimi 2.5 API (`moonshot-v1-8k`) with temperature 0 and a strict system prompt to extract a structured JSON canonical form:
+**The solution**: `canonicalizeQuery(text)` in `src/server/services/cacheKey.js` calls the Kimi 2.5 API (`moonshot-v1-8k`) with temperature 0 and a strict system prompt to extract a structured JSON canonical form:
 
 ```json
 {
@@ -333,7 +343,7 @@ Large CSV files are currently read entirely into memory. Adding `multer` with si
 ### Medium Priority
 
 **5. Real-time Chart Updates (WebSockets)**
-The agentic search loop runs up to 8 turns server-side before returning. Users see a spinner with no intermediate feedback. Streaming partial results via WebSockets or SSE would greatly improve perceived performance.
+Long-running AI and analytics requests still return mostly at completion. Users see a spinner with limited intermediate feedback. Streaming partial results via WebSockets or SSE would greatly improve perceived performance.
 
 **6. Refresh Token Flow**
 Access tokens expire after 7 days with no renewal mechanism. A short-lived access token (15 min) + long-lived refresh token pattern would be more secure and standard.
@@ -362,7 +372,7 @@ The World Bank API has gaps for some countries and many indicators (inflation, u
 Currently sessions are per-user. Sharing a session link (read-only or collaborative) would be a strong B2B feature for teams doing joint economic research.
 
 **14. Test Coverage for Backend Routes**
-Unit tests cover algorithms and utilities well, but `server.js` has no integration tests. Adding supertest-based route tests would catch regressions in the API layer.
+Unit tests cover algorithms and utilities well, but backend route integration coverage is still thin. Adding supertest-based route tests would catch regressions in the API layer.
 
 ---
 
@@ -398,6 +408,7 @@ npm run test:coverage
 | `PORT` | No | Server port (default 3000) |
 | `DB_PATH` | No | SQLite file path (default `data/econChart.db`) |
 | `NEWS_API_KEY` | No | NewsAPI.org for live news context |
+| `KAGI_API_KEY` | No | Kagi FastGPT key for `/api/search` |
 | `KIMI_API_KEY` | No | Kimi 2.5 API key for LLM query canonicalization; falls back to built-in normaliser if absent |
 | `KIMI_MODEL` | No | Kimi model override (default `moonshot-v1-8k`; set to `kimi-k2` if available) |
 | `VITE_POSTHOG_KEY` | No | PostHog client analytics |
