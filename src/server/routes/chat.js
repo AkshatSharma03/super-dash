@@ -17,6 +17,7 @@ function toolStatusText(name, input) {
     return `Fetching IMF data (${ind}${cc ? ' · ' + cc : ''})…`;
   }
   if (name === 'fetch_fred') return `Fetching FRED data (${input.series_id ?? ''})…`;
+  if (name === 'fetch_botmarket') return `Fetching BotMarket data (${input.slug ?? ''})…`;
   if (name === 'fetch_oecd') return `Fetching OECD data (${input.dataset ?? ''})…`;
   if (name === 'fetch_un_comtrade') return `Fetching UN Comtrade data (${input.reporter_code ?? ''})…`;
   return 'Fetching economic data…';
@@ -24,12 +25,14 @@ function toolStatusText(name, input) {
 
 /** Build the system prompt dynamically so it reflects which tools are actually available. */
 function buildVerifiedChatSystem(fredAvailable, DATA_TOOLS) {
+  const hasBotMarket = DATA_TOOLS.some((t) => t.name === 'fetch_botmarket');
   const hasOECD = DATA_TOOLS.some((t) => t.name === 'fetch_oecd');
   const hasComtrade = DATA_TOOLS.some((t) => t.name === 'fetch_un_comtrade');
   const toolList = [
     'fetch_world_bank',
     'fetch_imf',
     fredAvailable ? 'fetch_fred' : null,
+    hasBotMarket ? 'fetch_botmarket' : null,
     hasOECD ? 'fetch_oecd' : null,
     hasComtrade ? 'fetch_un_comtrade' : null,
   ].filter(Boolean).join(', ');

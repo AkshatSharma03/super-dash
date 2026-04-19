@@ -197,6 +197,7 @@ npm install
 cp .env.example .env
 # Required: ANTHROPIC_API_KEY, CLERK_SECRET_KEY, VITE_CLERK_PUBLISHABLE_KEY
 # Optional: KAGI_API_KEY (Search mode primary provider), KIMI_API_KEY (query canonicalization)
+# Recommended for expanded datasets: BOTMARKET_API_KEY
 
 # 3. Development (two terminals)
 npm run dev:server   # Express API on :3000
@@ -235,7 +236,8 @@ Open [http://localhost:5173](http://localhost:5173) in development or [http://lo
 |--------|---------|
 | [World Bank Open Data](https://data.worldbank.org) | GDP, growth rates, GDP per capita — any country |
 | IMF DataMapper | Macro indicator fallback and cross-source tool queries |
-| OECD Data API | Additional OECD/member macro series via SDMX |
+| OEC BotMarket | Expanded datasets: trade, demographics, debt, labor, education, health, governance, fiscal, productivity, skills, social indicators, US ACS |
+| OECD Data API (optional) | Additional OECD/member macro series via SDMX fallback |
 | UN Comtrade | Verified bilateral trade flow and commodity-level trade values |
 | FRED (optional, env-gated) | US-focused macro time series in chat tools |
 | Kagi FastGPT | Search summaries with references |

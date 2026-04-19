@@ -8,8 +8,11 @@ export function createMcpServerInstance(deps) {
     fetchWorldBankIndicator,
     fetchIMFIndicator,
     fetchFREDSeries,
+    fetchBotMarketData,
     fetchOECDData,
     fetchUNComtrade,
+    botMarketEnabled,
+    oecdEnabled,
   } = deps;
 
   const srv = new McpServer({ name: 'superdash-economic-data', version: '1.0.0' });
@@ -75,27 +78,55 @@ export function createMcpServerInstance(deps) {
     }
   );
 
-  srv.tool('fetch_oecd',
-    'Fetch OECD SDMX data for OECD/member indicators and structural series.',
-    {
-      dataset:    z.string().describe('OECD dataset code, e.g. "MEI"'),
-      filter:     z.string().describe('OECD filter path, e.g. "USA.CPALTT01.IXOB.A"'),
-      start_year: z.number().int().min(1950).max(2024).default(2000),
-      end_year:   z.number().int().min(1950).max(2024).default(2024),
-    },
-    async ({ dataset, filter, start_year, end_year }) => {
-      const rows = await fetchOECDData(dataset, filter, start_year, end_year);
-      if (!rows.length) throw new Error(`No OECD data for ${dataset} / ${filter}`);
-      return { content: [{ type: 'text', text: JSON.stringify({
-        rows,
-        source: 'OECD Data',
-        dataset,
-        filter,
-        sourceUrl: 'https://stats.oecd.org/',
-        count: rows.length,
-      }) }] };
-    }
-  );
+  if (botMarketEnabled) {
+    srv.tool('fetch_botmarket',
+      'Fetch data from OEC BotMarket (Datawheel) by dataset slug and optional filter object.',
+      {
+        slug: z.string().describe('BotMarket dataset slug from /api/catalog'),
+        filters: z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number(), z.boolean()]))])).default({}).describe('Filter object where keys are filter columns and values are scalar or arrays'),
+        limit: z.number().int().min(1).max(1000).default(1000),
+        offset: z.number().int().min(0).default(0),
+        format: z.enum(['json', 'csv', 'parquet']).default('json'),
+      },
+      async ({ slug, filters, limit, offset, format }) => {
+        const result = await fetchBotMarketData({ slug, filters, limit, offset, format });
+        if (!result.rows.length) throw new Error(`No BotMarket data for ${slug}`);
+        return { content: [{ type: 'text', text: JSON.stringify({
+          rows: result.rows,
+          source: 'OEC BotMarket',
+          slug,
+          filters,
+          sourceUrl: `https://botmarket.oec.world/api/datasets/${encodeURIComponent(slug)}/query`,
+          count: result.rows.length,
+          ...result.meta,
+        }) }] };
+      }
+    );
+  }
+
+  if (oecdEnabled) {
+    srv.tool('fetch_oecd',
+      'Fetch OECD SDMX data for OECD/member indicators and structural series.',
+      {
+        dataset:    z.string().describe('OECD dataset code, e.g. "MEI"'),
+        filter:     z.string().describe('OECD filter path, e.g. "USA.CPALTT01.IXOB.A"'),
+        start_year: z.number().int().min(1950).max(2024).default(2000),
+        end_year:   z.number().int().min(1950).max(2024).default(2024),
+      },
+      async ({ dataset, filter, start_year, end_year }) => {
+        const rows = await fetchOECDData(dataset, filter, start_year, end_year);
+        if (!rows.length) throw new Error(`No OECD data for ${dataset} / ${filter}`);
+        return { content: [{ type: 'text', text: JSON.stringify({
+          rows,
+          source: 'OECD Data',
+          dataset,
+          filter,
+          sourceUrl: 'https://stats.oecd.org/',
+          count: rows.length,
+        }) }] };
+      }
+    );
+  }
 
   srv.tool('fetch_un_comtrade',
     'Fetch UN Comtrade merchandise trade records (bilateral/commodity-level).',
@@ -148,8 +179,11 @@ export function createMcpRouter(deps) {
     fetchWorldBankIndicator,
     fetchIMFIndicator,
     fetchFREDSeries,
+    fetchBotMarketData,
     fetchOECDData,
     fetchUNComtrade,
+    BOTMARKET_API_KEY,
+    OECD_API_KEY,
   } = deps;
 
   const router = Router();
@@ -164,8 +198,11 @@ export function createMcpRouter(deps) {
       fetchWorldBankIndicator,
       fetchIMFIndicator,
       fetchFREDSeries,
+      fetchBotMarketData,
       fetchOECDData,
       fetchUNComtrade,
+      botMarketEnabled: Boolean(BOTMARKET_API_KEY),
+      oecdEnabled: Boolean(OECD_API_KEY),
     });
     await srv.connect(transport);
   });

@@ -5,6 +5,7 @@ export function createDataToolsService({
   RAW_DATA_TTL_MS,
   IS_DEV,
   FRED_API_KEY,
+  BOTMARKET_API_KEY,
   OECD_API_KEY,
   UN_COMTRADE_API_KEY,
 }) {
@@ -151,6 +152,83 @@ export function createDataToolsService({
     return result;
   }
 
+  function normalizeBotMarketRows(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (!payload || typeof payload !== 'object') return [];
+    if (Array.isArray(payload.rows)) return payload.rows;
+    if (Array.isArray(payload.data)) return payload.data;
+    if (Array.isArray(payload.results)) return payload.results;
+    return [];
+  }
+
+  async function fetchBotMarketData({
+    slug,
+    filters = {},
+    limit = 1000,
+    offset = 0,
+    format = 'json',
+  }) {
+    if (!BOTMARKET_API_KEY) {
+      throw new Error('BOTMARKET_API_KEY environment variable is not set');
+    }
+    if (!slug || typeof slug !== 'string') {
+      throw new Error('BotMarket dataset slug is required');
+    }
+
+    const url = new URL(`https://botmarket.oec.world/api/datasets/${encodeURIComponent(slug)}/query`);
+    url.searchParams.set('limit', String(limit));
+    url.searchParams.set('offset', String(offset));
+    if (format && format !== 'json') {
+      url.searchParams.set('format', String(format));
+    }
+
+    if (filters && typeof filters === 'object') {
+      for (const [key, rawValue] of Object.entries(filters)) {
+        if (rawValue == null || key === 'limit' || key === 'offset' || key === 'format') continue;
+        if (Array.isArray(rawValue)) {
+          for (const v of rawValue) {
+            if (v == null || v === '') continue;
+            url.searchParams.append(key, String(v));
+          }
+          continue;
+        }
+        if (rawValue === '') continue;
+        url.searchParams.set(key, String(rawValue));
+      }
+    }
+
+    const requestUrl = url.toString();
+    const ck = `botmarket:${requestUrl}`;
+    const hit = rawDataCache.get(ck);
+    if (hit) return hit;
+
+    const res = await fetchWithRetry(
+      requestUrl,
+      {
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${BOTMARKET_API_KEY}`,
+        },
+      },
+      2,
+      1500,
+      [402, 429, 500, 502, 503, 504],
+      25000
+    );
+    const json = await res.json();
+    const rows = normalizeBotMarketRows(json);
+    const result = {
+      rows,
+      meta: {
+        balance_remaining: json?.balance_remaining ?? null,
+        max_rows_per_query: json?.max_rows_per_query ?? null,
+      },
+    };
+
+    rawDataCache.put(ck, result, RAW_DATA_TTL_MS);
+    return result;
+  }
+
   async function fetchUNComtrade({
     reporterCode,
     partnerCode = '0',
@@ -290,6 +368,28 @@ export function createDataToolsService({
       return JSON.stringify({ rows, source: 'OECD Data', dataset, filter, sourceUrl });
     }
 
+    if (name === 'fetch_botmarket') {
+      const {
+        slug,
+        filters = {},
+        limit = 1000,
+        offset = 0,
+        format = 'json',
+      } = input;
+      const result = await fetchBotMarketData({ slug, filters, limit, offset, format });
+      if (!Array.isArray(result.rows) || result.rows.length === 0) {
+        throw new Error('BotMarket returned no data for this query');
+      }
+      return JSON.stringify({
+        rows: result.rows,
+        source: 'OEC BotMarket',
+        slug,
+        filters,
+        sourceUrl: `https://botmarket.oec.world/api/datasets/${encodeURIComponent(slug)}/query`,
+        ...result.meta,
+      });
+    }
+
     if (name === 'fetch_un_comtrade') {
       const {
         reporter_code,
@@ -388,26 +488,6 @@ OTHER: BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), 
       },
     },
     {
-      name: 'fetch_oecd',
-      description: 'Fetch verified OECD SDMX data. Best for OECD economies and structural indicators when World Bank/IMF series are not sufficient.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          dataset: {
-            type: 'string',
-            description: 'OECD SDMX dataset code (e.g. "MEI", "QNA").',
-          },
-          filter: {
-            type: 'string',
-            description: 'OECD SDMX filter path segment (e.g. "USA.CPALTT01.IXOB.A").',
-          },
-          start_year: { type: 'number', description: 'Start year (default 2000)' },
-          end_year: { type: 'number', description: 'End year (default 2024)' },
-        },
-        required: ['dataset', 'filter'],
-      },
-    },
-    {
       name: 'fetch_un_comtrade',
       description: 'Fetch verified merchandise trade data from UN Comtrade. Use for bilateral trade flows and commodity-level trade values.',
       input_schema: {
@@ -451,11 +531,68 @@ OTHER: BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), 
     },
   ];
 
+  if (BOTMARKET_API_KEY) {
+    DATA_TOOLS.push({
+      name: 'fetch_botmarket',
+      description: 'Fetch data from OEC BotMarket (Datawheel) using your BotMarket API key. Use this for OECD-like and broader datasets (trade, demographics, debt, labor, education, health, housing, governance, fiscal policy, productivity, skills, social indicators, US ACS).',
+      input_schema: {
+        type: 'object',
+        properties: {
+          slug: {
+            type: 'string',
+            description: 'BotMarket dataset slug from catalog, e.g. "oec_..."',
+          },
+          filters: {
+            type: 'object',
+            description: 'Optional query filters as key-value pairs. Values can be a string/number/boolean or an array for multi-value filters.',
+          },
+          limit: {
+            type: 'number',
+            description: 'Max rows to return (default 1000).',
+          },
+          offset: {
+            type: 'number',
+            description: 'Pagination offset (default 0).',
+          },
+          format: {
+            type: 'string',
+            description: 'Response format: "json" (default), or "csv"/"parquet" when supported.',
+          },
+        },
+        required: ['slug'],
+      },
+    });
+  }
+
+  if (OECD_API_KEY) {
+    DATA_TOOLS.push({
+      name: 'fetch_oecd',
+      description: 'Fetch verified OECD SDMX data. Best for OECD economies and structural indicators when World Bank/IMF series are not sufficient.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          dataset: {
+            type: 'string',
+            description: 'OECD SDMX dataset code (e.g. "MEI", "QNA").',
+          },
+          filter: {
+            type: 'string',
+            description: 'OECD SDMX filter path segment (e.g. "USA.CPALTT01.IXOB.A").',
+          },
+          start_year: { type: 'number', description: 'Start year (default 2000)' },
+          end_year: { type: 'number', description: 'End year (default 2024)' },
+        },
+        required: ['dataset', 'filter'],
+      },
+    });
+  }
+
   return {
     fetchWithRetry,
     fetchWorldBankIndicator,
     fetchIMFIndicator,
     fetchFREDSeries,
+    fetchBotMarketData,
     fetchOECDData,
     fetchUNComtrade,
     executeDataTool,

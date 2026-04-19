@@ -10,6 +10,7 @@ export const ANTHROPIC_BASE = 'https://api.anthropic.com/v1/messages';
 export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 export const KAGI_API_KEY = process.env.KAGI_API_KEY;
 export const KAGI_BASE = process.env.KAGI_BASE || 'https://kagi.com/api/v0';
+export const BOTMARKET_API_KEY = process.env.BOTMARKET_API_KEY;
 export const OECD_API_KEY = process.env.OECD_API_KEY;
 export const UN_COMTRADE_API_KEY = process.env.UN_COMTRADE_API_KEY;
 export const IS_DEV = process.env.NODE_ENV !== 'production';

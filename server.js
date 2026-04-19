@@ -13,6 +13,7 @@ import {
   ANTHROPIC_API_KEY,
   KAGI_API_KEY,
   KAGI_BASE,
+  BOTMARKET_API_KEY,
   OECD_API_KEY,
   UN_COMTRADE_API_KEY,
   IS_DEV,
@@ -99,10 +100,6 @@ if (!ANTHROPIC_API_KEY && process.env.NODE_ENV !== 'test') {
 }
 if (!KAGI_API_KEY && process.env.NODE_ENV !== 'test') {
   console.error('ERROR: KAGI_API_KEY environment variable is required and must be set.');
-  process.exit(1);
-}
-if (!OECD_API_KEY && process.env.NODE_ENV !== 'test') {
-  console.error('ERROR: OECD_API_KEY environment variable is required and must be set.');
   process.exit(1);
 }
 if (!UN_COMTRADE_API_KEY && process.env.NODE_ENV !== 'test') {
@@ -274,6 +271,7 @@ const {
   fetchWorldBankIndicator,
   fetchIMFIndicator,
   fetchFREDSeries,
+  fetchBotMarketData,
   fetchOECDData,
   fetchUNComtrade,
   executeDataTool,
@@ -283,6 +281,7 @@ const {
   RAW_DATA_TTL_MS,
   IS_DEV,
   FRED_API_KEY: process.env.FRED_API_KEY,
+  BOTMARKET_API_KEY,
   OECD_API_KEY,
   UN_COMTRADE_API_KEY,
 });
@@ -887,8 +886,11 @@ app.use('/mcp', createMcpRouter({
   fetchWorldBankIndicator,
   fetchIMFIndicator,
   fetchFREDSeries,
+  fetchBotMarketData,
   fetchOECDData,
   fetchUNComtrade,
+  BOTMARKET_API_KEY,
+  OECD_API_KEY,
 }));
 
 const staticLimiter = createStaticLimiter();
