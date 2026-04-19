@@ -71,8 +71,8 @@ export const MODE_META: Record<Mode, ModeMeta> = {
     color: "#FFBE0B",
     bg: "#FFBE0B",
     desc:
-      "Algorithms from scratch: OLS Regression · HHI Concentration · " +
-      "K-Means Clustering · Z-Score Anomaly Detection",
+      "Economics algorithms: OLS Regression · HHI Concentration · " +
+      "K-Means Segmentation · Z-Score Outlier Detection",
   },
   dashboard: {
     label: "Country Data",

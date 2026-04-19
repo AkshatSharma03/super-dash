@@ -1,8 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// K-MEANS CLUSTERING  (implemented from scratch with K-Means++ initialization)
+// K-MEANS CLUSTERING  (library-backed)
+// Uses ml-kmeans with deterministic seeding and k-means++ initialization.
 // Features are z-score normalized before clustering so no single dimension
 // dominates purely due to scale differences.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import { kmeans as runKMeans } from "ml-kmeans";
 
 export interface KMeansResult {
   assignments: number[];   // cluster index per point (0..k-1)
@@ -21,10 +24,6 @@ export interface LabeledCluster {
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
-
-function euclidean(a: number[], b: number[]): number {
-  return Math.sqrt(a.reduce((acc, ai, i) => acc + (ai - b[i]) ** 2, 0));
-}
 
 function euclideanSquared(a: number[], b: number[]): number {
   return a.reduce((acc, ai, i) => {
@@ -47,39 +46,6 @@ function zNormalize(data: number[][]): { normalized: number[][]; means: number[]
   });
   const normalized = data.map(row => row.map((v, j) => (v - means[j]) / stds[j]));
   return { normalized, means, stds };
-}
-
-// Seeded LCG for reproducible initialization across runs
-function makeLCG(seed: number) {
-  let s = seed >>> 0;
-  return () => {
-    s = (Math.imul(1664525, s) + 1013904223) >>> 0;
-    return s / 0x100000000;
-  };
-}
-
-// ── K-Means++ initialization ──────────────────────────────────────────────────
-function kmeanspp(data: number[][], k: number, rand: () => number): number[][] {
-  const n = data.length;
-  const centroids: number[][] = [data[Math.floor(rand() * n)]];
-
-  while (centroids.length < k) {
-    // D²-weighted probability: probability ∝ dist² to nearest centroid
-    const dists = data.map(p => {
-      const nearest = centroids.reduce(
-        (best, c) => Math.min(best, euclidean(p, c)),
-        Infinity,
-      );
-      return nearest * nearest;
-    });
-    const total = dists.reduce((a, b) => a + b, 0);
-    let r = rand() * total;
-    for (let i = 0; i < n; i++) {
-      r -= dists[i];
-      if (r <= 0) { centroids.push(data[i]); break; }
-    }
-  }
-  return centroids;
 }
 
 // ── Main K-Means algorithm ────────────────────────────────────────────────────
@@ -110,46 +76,23 @@ export function kmeans(
   }
 
   const { normalized } = zNormalize(data);
-  const n = normalized.length;
-  const rand = makeLCG(seed);
+  const result = runKMeans(normalized, k, {
+    initialization: "kmeans++",
+    maxIterations,
+    seed,
+    tolerance: 1e-6,
+  });
 
-  let centroids = kmeanspp(normalized, k, rand);
-  let assignments = new Array<number>(n).fill(0);
-  let iterations = 0;
-  let converged = false;
-
-  for (iterations = 0; iterations < maxIterations; iterations++) {
-    // Assignment step: assign each point to nearest centroid
-    const newAssignments = normalized.map(p => {
-      let bestIdx = 0;
-      let bestDist = euclideanSquared(p, centroids[0]);
-      for (let ci = 1; ci < centroids.length; ci++) {
-        const d2 = euclideanSquared(p, centroids[ci]);
-        if (d2 < bestDist) {
-          bestDist = d2;
-          bestIdx = ci;
-        }
-      }
-      return bestIdx;
-    });
-
-    converged = newAssignments.every((a, i) => a === assignments[i]);
-    assignments = newAssignments;
-    if (converged) break;
-
-    // Update step: recompute centroids as mean of assigned points
-    for (let c = 0; c < k; c++) {
-      const members = normalized.filter((_, i) => assignments[i] === c);
-      if (members.length === 0) continue; // empty cluster — keep old centroid
-      centroids[c] = Array.from({ length: dims }, (_, j) =>
-        members.reduce((acc, p) => acc + p[j], 0) / members.length,
-      );
-    }
-  }
+  const assignments = result.clusters;
+  const centroids = result.centroids;
+  const iterations = Math.max(1, result.iterations);
+  const converged = result.converged;
 
   // WCSS: within-cluster sum of squares
-  const wcss = normalized.reduce((acc, p, i) =>
-    acc + euclidean(p, centroids[assignments[i]]) ** 2, 0);
+  const wcss = normalized.reduce((acc, point, i) => {
+    const centroid = centroids[assignments[i]];
+    return acc + euclideanSquared(point, centroid);
+  }, 0);
 
   return { assignments, centroids, iterations, converged, wcss };
 }

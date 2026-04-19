@@ -1,6 +1,6 @@
 # SuperDash — Economic Intelligence Dashboard
 
-> A full-stack economic research platform: AI-driven visualisation, eight algorithms implemented from scratch, live country data, and a modular Express backend. Mobile-responsive.
+> A full-stack economic research platform: AI-driven visualisation, eight economics/statistics algorithms, live country data, and a modular Express backend. Mobile-responsive.
 
 ---
 
@@ -17,12 +17,12 @@
 
 ---
 
-## 🧠 Algorithms — Implemented from Scratch
+## 🧠 Algorithms — Economics & Statistics
 
-Every algorithm is written from first principles with **zero ML libraries**.
+Core statistical routines are implemented with established libraries (`simple-statistics`, `ml-kmeans`) and wrapped in transparent, domain-specific analytics modules.
 
 ### 1 · OLS Linear Regression + Forecast (`src/algorithms/regression.ts`)
-- Solves **β = (XᵀX)⁻¹Xᵀy** in closed form with manual matrix arithmetic
+- Fits a linear trend using library-backed OLS
 - Computes R², RSE, and a **95% prediction interval** (CI band) for multi-year forecasts
 - Overlays actual GDP bars against the OLS trend line and a shaded uncertainty cone
 
@@ -34,7 +34,7 @@ Every algorithm is written from first principles with **zero ML libraries**.
 ### 3 · Hodrick-Prescott Filter (`src/algorithms/hp_filter.ts`)
 - Decomposes a GDP time series into **long-run trend τ** and **cyclical component c = y − τ**
 - Solves the HP minimisation problem as a banded linear system (λ = 100 for annual data)
-- Uses Gaussian elimination with partial pivoting — no external linear algebra library
+- Uses explicit linear-system solving tailored for annual macroeconomic series
 
 ### 4 · Pearson Correlation Matrix (`src/algorithms/correlation.ts`)
 - Builds an **n × n correlation matrix** across GDP, exports, imports, growth rate, trade balance, and openness
@@ -52,7 +52,7 @@ Every algorithm is written from first principles with **zero ML libraries**.
 - Handles structural breaks (e.g. 2020 COVID shock) correctly
 
 ### 7 · K-Means++ Clustering (`src/algorithms/kmeans.ts`)
-- **K-Means++** initialisation (distance-weighted seeding) for stable, reproducible clusters
+- Library-backed **K-Means++** initialisation for stable, reproducible clusters
 - Z-score normalisation across dimensions before clustering
 - Labels each cluster semantically: Expansion · Transition · Contraction · Recovery
 

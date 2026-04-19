@@ -1,7 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// ORDINARY LEAST SQUARES LINEAR REGRESSION  (implemented from scratch)
-// β = (XᵀX)⁻¹Xᵀy   →  scalar form for simple linear regression
+// ORDINARY LEAST SQUARES LINEAR REGRESSION  (library-backed)
+// Uses simple-statistics for line fit and R².
 // ─────────────────────────────────────────────────────────────────────────────
+
+import {
+  linearRegression,
+  linearRegressionLine,
+  mean,
+  rSquared,
+} from "simple-statistics";
 
 export interface RegressionModel {
   slope: number;
@@ -34,38 +41,34 @@ export function fitLinearRegression(
     throw new Error("Regression input contains non-finite values");
   }
 
-  // Compute means
-  const xBar = xs.reduce((a, b) => a + b, 0) / n;
-  const yBar = ys.reduce((a, b) => a + b, 0) / n;
-
-  // Sum of squares
-  let Sxx = 0, Sxy = 0, Syy = 0;
-  for (let i = 0; i < n; i++) {
-    const dx = xs[i] - xBar;
-    const dy = ys[i] - yBar;
-    Sxx += dx * dx;
-    Sxy += dx * dy;
-    Syy += dy * dy;
-  }
+  const xBar = mean(xs);
+  const Sxx = xs.reduce((acc, x) => {
+    const dx = x - xBar;
+    return acc + dx * dx;
+  }, 0);
 
   if (Sxx < 1e-12) {
     throw new Error("Regression requires variability in x values");
   }
 
-  const slope     = Sxy / Sxx;
-  const intercept = yBar - slope * xBar;
-  const r2        = Sxx > 0 && Syy > 0 ? (Sxy * Sxy) / (Sxx * Syy) : 0;
+  const points = xs.map((x, i) => [x, ys[i]] as [number, number]);
+  const fitted = linearRegression(points);
+  const line = linearRegressionLine(fitted);
 
-  // Residual standard error: s = sqrt(SSE / (n-2))
-  let sse = 0;
-  for (let i = 0; i < n; i++) {
-    const resid = ys[i] - (slope * xs[i] + intercept);
-    sse += resid * resid;
-  }
+  const slope = fitted.m;
+  const intercept = fitted.b;
+  const r2Raw = rSquared(points, line);
+  const r2 = Number.isFinite(r2Raw) ? Math.max(0, Math.min(1, r2Raw)) : 0;
+
+  // Residual standard error: s = sqrt(SSE / (n-2)).
+  const sse = xs.reduce((acc, x, i) => {
+    const resid = ys[i] - line(x);
+    return acc + resid * resid;
+  }, 0);
   const s2  = sse / (n - 2);
   const rse = Math.sqrt(s2);
 
-  const predict = (x: number) => slope * x + intercept;
+  const predict = (x: number) => line(x);
 
   // 95% prediction interval: ŷ ± t * s * sqrt(1 + 1/n + (x - x̄)²/Sxx)
   // Using z ≈ 1.96 for large n; caller can override

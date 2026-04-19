@@ -326,8 +326,8 @@ export default function MethodologyMode() {
             Methodology & Documentation
           </h2>
           <p className="text-[11px] text-memphis-black/60 mt-0.5">
-            Every algorithm is implemented from scratch with zero ML libraries.
-            Full transparency for reproducible research.
+            Economics-first methods powered by audited statistics libraries,
+            with transparent formulas, assumptions, and references.
           </p>
         </div>
         <div className="flex gap-2 shrink-0">
@@ -363,10 +363,10 @@ export default function MethodologyMode() {
             <span className="text-memphis-pink font-bold shrink-0">1.</span>
             <span>
               <strong className="text-memphis-black">
-                No external ML libraries.
+                Library-backed econometrics.
               </strong>{" "}
-              All algorithms are pure TypeScript functions with deterministic,
-              auditable math. No black-box dependencies.
+              Core statistics use proven libraries (`simple-statistics`,
+              `ml-kmeans`) with explicit formulas documented in each method.
             </span>
           </li>
           <li className="flex gap-2">
@@ -375,8 +375,8 @@ export default function MethodologyMode() {
               <strong className="text-memphis-black">
                 Reproducible results.
               </strong>{" "}
-              K-Means uses a seeded LCG (seed = 42). All calculations are pure
-              functions — same input always produces the same output.
+              K-Means uses fixed-seed initialization (`seed = 42`) and
+              deterministic inputs, so repeated runs return stable outputs.
             </span>
           </li>
           <li className="flex gap-2">

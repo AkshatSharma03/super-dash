@@ -1107,8 +1107,8 @@ export default function AnalyticsMode({
       ) : null}
 
       <p className="text-center text-[11px] text-memphis-black/50 mt-5 font-medium">
-        {"Algorithms from scratch · OLS Regression · HHI · K-Means++ · "}
-        {"Z-Score Anomaly · HP Filter ·"}
+        {"Economics analytics · OLS Regression · HHI · K-Means · "}
+        {"Z-Score Outliers · HP Filter ·"}
         CAGR · Pearson r · Trade Openness
       </p>
     </div>

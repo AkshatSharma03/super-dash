@@ -1,10 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// PEARSON CORRELATION MATRIX  (implemented from scratch)
-// r(X,Y) = Σ[(xᵢ − x̄)(yᵢ − ȳ)] / √[Σ(xᵢ−x̄)² · Σ(yᵢ−ȳ)²]
-//
-// Computes pairwise Pearson correlations across key economic variables aligned
-// by year, returns a flat list suitable for a heat-map or table display.
+// PEARSON CORRELATION MATRIX  (library-backed)
+// Uses simple-statistics for Pearson r.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import { sampleCorrelation } from "simple-statistics";
 
 export interface CorrelationCell {
   rowLabel: string;
@@ -26,20 +25,12 @@ export function pearsonR(x: number[], y: number[]): number {
   if (n !== y.length) return 0;
   if (n < 3) return 0;
   if (!x.every(Number.isFinite) || !y.every(Number.isFinite)) return 0;
-
-  const xBar = x.reduce((a, b) => a + b, 0) / n;
-  const yBar = y.reduce((a, b) => a + b, 0) / n;
-
-  let num = 0, sx2 = 0, sy2 = 0;
-  for (let i = 0; i < n; i++) {
-    const dx = x[i] - xBar;
-    const dy = y[i] - yBar;
-    num += dx * dy;
-    sx2 += dx * dx;
-    sy2 += dy * dy;
+  try {
+    const r = sampleCorrelation(x, y);
+    return Number.isFinite(r) ? +r.toFixed(3) : 0;
+  } catch {
+    return 0;
   }
-  const denom = Math.sqrt(sx2 * sy2);
-  return denom < 1e-12 ? 0 : +(num / denom).toFixed(3);
 }
 
 function strengthLabel(absR: number): CorrelationCell["strength"] {

@@ -1,9 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Z-SCORE ANOMALY DETECTION  (implemented from scratch)
+// Z-SCORE ANOMALY DETECTION  (library-backed)
 // A value is anomalous if |z| = |(x - μ) / σ| exceeds the threshold.
 // We use a modified threshold of 1.6 (vs the typical 2.0) to surface
 // economically meaningful events like the 2016 oil crash and 2020 COVID shock.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import { mean, standardDeviation } from "simple-statistics";
 
 export interface AnomalyPoint {
   year: number;
@@ -15,15 +17,6 @@ export interface AnomalyPoint {
   direction: "high" | "low";
   severity: "moderate" | "strong" | "extreme";
   annotation: string;
-}
-
-function sampleMean(values: number[]): number {
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
-
-function sampleStd(values: number[], mean: number): number {
-  const variance = values.reduce((acc, v) => acc + (v - mean) ** 2, 0) / values.length;
-  return Math.sqrt(variance);
 }
 
 function severityLabel(absZ: number): AnomalyPoint["severity"] {
@@ -38,14 +31,14 @@ export function detectAnomalies(
   threshold = 1.6,
 ): AnomalyPoint[] {
   const values = series.map(d => d.value);
-  const mean   = sampleMean(values);
-  const std    = sampleStd(values, mean);
+  const avg = mean(values);
+  const std = standardDeviation(values);
   if (std === 0) return [];
 
   const results: AnomalyPoint[] = [];
 
   for (const point of series) {
-    const zScore = (point.value - mean) / std;
+    const zScore = (point.value - avg) / std;
     const absZ   = Math.abs(zScore);
     if (absZ < threshold) continue;
 
@@ -61,7 +54,7 @@ export function detectAnomalies(
       year: point.year,
       metric: metricName,
       value: +point.value.toFixed(2),
-      mean: +mean.toFixed(2),
+      mean: +avg.toFixed(2),
       std: +std.toFixed(2),
       zScore: +zScore.toFixed(2),
       direction,
