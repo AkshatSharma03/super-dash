@@ -112,7 +112,7 @@ function buildKagiChatPrompt(messages = [], newsSources = []) {
   ].join('\n');
 }
 
-async function callKagi(KAGI_BASE, KAGI_API_KEY, path, { method = 'GET', body = null, timeoutMs = 15000 } = {}) {
+async function callKagi(KAGI_BASE, KAGI_API_KEY, path, { method = 'GET', body = null, timeoutMs = 30000 } = {}) {
   if (!KAGI_API_KEY) throw new Error('KAGI_API_KEY not configured');
 
   const res = await fetch(`${KAGI_BASE}${path}`, {
