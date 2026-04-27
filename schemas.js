@@ -11,7 +11,7 @@ import { z } from 'zod';
 const MAX_MSG_CHARS     = 12_000;
 const MAX_QUERY_CHARS   = 1_000;
 const MAX_CSV_COLS      = 50;
-const MAX_CSV_ROWS      = 500;
+const MAX_CSV_ROWS      = 10_000;
 const MAX_CONTEXT_CHARS = 2_000;
 const MAX_SEARCH_HISTORY = 20;
 
