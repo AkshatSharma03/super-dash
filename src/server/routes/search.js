@@ -47,32 +47,51 @@ function buildKagiSearchPrompt(query, searchNewsSources = [], searchContext = []
 async function callKagi(KAGI_BASE, KAGI_API_KEY, path, { method = 'GET', body = null, timeoutMs = 15000 } = {}) {
   if (!KAGI_API_KEY) throw new Error('KAGI_API_KEY not configured');
 
-  const res = await fetch(`${KAGI_BASE}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bot ${KAGI_API_KEY}`,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const url = `${KAGI_BASE}${path}`;
+  console.log(`[Kagi] Request: ${method} ${url}`);
+  console.log(`[Kagi] API Key present: ${KAGI_API_KEY ? 'Yes (length: ' + KAGI_API_KEY.length + ')' : 'No'}`);
+
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bot ${KAGI_API_KEY}`,
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (fetchError) {
+    console.error('[Kagi] Fetch error:', fetchError.message);
+    throw new Error(`Kagi network error: ${fetchError.message}`);
+  }
+
+  console.log(`[Kagi] Response status: ${res.status} ${res.statusText}`);
 
   let payload = null;
+  const responseText = await res.text();
+  console.log(`[Kagi] Raw response:`, responseText.slice(0, 500));
+
   try {
-    payload = await res.json();
+    payload = JSON.parse(responseText);
   } catch {
     payload = null;
   }
 
   if (!res.ok) {
     const detail = payload?.error?.[0]?.msg || payload?.message || `${res.status} ${res.statusText}`;
+    console.error('[Kagi] Error response:', detail);
     throw new Error(`Kagi ${res.status}: ${detail}`);
   }
 
   if (Array.isArray(payload?.error) && payload.error.length > 0) {
-    throw new Error(`Kagi error: ${payload.error.map(e => e.msg).join('; ')}`);
+    const errorMsg = payload.error.map(e => e.msg).join('; ');
+    console.error('[Kagi] API error:', errorMsg);
+    throw new Error(`Kagi error: ${errorMsg}`);
   }
 
+  console.log(`[Kagi] Success: output length = ${payload?.data?.output?.length || 0}`);
   return payload;
 }
 
@@ -141,13 +160,15 @@ export function createSearchRouter(deps) {
         webSearchUsed = true;
       } else {
         return res.status(502).json({
-          error: 'Kagi search returned no output. Claude fallback is disabled.',
+          error: 'Kagi search returned no output.',
+          detail: 'The search completed but returned empty results.',
         });
       }
     } catch (e) {
       console.error('/api/search Kagi error:', e.message);
       return res.status(502).json({
-        error: 'Kagi search failed. Claude fallback is disabled.',
+        error: 'Kagi search failed.',
+        detail: e.message,
       });
     }
 
