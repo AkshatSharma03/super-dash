@@ -1,5 +1,42 @@
 import { Router } from 'express';
 
+const DEFAULT_DYNAMIC_SUGGESTIONS = [
+  'US GDP growth forecast 2026',
+  'China exports and trade surplus latest data',
+  'Euro area inflation and ECB policy outlook',
+  'Federal Reserve interest rate path and labor market',
+  'India manufacturing growth and investment trends',
+  'Global supply chain shifts and nearshoring update',
+  'Oil prices, shipping costs, and inflation pass-through',
+  'G7 growth divergence and recession risk indicators',
+];
+
+const SUGGESTION_TOPIC_SEEDS = [
+  'Federal Reserve interest rates',
+  'US inflation',
+  'China trade',
+  'Eurozone growth',
+  'India manufacturing',
+  'oil market',
+  'global supply chain',
+  'emerging markets debt',
+];
+
+let suggestionsCache = { expiresAt: 0, items: DEFAULT_DYNAMIC_SUGGESTIONS };
+
+function headlineToSuggestion(title = '') {
+  const clean = String(title)
+    .replace(/\s+/g, ' ')
+    .replace(/\s*[-|:]\s*Reuters.*$/i, '')
+    .replace(/\s*[-|:]\s*Bloomberg.*$/i, '')
+    .trim();
+  if (!clean) return null;
+  const noTrailing = clean.replace(/[.?!,:;]+$/g, '');
+  if (noTrailing.length < 24) return null;
+  const prompt = noTrailing.length > 92 ? `${noTrailing.slice(0, 92).trim()}…` : noTrailing;
+  return prompt;
+}
+
 function buildKagiSearchPrompt(query, searchNewsSources = [], searchContext = []) {
   const contextTurns = Array.isArray(searchContext)
     ? searchContext
@@ -118,6 +155,35 @@ export function createSearchRouter(deps) {
   } = deps;
 
   const router = Router();
+
+  router.get('/suggestions', apiLimiter, async (_req, res) => {
+    const now = Date.now();
+    if (suggestionsCache.expiresAt > now && suggestionsCache.items.length > 0) {
+      return res.json({ suggestions: suggestionsCache.items, source: 'cache' });
+    }
+
+    const collected = [];
+    for (const seed of SUGGESTION_TOPIC_SEEDS) {
+      try {
+        const news = await fetchVerifiedNews(seed.slice(0, 200));
+        for (const item of news.slice(0, 2)) {
+          const suggestion = headlineToSuggestion(item?.title);
+          if (!suggestion) continue;
+          if (!collected.some((s) => s.toLowerCase() === suggestion.toLowerCase())) {
+            collected.push(suggestion);
+          }
+          if (collected.length >= 8) break;
+        }
+      } catch {
+        // Keep trying remaining seeds.
+      }
+      if (collected.length >= 8) break;
+    }
+
+    const next = collected.length > 0 ? collected : DEFAULT_DYNAMIC_SUGGESTIONS;
+    suggestionsCache = { items: next, expiresAt: now + (15 * 60 * 1000) };
+    return res.json({ suggestions: next, source: collected.length > 0 ? 'live' : 'fallback' });
+  });
 
   router.post('/', apiLimiter, async (req, res) => {
     const body = validate(SearchSchema, req.body, res);

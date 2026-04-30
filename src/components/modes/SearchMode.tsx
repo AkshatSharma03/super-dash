@@ -6,6 +6,7 @@ import {
   clearSearchHistory,
   createSearchSession,
   deleteSearchSession,
+  getDynamicSearchSuggestions,
   getSearchHistory,
   getSearchSessions,
   performWebSearch,
@@ -58,6 +59,7 @@ export default function SearchMode({
   const [sidebarTab, setSidebarTab] = useState<SearchSidebarTab>("history");
   const [threadsLoading, setThreadsLoading] = useState(true);
   const [hoveredThreadId, setHoveredThreadId] = useState<string | null>(null);
+  const [dynamicSuggestions, setDynamicSuggestions] = useState<string[]>(SEARCH_SUGGESTIONS);
 
   const trie = getSearchTrie();
 
@@ -89,6 +91,26 @@ export default function SearchMode({
       cancelled = true;
     };
   }, [token, isGuest]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getDynamicSearchSuggestions()
+      .then((payload) => {
+        if (cancelled) return;
+        const next = Array.isArray(payload?.suggestions)
+          ? payload.suggestions.filter((s) => typeof s === "string" && s.trim()).slice(0, 8)
+          : [];
+        if (next.length > 0) setDynamicSuggestions(next);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setDynamicSuggestions(SEARCH_SUGGESTIONS);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -594,7 +616,7 @@ export default function SearchMode({
                   isMobile ? "grid-cols-1" : "grid-cols-2",
                 )}
               >
-                {SEARCH_SUGGESTIONS.map((s, i) => (
+                {dynamicSuggestions.map((s, i) => (
                   <button
                     key={i}
                     onClick={() => doSearch(s)}

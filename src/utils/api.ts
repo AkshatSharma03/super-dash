@@ -338,6 +338,10 @@ export function performWebSearch(query: string, context: SearchContextTurn[] = [
   return post<SearchResult>("/api/search", { query, context }, undefined, SEARCH_TIMEOUT_MS);
 }
 
+export function getDynamicSearchSuggestions(): Promise<{ suggestions: string[]; source?: string }> {
+  return get<{ suggestions: string[]; source?: string }>("/api/search/suggestions");
+}
+
 export function getSearchHistory(token: string): Promise<SearchHistoryEntry[]> {
   return get<SearchHistoryEntry[]>("/api/search/history", token);
 }
