@@ -25,16 +25,23 @@ export function createAIClients({
 
   async function callKagi(path, { method = 'GET', body = null, timeoutMs = KAGI_TIMEOUT_MS } = {}) {
     if (!KAGI_API_KEY) throw new Error('KAGI_API_KEY not configured');
+    const apiKey = KAGI_API_KEY.trim();
 
-    const res = await fetch(`${KAGI_BASE}${path}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bot ${KAGI_API_KEY}`,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(timeoutMs),
-    });
+    async function fetchWithAuth(authHeader) {
+      return fetch(`${KAGI_BASE}${path}`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: authHeader,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    }
+    let res = await fetchWithAuth(`Bot ${apiKey}`);
+    if (res.status === 401) {
+      res = await fetchWithAuth(`Bearer ${apiKey}`);
+    }
 
     let payload = null;
     try {

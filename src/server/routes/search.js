@@ -46,25 +46,32 @@ function buildKagiSearchPrompt(query, searchNewsSources = [], searchContext = []
 
 async function callKagi(KAGI_BASE, KAGI_API_KEY, path, { method = 'GET', body = null, timeoutMs = 30000 } = {}) {
   if (!KAGI_API_KEY) throw new Error('KAGI_API_KEY not configured');
+  const apiKey = KAGI_API_KEY.trim();
 
   const url = `${KAGI_BASE}${path}`;
   console.log(`[Kagi] Request: ${method} ${url}`);
-  console.log(`[Kagi] API Key present: ${KAGI_API_KEY ? 'Yes (length: ' + KAGI_API_KEY.length + ')' : 'No'}`);
+  console.log(`[Kagi] API Key present: ${apiKey ? 'Yes (length: ' + apiKey.length + ')' : 'No'}`);
 
-  let res;
-  try {
-    res = await fetch(url, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bot ${KAGI_API_KEY}`,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch (fetchError) {
-    console.error('[Kagi] Fetch error:', fetchError.message);
-    throw new Error(`Kagi network error: ${fetchError.message}`);
+  async function fetchWithAuth(authHeader) {
+    try {
+      return await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: authHeader,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch (fetchError) {
+      console.error('[Kagi] Fetch error:', fetchError.message);
+      throw new Error(`Kagi network error: ${fetchError.message}`);
+    }
+  }
+  let res = await fetchWithAuth(`Bot ${apiKey}`);
+  if (res.status === 401) {
+    console.log('[Kagi] Retrying with Bearer auth scheme after 401 on Bot scheme');
+    res = await fetchWithAuth(`Bearer ${apiKey}`);
   }
 
   console.log(`[Kagi] Response status: ${res.status} ${res.statusText}`);

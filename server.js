@@ -1558,7 +1558,7 @@ if (shouldStartServer) {
   app.listen(PORT, () => {
     console.log(`Economic Dashboard server running on http://localhost:${PORT}`);
     console.log(`Build: ${APP_BUILD_ID}`);
-    console.log(`Supported countries: ${countries.getNames('en').length} via i18n-iso-countries`);
+    console.log(`Supported countries: ${Object.keys(countries.getNames('en') || {}).length} via i18n-iso-countries`);
   });
 }
 
