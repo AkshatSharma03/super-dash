@@ -39,7 +39,7 @@ export const ChatSchema = z.object({
         role:    z.enum(['user', 'assistant']),
         content: z.union([
           z.string().max(MAX_MSG_CHARS),
-          z.record(z.unknown()),
+          z.record(z.string(), z.unknown()),
         ]),
       })
     )
@@ -121,7 +121,7 @@ export const CreateSearchSessionSchema = z.object({
 });
 
 export const UpdateSearchSessionSchema = z.object({
-  turns: z.array(z.record(z.unknown())).max(MAX_SEARCH_HISTORY).optional(),
+  turns: z.array(z.record(z.string(), z.unknown())).max(MAX_SEARCH_HISTORY).optional(),
   title: z.string().max(100).optional(),
 });
 
@@ -164,7 +164,7 @@ export const SnapshotCreateSchema = z.object({
     .max(3, 'countryCode must be 2 or 3 letters'),
   title: z.string().trim().max(160, 'title is too long').optional(),
   description: z.string().trim().max(1000, 'description is too long').optional(),
-  dataPayload: z.record(z.unknown()).optional(),
+  dataPayload: z.record(z.string(), z.unknown()).optional(),
   dataVersion: z.number().int().positive().optional(),
   isPublic: z.boolean().optional(),
 });

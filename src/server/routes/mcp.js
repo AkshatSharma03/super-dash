@@ -83,7 +83,10 @@ export function createMcpServerInstance(deps) {
       'Fetch data from OEC BotMarket (Datawheel) by dataset slug and optional filter object.',
       {
         slug: z.string().describe('BotMarket dataset slug from /api/catalog'),
-        filters: z.record(z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number(), z.boolean()]))])).default({}).describe('Filter object where keys are filter columns and values are scalar or arrays'),
+        filters: z.record(
+          z.string(),
+          z.union([z.string(), z.number(), z.boolean(), z.array(z.union([z.string(), z.number(), z.boolean()]))]),
+        ).default({}).describe('Filter object where keys are filter columns and values are scalar or arrays'),
         limit: z.number().int().min(1).max(1000).default(1000),
         offset: z.number().int().min(0).default(0),
         format: z.enum(['json', 'csv', 'parquet']).default('json'),
