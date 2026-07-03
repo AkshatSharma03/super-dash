@@ -21,6 +21,12 @@ import { ALGO_DEFS, FILE_FORMATS } from "./export/constants";
 import { buildAlgoCSVs } from "./export/buildAlgoCsvs";
 import { HiddenCharts } from "./export/HiddenCharts";
 import { ExportBtn, Panel, SectionTitle } from "./export/ui";
+import { trackReportExported } from "../../analytics";
+import {
+  DEFAULT_REPORT_PROFILE,
+  REPORT_PROFILES,
+  type ReportAudience,
+} from "../../config/reportProfiles";
 
 interface ExportModeProps {
   dashDataset: CountryDataset | null;
@@ -130,6 +136,9 @@ export default function ExportMode({
 }: ExportModeProps) {
   const isMobile = useMobile();
   const [generating, setGenerating] = useState<"dash" | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<ReportAudience>(
+    DEFAULT_REPORT_PROFILE.id,
+  );
 
   const refs = useDashboardChartRefs();
   const chartRefs = useMemo(
@@ -169,12 +178,14 @@ export default function ExportMode({
 
     const [csv, filename] = map[which]() as [string, string];
     downloadCSV(filename, csv);
+    trackReportExported(`csv_${which}`, dashDataset.code);
     toast.success(`Downloaded ${filename}`);
   }
 
   function handleDashJSON() {
     if (!dashDataset) return;
     downloadJSON(`${dashDataset.code}_dataset.json`, dashDataset);
+    trackReportExported("json_dataset", dashDataset.code);
     toast.success(`Downloaded ${dashDataset.code}_dataset.json`);
   }
 
@@ -192,24 +203,29 @@ export default function ExportMode({
         imports: extractSVG(chartRefs.imports),
       };
 
-      const html = buildDashboardHTML(dashDataset, svgByChart);
+      const html = buildDashboardHTML(dashDataset, svgByChart, {
+        audience: selectedProfile,
+      });
 
       if (print) {
         const opened = printHTML(html);
         if (!opened) {
           toast.error("Popup blocked. Enable popups, then retry print.");
+        } else {
+          trackReportExported("pdf_print", dashDataset.code);
         }
       } else {
         const blob = new Blob([html], { type: "text/html;charset=utf-8" });
         const url = URL.createObjectURL(blob);
         const anchor = Object.assign(document.createElement("a"), {
           href: url,
-          download: `${dashDataset.code}_economic_report.html`,
+          download: `${dashDataset.code}_${selectedProfile}_briefing.html`,
         });
         document.body.appendChild(anchor);
         anchor.click();
         document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
+        trackReportExported(`html_briefing_${selectedProfile}`, dashDataset.code);
         toast.success("Report downloaded");
       }
 
@@ -223,12 +239,14 @@ export default function ExportMode({
 
     const filename = `${analyticsDataset.code}_${key}.csv`;
     downloadCSV(filename, csv);
+    trackReportExported(`algorithm_csv_${key}`, analyticsDataset.code);
     toast.success(`Downloaded ${filename}`);
   }
 
   function handleAlgoJSON() {
     if (!analyticsDataset) return;
     downloadJSON(`${analyticsDataset.code}_all_algorithms.json`, algoCsvs);
+    trackReportExported("algorithm_json", analyticsDataset.code);
     toast.success("Downloaded all algorithm results as JSON");
   }
 
@@ -257,12 +275,48 @@ export default function ExportMode({
 
       <div className="mb-6">
         <h1 className="text-[22px] font-black text-memphis-black tracking-tight mb-1 uppercase">
-          Export &amp; Reports
+          Reports &amp; Briefings
         </h1>
         <p className="text-[13px] text-memphis-black/60 font-medium">
-          Download country data as CSV / JSON · Generate standalone HTML reports
-          with embedded charts · Print to PDF
+          Create portable analyst deliverables with charts, data tables,
+          provenance, and methodology notes. Every action is explicit.
         </p>
+      </div>
+
+      <div className="mb-4 bg-white border-4 border-memphis-black shadow-hard p-4">
+        <SectionTitle>Report audience</SectionTitle>
+        <p className="text-[11px] text-memphis-black/60 mb-3 font-medium">
+          Choose the reader context so the exported briefing includes the right
+          decision questions, caveats, and evidence standards.
+        </p>
+        <div className={`grid gap-2 ${isMobile ? "grid-cols-1" : "grid-cols-3"}`}>
+          {REPORT_PROFILES.map((profile) => {
+            const active = selectedProfile === profile.id;
+            return (
+              <button
+                key={profile.id}
+                type="button"
+                onClick={() => setSelectedProfile(profile.id)}
+                className={
+                  "text-left border-3 border-memphis-black p-3 transition-snap " +
+                  "shadow-hard-sm focus:outline-none focus:ring-3 focus:ring-memphis-black"
+                }
+                style={{
+                  background: active ? "#FFBE0B" : "#FFFFFF",
+                  color: "#1A1A2E",
+                }}
+                aria-pressed={active}
+              >
+                <span className="block text-[11px] font-black uppercase mb-1">
+                  {profile.label}
+                </span>
+                <span className="block text-[11px] text-memphis-black/65 leading-relaxed">
+                  {profile.headline}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className={`flex gap-4 items-start ${isMobile ? "flex-col" : ""}`}>
@@ -316,17 +370,20 @@ export default function ExportMode({
                 full
               />
 
-              <SectionTitle>Full Report</SectionTitle>
+              <SectionTitle>{REPORT_PROFILES.find((p) => p.id === selectedProfile)?.label ?? "Analyst Briefing"}</SectionTitle>
               <p className="text-[11px] text-memphis-black/50 mb-2 font-medium">
-                Generates a standalone `.html` file with embedded SVG charts,
-                KPI cards, and data tables.
+                Generates a standalone `.html` file with an executive summary,
+                embedded SVG charts, KPI cards, data tables, sources, and
+                methodology notes tailored for the selected audience.
               </p>
               <div className="flex flex-col sm:flex-row gap-1.5">
                 <div className="flex-1">
                   <ExportBtn
                     icon={generating === "dash" ? "..." : "HTML"}
                     label={
-                      generating === "dash" ? "Generating…" : "Download HTML"
+                      generating === "dash"
+                        ? "Generating…"
+                        : "Download briefing"
                     }
                     onClick={() => handleDashReport(false)}
                     disabled={generating === "dash"}
@@ -336,7 +393,7 @@ export default function ExportMode({
                 <div className="flex-1">
                   <ExportBtn
                     icon="PDF"
-                    label="Print / Save PDF"
+                    label="Print / save PDF"
                     onClick={() => handleDashReport(true)}
                     disabled={generating === "dash"}
                     full

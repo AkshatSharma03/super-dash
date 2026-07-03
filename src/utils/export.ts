@@ -4,6 +4,11 @@
 // helpers which trigger browser actions.
 // ─────────────────────────────────────────────────────────────────────────────
 import type { CountryDataset, Message, AIResponse, ChartConfig, SearchResult } from "../types";
+import {
+  getReportProfile,
+  REPORT_GROUNDING_STANDARDS,
+  type ReportAudience,
+} from "../config/reportProfiles";
 
 // ── Download primitives ───────────────────────────────────────────────────────
 
@@ -162,7 +167,9 @@ const KPI_BG: Record<string, string> = {
 export function buildDashboardHTML(
   dataset: CountryDataset,
   svgs: Record<string, string> = {},
+  options: { audience?: ReportAudience } = {},
 ): string {
+  const profile = getReportProfile(options.audience);
   const generated = new Date().toLocaleDateString("en-GB", {
     day: "numeric", month: "long", year: "numeric",
   });
@@ -233,6 +240,40 @@ export function buildDashboardHTML(
   const cachedAt = dataset._meta?.cachedAt
     ? new Date(dataset._meta.cachedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : "unknown";
+  const latestGdp = dataset.gdpData[dataset.gdpData.length - 1];
+  const latestTradeBalance = latestExp && latestImp
+    ? +(latestExp.total - latestImp.total).toFixed(1)
+    : null;
+  const latestOpenness = latestGdp && latestExp && latestImp && latestGdp.gdp_bn > 0
+    ? +(((latestExp.total + latestImp.total) / latestGdp.gdp_bn) * 100).toFixed(1)
+    : null;
+  const coverageRows = [
+    ...dataset.gdpData,
+    ...dataset.exportData,
+    ...dataset.importData,
+  ];
+  const coverageScore = coverageRows.length
+    ? Math.round((coverageRows.filter((row) =>
+        Object.values(row).some((value) => typeof value === "number"),
+      ).length / coverageRows.length) * 100)
+    : 0;
+  const primaryQuestionsHTML = profile.primaryQuestions
+    .map((question) => `<li>${question}</li>`)
+    .join("");
+  const sectionsHTML = profile.recommendedSections
+    .map((section) => `<li>${section}</li>`)
+    .join("");
+  const groundingHTML = REPORT_GROUNDING_STANDARDS
+    .map((standard) => `<li>${standard}</li>`)
+    .join("");
+  const evidenceRows = [
+    ["GDP table", `${dataset.gdpData.length} rows`, "Source-backed rows included in export"],
+    ["Exports table", `${dataset.exportData.length} rows`, "Trade balance uses these values when available"],
+    ["Imports table", `${dataset.importData.length} rows`, "Trade openness uses imports + exports / GDP"],
+    ["Source metadata", sources.join(" · "), `Cached ${cachedAt}`],
+  ].map(([area, coverage, note]) =>
+    `<tr><td>${area}</td><td>${coverage}</td><td>${note}</td></tr>`
+  ).join("");
 
   // ── SVG wrappers ──────────────────────────────────────────────────────────
   function chartSection(title: string, svgKey: string): string {
@@ -270,6 +311,16 @@ tr:nth-child(even) td{background:#fafafa}
 .header .meta{display:flex;gap:20px;margin-top:10px;font-size:11px;color:#94a3b8}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:12px 0}
 @media(max-width:640px){.two-col{grid-template-columns:1fr}}
+.summary{background:#f8fafc;border:1px solid #cbd5e1;border-left:4px solid #3b82f6;border-radius:10px;padding:16px 18px;margin:18px 0}
+.summary p{font-size:13px;color:#334155;margin:0 0 8px}
+.trust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.trust-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px}
+.trust-card strong{display:block;font-size:16px;color:#0f172a}
+.trust-card span{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.4px}
+@media(max-width:640px){.trust-grid{grid-template-columns:1fr}}
+.callout{background:#fff7ed;border:1px solid #fed7aa;border-left:4px solid #f97316;border-radius:10px;padding:16px 18px;margin:18px 0}
+.callout p,.callout li{font-size:13px;color:#334155;margin-bottom:6px}
+.callout ul{padding-left:20px;margin-top:8px}
 .footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 @media print{body{padding:20px}.no-print{display:none}h2{page-break-after:avoid}table,figure{page-break-inside:avoid}}
 </style>
@@ -277,13 +328,56 @@ tr:nth-child(even) td{background:#fafafa}
 <body>
 
 <div class="header">
-  <h1>${dataset.flag} ${dataset.name} — Economic Report</h1>
-  <p class="sub">${dataset.region}</p>
+  <h1>${dataset.flag} ${dataset.name} — ${profile.label}</h1>
+  <p class="sub">${dataset.region} · ${profile.headline}</p>
   <div class="meta">
     <span>📅 Generated: ${generated}</span>
     <span>🗄 Data cached: ${cachedAt}</span>
     <span>📊 Source: ${sources.join(" · ")}</span>
   </div>
+</div>
+
+<h2>Reader Context</h2>
+<div class="callout">
+  <p><strong>${profile.label}:</strong> ${profile.description}</p>
+  <p><strong>Evidence standard:</strong> ${profile.evidenceStandard}</p>
+  <div class="two-col">
+    <div>
+      <h3>Decision questions</h3>
+      <ul>${primaryQuestionsHTML}</ul>
+    </div>
+    <div>
+      <h3>Recommended sections</h3>
+      <ul>${sectionsHTML}</ul>
+    </div>
+  </div>
+</div>
+
+<h2>Executive Summary</h2>
+<div class="summary">
+  <p><strong>${dataset.name}</strong> latest source-backed GDP is ${latestGdp ? `$${latestGdp.gdp_bn}B in ${latestGdp.year}` : "not available"}.</p>
+  <p>Latest recorded GDP growth is ${latestGdp?.gdp_growth != null ? `${latestGdp.gdp_growth}%` : "not available"}; latest trade balance is ${latestTradeBalance != null ? `${latestTradeBalance >= 0 ? "+" : ""}$${latestTradeBalance}B` : "not available"}${latestOpenness != null ? `; trade openness is ${latestOpenness}%.` : "."}</p>
+  <p>This report uses the data tables below as its source of truth and avoids estimated values where source data is missing.</p>
+</div>
+
+<h2>Trust & Provenance</h2>
+<div class="trust-grid">
+  <div class="trust-card"><span>Data coverage</span><strong>${coverageScore}%</strong></div>
+  <div class="trust-card"><span>Data cached</span><strong>${cachedAt}</strong></div>
+  <div class="trust-card"><span>Sources</span><strong>${sources.length}</strong></div>
+</div>
+<p style="font-size:12px;color:#64748b">Sources: ${sources.join(" · ")}. Methodology note: GDP, trade totals, balances, and openness are calculated from source-backed rows included in this export.</p>
+
+<h2>Evidence Ledger</h2>
+<table>
+  <thead><tr><th>Evidence area</th><th>Coverage / source</th><th>Use in report</th></tr></thead>
+  <tbody>${evidenceRows}</tbody>
+</table>
+
+<h2>Grounding Standards</h2>
+<div class="callout">
+  <ul>${groundingHTML}</ul>
+  <p><strong>Limitation:</strong> This report is descriptive. It can support briefing, screening, and prioritization, but causal claims and forecasts require additional model design and validation.</p>
 </div>
 
 <h2>Key Performance Indicators</h2>

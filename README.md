@@ -208,6 +208,11 @@ npm run build        # Vite → dist/
 npm start            # Express serves dist/ + API on :3000
 ```
 
+For production-only dependency installs, use `npm ci --omit=dev` rather than
+the deprecated `npm_config_production=true` / `--production` setting. The
+`npm run ci:install:prod` helper is provided for deploy platforms that allow a
+custom install command.
+
 Open [http://localhost:5173](http://localhost:5173) in development or [http://localhost:3000](http://localhost:3000) in production.
 
 ---
