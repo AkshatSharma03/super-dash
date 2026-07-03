@@ -14,6 +14,8 @@ export function createAuthRouter(deps) {
     schemas,
     BCRYPT_ROUNDS,
     JWT_SECRET,
+    JWT_ISSUER,
+    JWT_AUDIENCE,
     PORT,
     revokeCurrentToken,
   } = deps;
@@ -29,6 +31,15 @@ export function createAuthRouter(deps) {
 
   const router = express.Router();
 
+  function signAppToken(payload, expiresIn) {
+    return jwt.sign(payload, JWT_SECRET, {
+      expiresIn,
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+      algorithm: 'HS256',
+    });
+  }
+
   router.post('/logout', requireAuth, (req, res) => {
     revokeCurrentToken(req.user);
     track(req.user.id, 'user_logged_out');
@@ -36,10 +47,9 @@ export function createAuthRouter(deps) {
   });
 
   router.post('/guest', authLimiter, (_req, res) => {
-    const token = jwt.sign(
+    const token = signAppToken(
       { id: 'guest', name: 'Guest', email: '', isGuest: true, jti: randomBytes(16).toString('hex') },
-      JWT_SECRET,
-      { expiresIn: '24h' }
+      '24h'
     );
     track('guest', 'guest_session_started');
     res.json({ token, user: { id: 'guest', name: 'Guest', email: '', isGuest: true } });
@@ -55,7 +65,7 @@ export function createAuthRouter(deps) {
     const id = `u_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const uname = name.slice(0, 80).trim();
     stmt.insertUser.run(id, em, uname, hashedPassword, new Date().toISOString());
-    const token = jwt.sign({ id, email: em, name: uname, jti: randomBytes(16).toString('hex') }, JWT_SECRET, { expiresIn: '7d' });
+    const token = signAppToken({ id, email: em, name: uname, jti: randomBytes(16).toString('hex') }, '7d');
     if (ph) ph.identify({ distinctId: id, properties: { email: em, name: uname } });
     track(id, 'user_registered', { email: em, name: uname });
     res.json({ token, user: { id, email: em, name: uname } });
@@ -70,7 +80,7 @@ export function createAuthRouter(deps) {
     if (!user) return res.status(401).json({ error: 'Invalid email or password' });
     const match = await bcrypt.compare(password, user.hashed_password);
     if (!match) return res.status(401).json({ error: 'Invalid email or password' });
-    const token = jwt.sign({ id: user.id, email: user.email, name: user.name, jti: randomBytes(16).toString('hex') }, JWT_SECRET, { expiresIn: '7d' });
+    const token = signAppToken({ id: user.id, email: user.email, name: user.name, jti: randomBytes(16).toString('hex') }, '7d');
     track(user.id, 'user_logged_in', { email: user.email });
     res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
   });

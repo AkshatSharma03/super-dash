@@ -38,3 +38,19 @@ export function track(event: string, properties?: Record<string, unknown>) {
   if (!KEY) return;
   posthog.capture(event, properties);
 }
+
+export function trackGuestStarted() {
+  track("guest_started");
+}
+
+export function trackCountrySelected(countryCode: string, surface: string) {
+  track("country_selected", { country_code: countryCode, surface });
+}
+
+export function trackReportExported(format: string, countryCode?: string) {
+  track("report_exported", { format, country_code: countryCode });
+}
+
+export function trackUpgradePromptViewed(surface: string) {
+  track("upgrade_prompt_viewed", { surface });
+}
