@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 
 interface AuthPageProps {
   onGuestAuth: (token: string, user: User) => void;
+  clerkAvailable?: boolean;
+  authNotice?: string;
 }
 
 const FEATURES: [ComponentType<{ className?: string }>, string, string][] = [
@@ -98,7 +100,11 @@ const clerkAppearance = {
   },
 } as const;
 
-export default function AuthPage({ onGuestAuth }: AuthPageProps) {
+export default function AuthPage({
+  onGuestAuth,
+  clerkAvailable = true,
+  authNotice,
+}: AuthPageProps) {
   const isMobile = useMobile();
   const [view, setView] = useState<View>("login");
   const [guestLoading, setGuestLoading] = useState(false);
@@ -133,17 +139,23 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
     <>
       <div className="mb-5">
         <h2 className="text-xl font-extrabold text-memphis-black tracking-[-0.3px] mb-1.5">
-          {view === "login" ? "Welcome back" : "Create your account"}
+          {!clerkAvailable
+            ? "Start a guest briefing"
+            : view === "login"
+              ? "Welcome back"
+              : "Create your account"}
         </h2>
         <p className="text-xs text-muted-foreground">
-          {view === "login"
-            ? "Sign in to access your dashboard and chat history"
-            : "Create your account and start generating charts"}
+          {!clerkAvailable
+            ? "Account sign-in is unavailable until Clerk is configured."
+            : view === "login"
+              ? "Sign in to access your dashboard and chat history"
+              : "Create your account and start generating charts"}
         </p>
       </div>
 
       {/* Tab toggle */}
-      <div className="flex bg-white border-3 border-memphis-black p-1 mb-5 shadow-hard">
+      {clerkAvailable && <div className="flex bg-white border-3 border-memphis-black p-1 mb-5 shadow-hard">
         {(["login", "register"] as const).map((t) => (
           <button
             key={t}
@@ -161,34 +173,44 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
             {t === "login" ? "Sign in" : "Register"}
           </button>
         ))}
-      </div>
+      </div>}
 
-      <div
-        className={cn(
-          "border-3 border-memphis-black bg-white p-3 shadow-hard",
-          "min-h-[540px] sm:min-h-[560px]",
-        )}
-      >
-        {view === "login" ? (
-          <SignIn
-            routing="hash"
-            signUpUrl="/sign-up"
-            oauthFlow="redirect"
-            forceRedirectUrl="/"
-            fallbackRedirectUrl="/"
-            appearance={clerkAppearance}
-          />
-        ) : (
-          <SignUp
-            routing="hash"
-            signInUrl="/sign-in"
-            oauthFlow="redirect"
-            forceRedirectUrl="/"
-            fallbackRedirectUrl="/"
-            appearance={clerkAppearance}
-          />
-        )}
-      </div>
+      {clerkAvailable ? (
+        <div
+          className={cn(
+            "border-3 border-memphis-black bg-white p-3 shadow-hard",
+            "min-h-[540px] sm:min-h-[560px]",
+          )}
+        >
+          {view === "login" ? (
+            <SignIn
+              routing="hash"
+              signUpUrl="/sign-up"
+              oauthFlow="redirect"
+              forceRedirectUrl="/"
+              fallbackRedirectUrl="/"
+              appearance={clerkAppearance}
+            />
+          ) : (
+            <SignUp
+              routing="hash"
+              signInUrl="/sign-in"
+              oauthFlow="redirect"
+              forceRedirectUrl="/"
+              fallbackRedirectUrl="/"
+              appearance={clerkAppearance}
+            />
+          )}
+        </div>
+      ) : (
+        <Alert className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            {authNotice ??
+              "Clerk is not configured. You can continue as a guest while the publishable key is added."}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {error && (
         <Alert variant="destructive" className="mt-3.5">
@@ -197,11 +219,11 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
         </Alert>
       )}
 
-      <div className="flex items-center gap-2.5 mt-4">
+      {clerkAvailable && <div className="flex items-center gap-2.5 mt-4">
         <div className="flex-1 h-1 bg-memphis-black" />
         <span className="text-[11px] text-memphis-black/50 font-bold">or</span>
         <div className="flex-1 h-1 bg-memphis-black" />
-      </div>
+      </div>}
       <Button
         variant="outline"
         onClick={continueAsGuest}
@@ -294,7 +316,7 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
                 className="w-2 h-2 bg-memphis-pink inline-block"
                 style={{ animation: "pulse 2s ease-in-out infinite" }}
               />
-              Economic Intelligence Platform
+              Ethical economic intelligence
             </div>
             <h1
               className={cn(
@@ -302,13 +324,43 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
                 "leading-[1.15] text-memphis-black tracking-[-0.5px] mb-4",
               )}
             >
-              Generate accurate dynamic charts for any economic query
+              Create source-backed country briefings in minutes
             </h1>
             <p className="text-sm text-memphis-black/70 leading-[1.8] mb-8 lg:mb-10">
-              Ask questions in plain language. Get interactive,
-              publication-ready charts backed by World Bank, IMF, UN Comtrade,
-              and OECD data — for any country or region in the world.
+              Pick a country, review transparent data provenance, and export a
+              briefing with charts, tables, and methodology notes. Start as a
+              guest before creating an account — no dark patterns or hidden
+              consent.
             </p>
+            <div className="border-3 border-memphis-black bg-white p-4 shadow-hard mb-7">
+              <div className="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <p className="text-[11px] font-black uppercase tracking-wide text-memphis-pink">
+                    Sample briefing
+                  </p>
+                  <h2 className="text-lg font-black text-memphis-black">
+                    India market-entry snapshot
+                  </h2>
+                </div>
+                <span className="border-2 border-memphis-black bg-memphis-yellow px-2 py-1 text-[10px] font-black">
+                  3 steps
+                </span>
+              </div>
+              <ol className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-memphis-black/70">
+                <li className="border-2 border-memphis-black/20 p-2">
+                  <strong className="block text-memphis-black">Consultants</strong>
+                  Client-ready market narrative
+                </li>
+                <li className="border-2 border-memphis-black/20 p-2">
+                  <strong className="block text-memphis-black">Analysts</strong>
+                  Reproducible data appendix
+                </li>
+                <li className="border-2 border-memphis-black/20 p-2">
+                  <strong className="block text-memphis-black">Policy teams</strong>
+                  Transparent evidence gaps
+                </li>
+              </ol>
+            </div>
             <div className="flex flex-col gap-3.5">
               {visibleFeatures.map(([Icon, title, desc]) => (
                 <div key={title} className="flex gap-3 items-start">

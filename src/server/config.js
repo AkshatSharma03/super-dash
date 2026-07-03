@@ -14,6 +14,7 @@ export const BOTMARKET_API_KEY = process.env.BOTMARKET_API_KEY;
 export const OECD_API_KEY = process.env.OECD_API_KEY;
 export const UN_COMTRADE_API_KEY = process.env.UN_COMTRADE_API_KEY;
 export const IS_DEV = process.env.NODE_ENV !== 'production';
+export const IS_TEST = process.env.NODE_ENV === 'test';
 export const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY;
 export const CLERK_JWT_KEY = process.env.CLERK_JWT_KEY;
 export const CLERK_AUTH_ENABLED = Boolean(CLERK_SECRET_KEY || CLERK_JWT_KEY);
@@ -35,6 +36,11 @@ export function chatCacheTtlMs() {
 
 export const RL_WINDOW_MS = 15 * 60 * 1000;
 export const RL_MAX = 20;
+export const BODY_LIMIT = process.env.BODY_LIMIT || '10mb';
+export const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
 
 export const MAX_HISTORY = 40;
 export const MAX_MSG_CHARS = 12_000;
@@ -50,6 +56,9 @@ export const ANTHROPIC_STREAM_TIMEOUT_MS = 180_000;
 export const KAGI_TIMEOUT_MS = 25_000;
 
 export const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-in-production';
+export const JWT_ISSUER = process.env.JWT_ISSUER || 'superdash';
+export const JWT_AUDIENCE = process.env.JWT_AUDIENCE || 'superdash-web';
+export const JWT_REQUIRE_CLAIMS = process.env.JWT_REQUIRE_CLAIMS === 'true' || !IS_TEST;
 export const BCRYPT_ROUNDS = 10;
 
 export const DB_PATH = process.env.DB_PATH || join(ROOT_DIR, 'data', 'superdash.db');
