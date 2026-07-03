@@ -348,16 +348,16 @@ export default function AuthPage({
               </div>
               <ol className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-memphis-black/70">
                 <li className="border-2 border-memphis-black/20 p-2">
-                  <strong className="block text-memphis-black">Consultants</strong>
-                  Client-ready market narrative
+                  <strong className="block text-memphis-black">1. Select</strong>
+                  Country and date range
                 </li>
                 <li className="border-2 border-memphis-black/20 p-2">
-                  <strong className="block text-memphis-black">Analysts</strong>
-                  Reproducible data appendix
+                  <strong className="block text-memphis-black">2. Verify</strong>
+                  Sources and coverage
                 </li>
                 <li className="border-2 border-memphis-black/20 p-2">
-                  <strong className="block text-memphis-black">Policy teams</strong>
-                  Transparent evidence gaps
+                  <strong className="block text-memphis-black">3. Export</strong>
+                  Portable HTML/PDF
                 </li>
               </ol>
             </div>

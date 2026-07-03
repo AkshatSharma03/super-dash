@@ -16,8 +16,7 @@ const CLERK_INIT_ERROR =
 const CLERK_MISSING_KEY_ERROR =
   "Missing or placeholder VITE_CLERK_PUBLISHABLE_KEY. Add the Clerk " +
   "publishable key to your local .env file and to your hosting provider's " +
-  "build-time environment variables, then rebuild the client. Guest mode is " +
-  "available now, but saved accounts require Clerk.";
+  "build-time environment variables, then rebuild the client.";
 
 const isValidClerkKey = (key?: string): key is string => {
   if (!key) return false;

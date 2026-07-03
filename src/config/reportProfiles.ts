@@ -74,7 +74,6 @@ export const REPORT_PROFILES: ReportProfile[] = [
 ];
 
 export const DEFAULT_REPORT_PROFILE = REPORT_PROFILES[0];
-export const DEFAULT_REPORT_AUDIENCE: ReportAudience = DEFAULT_REPORT_PROFILE.id;
 
 export const REPORT_GROUNDING_STANDARDS = [
   "Use source-backed table values for numeric claims; do not invent or impute missing values.",
