@@ -22,10 +22,6 @@ import { buildAlgoCSVs } from "./export/buildAlgoCsvs";
 import { HiddenCharts } from "./export/HiddenCharts";
 import { ExportBtn, Panel, SectionTitle } from "./export/ui";
 import { trackReportExported } from "../../analytics";
-import {
-  DEFAULT_REPORT_AUDIENCE,
-  REPORT_PROFILES,
-} from "../../config/reportProfiles";
 
 interface ExportModeProps {
   dashDataset: CountryDataset | null;
@@ -135,8 +131,8 @@ export default function ExportMode({
 }: ExportModeProps) {
   const isMobile = useMobile();
   const [generating, setGenerating] = useState<"dash" | null>(null);
-  const [selectedProfile, setSelectedProfile] = useState(
-    DEFAULT_REPORT_AUDIENCE,
+  const [selectedProfile, setSelectedProfile] = useState<ReportAudience>(
+    DEFAULT_REPORT_PROFILE.id,
   );
 
   const refs = useDashboardChartRefs();
@@ -224,7 +220,7 @@ export default function ExportMode({
         anchor.click();
         document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
-        trackReportExported(`html_briefing_${selectedProfile}`, dashDataset.code);
+        trackReportExported("html_briefing", dashDataset.code);
         toast.success("Report downloaded");
       }
 
@@ -279,14 +275,6 @@ export default function ExportMode({
         <p className="text-[13px] text-memphis-black/60 font-medium">
           Create portable analyst deliverables with charts, data tables,
           provenance, and methodology notes. Every action is explicit.
-        </p>
-      </div>
-
-      <div className="mb-4 bg-white border-4 border-memphis-black shadow-hard p-4">
-        <SectionTitle>Report audience</SectionTitle>
-        <p className="text-[11px] text-memphis-black/60 mb-3 font-medium">
-          Choose the reader context so the exported briefing includes the right
-          decision questions, caveats, and evidence standards.
         </p>
         <div className={`grid gap-2 ${isMobile ? "grid-cols-1" : "grid-cols-3"}`}>
           {REPORT_PROFILES.map((profile) => {
@@ -369,11 +357,11 @@ export default function ExportMode({
                 full
               />
 
-              <SectionTitle>{REPORT_PROFILES.find((p) => p.id === selectedProfile)?.label ?? "Analyst Briefing"}</SectionTitle>
+              <SectionTitle>Analyst Briefing</SectionTitle>
               <p className="text-[11px] text-memphis-black/50 mb-2 font-medium">
                 Generates a standalone `.html` file with an executive summary,
                 embedded SVG charts, KPI cards, data tables, sources, and
-                methodology notes tailored for the selected audience.
+                methodology notes.
               </p>
               <div className="flex flex-col sm:flex-row gap-1.5">
                 <div className="flex-1">

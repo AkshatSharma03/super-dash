@@ -208,21 +208,6 @@ export default function AuthPage({
           <AlertDescription>
             {authNotice ??
               "Clerk is not configured. You can continue as a guest while the publishable key is added."}
-            <span className="block mt-2">
-              Get the key from{" "}
-              <a
-                href="https://dashboard.clerk.com/last-active?path=api-keys"
-                className="font-black underline"
-              >
-                Clerk API keys
-              </a>{" "}
-              and set it as{" "}
-              <code className="font-black">VITE_CLERK_PUBLISHABLE_KEY</code>.
-              If the Clerk quick-copy panel shows{" "}
-              <code className="font-black">
-                NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
-              </code>, use the same value with the Vite variable name.
-            </span>
           </AlertDescription>
         </Alert>
       )}
@@ -363,16 +348,16 @@ export default function AuthPage({
               </div>
               <ol className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] text-memphis-black/70">
                 <li className="border-2 border-memphis-black/20 p-2">
-                  <strong className="block text-memphis-black">Consultants</strong>
-                  Client-ready market narrative
+                  <strong className="block text-memphis-black">1. Select</strong>
+                  Country and date range
                 </li>
                 <li className="border-2 border-memphis-black/20 p-2">
-                  <strong className="block text-memphis-black">Analysts</strong>
-                  Reproducible data appendix
+                  <strong className="block text-memphis-black">2. Verify</strong>
+                  Sources and coverage
                 </li>
                 <li className="border-2 border-memphis-black/20 p-2">
-                  <strong className="block text-memphis-black">Policy teams</strong>
-                  Transparent evidence gaps
+                  <strong className="block text-memphis-black">3. Export</strong>
+                  Portable HTML/PDF
                 </li>
               </ol>
             </div>
