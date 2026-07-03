@@ -7,7 +7,6 @@
     "dev": "vite",
     "dev:server": "node server.js",
     "build": "vite build",
-    "prestart": "npm run build",
     "start": "node server.js",
     "test": "vitest run",
     "test:watch": "vitest",
