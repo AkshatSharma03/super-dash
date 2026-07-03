@@ -178,10 +178,30 @@ function renderModeContent(params: ModeContentParams) {
   );
 }
 
-export default function App() {
-  const { isLoaded: clerkLoaded, isSignedIn, getToken } = useAuth();
-  const { user: clerkUser } = useUser();
-  const { signOut } = useClerk();
+interface AppShellProps {
+  clerkLoaded: boolean;
+  isSignedIn: boolean;
+  getToken: () => Promise<string | null>;
+  clerkUser?: {
+    id: string;
+    primaryEmailAddress?: { emailAddress?: string | null } | null;
+    fullName?: string | null;
+    firstName?: string | null;
+  } | null;
+  signOut: () => Promise<void>;
+  clerkAvailable?: boolean;
+  authNotice?: string;
+}
+
+function AppShell({
+  clerkLoaded,
+  isSignedIn,
+  getToken,
+  clerkUser,
+  signOut,
+  clerkAvailable = true,
+  authNotice,
+}: AppShellProps) {
 
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string>("");
@@ -330,7 +350,7 @@ export default function App() {
     }
     localStorage.removeItem("ec_guest_token");
     localStorage.removeItem("ec_guest_user");
-    if (!user?.isGuest && isSignedIn) {
+    if (clerkAvailable && !user?.isGuest && isSignedIn) {
       await signOut();
     }
     setToken("");
@@ -351,7 +371,11 @@ export default function App() {
   if (!user)
     return (
       <Suspense fallback={null}>
-        <AuthPage onGuestAuth={handleGuestAuth} />
+        <AuthPage
+          onGuestAuth={handleGuestAuth}
+          clerkAvailable={clerkAvailable}
+          authNotice={authNotice}
+        />
       </Suspense>
     );
 
@@ -753,5 +777,36 @@ export default function App() {
         </Suspense>
       )}
     </div>
+  );
+}
+
+export function LocalOnlyApp({ authNotice }: { authNotice?: string }) {
+  return (
+    <AppShell
+      clerkLoaded
+      isSignedIn={false}
+      getToken={async () => null}
+      clerkUser={null}
+      signOut={async () => {}}
+      clerkAvailable={false}
+      authNotice={authNotice}
+    />
+  );
+}
+
+export default function App() {
+  const { isLoaded: clerkLoaded, isSignedIn, getToken } = useAuth();
+  const { user: clerkUser } = useUser();
+  const { signOut } = useClerk();
+
+  return (
+    <AppShell
+      clerkLoaded={clerkLoaded}
+      isSignedIn={Boolean(isSignedIn)}
+      getToken={getToken}
+      clerkUser={clerkUser}
+      signOut={signOut}
+      clerkAvailable
+    />
   );
 }

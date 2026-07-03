@@ -19,6 +19,8 @@ import { cn } from "@/lib/utils";
 
 interface AuthPageProps {
   onGuestAuth: (token: string, user: User) => void;
+  clerkAvailable?: boolean;
+  authNotice?: string;
 }
 
 const FEATURES: [ComponentType<{ className?: string }>, string, string][] = [
@@ -98,7 +100,11 @@ const clerkAppearance = {
   },
 } as const;
 
-export default function AuthPage({ onGuestAuth }: AuthPageProps) {
+export default function AuthPage({
+  onGuestAuth,
+  clerkAvailable = true,
+  authNotice,
+}: AuthPageProps) {
   const isMobile = useMobile();
   const [view, setView] = useState<View>("login");
   const [guestLoading, setGuestLoading] = useState(false);
@@ -133,17 +139,23 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
     <>
       <div className="mb-5">
         <h2 className="text-xl font-extrabold text-memphis-black tracking-[-0.3px] mb-1.5">
-          {view === "login" ? "Welcome back" : "Create your account"}
+          {!clerkAvailable
+            ? "Start a guest briefing"
+            : view === "login"
+              ? "Welcome back"
+              : "Create your account"}
         </h2>
         <p className="text-xs text-muted-foreground">
-          {view === "login"
-            ? "Sign in to access your dashboard and chat history"
-            : "Create your account and start generating charts"}
+          {!clerkAvailable
+            ? "Account sign-in is unavailable until Clerk is configured."
+            : view === "login"
+              ? "Sign in to access your dashboard and chat history"
+              : "Create your account and start generating charts"}
         </p>
       </div>
 
       {/* Tab toggle */}
-      <div className="flex bg-white border-3 border-memphis-black p-1 mb-5 shadow-hard">
+      {clerkAvailable && <div className="flex bg-white border-3 border-memphis-black p-1 mb-5 shadow-hard">
         {(["login", "register"] as const).map((t) => (
           <button
             key={t}
@@ -161,34 +173,44 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
             {t === "login" ? "Sign in" : "Register"}
           </button>
         ))}
-      </div>
+      </div>}
 
-      <div
-        className={cn(
-          "border-3 border-memphis-black bg-white p-3 shadow-hard",
-          "min-h-[540px] sm:min-h-[560px]",
-        )}
-      >
-        {view === "login" ? (
-          <SignIn
-            routing="hash"
-            signUpUrl="/sign-up"
-            oauthFlow="redirect"
-            forceRedirectUrl="/"
-            fallbackRedirectUrl="/"
-            appearance={clerkAppearance}
-          />
-        ) : (
-          <SignUp
-            routing="hash"
-            signInUrl="/sign-in"
-            oauthFlow="redirect"
-            forceRedirectUrl="/"
-            fallbackRedirectUrl="/"
-            appearance={clerkAppearance}
-          />
-        )}
-      </div>
+      {clerkAvailable ? (
+        <div
+          className={cn(
+            "border-3 border-memphis-black bg-white p-3 shadow-hard",
+            "min-h-[540px] sm:min-h-[560px]",
+          )}
+        >
+          {view === "login" ? (
+            <SignIn
+              routing="hash"
+              signUpUrl="/sign-up"
+              oauthFlow="redirect"
+              forceRedirectUrl="/"
+              fallbackRedirectUrl="/"
+              appearance={clerkAppearance}
+            />
+          ) : (
+            <SignUp
+              routing="hash"
+              signInUrl="/sign-in"
+              oauthFlow="redirect"
+              forceRedirectUrl="/"
+              fallbackRedirectUrl="/"
+              appearance={clerkAppearance}
+            />
+          )}
+        </div>
+      ) : (
+        <Alert className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            {authNotice ??
+              "Clerk is not configured. You can continue as a guest while the publishable key is added."}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {error && (
         <Alert variant="destructive" className="mt-3.5">
@@ -197,11 +219,11 @@ export default function AuthPage({ onGuestAuth }: AuthPageProps) {
         </Alert>
       )}
 
-      <div className="flex items-center gap-2.5 mt-4">
+      {clerkAvailable && <div className="flex items-center gap-2.5 mt-4">
         <div className="flex-1 h-1 bg-memphis-black" />
         <span className="text-[11px] text-memphis-black/50 font-bold">or</span>
         <div className="flex-1 h-1 bg-memphis-black" />
-      </div>
+      </div>}
       <Button
         variant="outline"
         onClick={continueAsGuest}

@@ -2,7 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { ClerkProvider } from "@clerk/react";
 import { Toaster } from "sonner";
-import App from "./App";
+import App, { LocalOnlyApp } from "./App";
 import "./index.css";
 import { initAnalytics } from "./analytics";
 
@@ -118,7 +118,10 @@ const Root = isValidClerkKey(clerkPublishableKey) ? (
     </ClerkProvider>
   </RootErrorBoundary>
 ) : (
-  <ConfigNotice message={CLERK_MISSING_KEY_ERROR} />
+  <>
+    <LocalOnlyApp authNotice={CLERK_MISSING_KEY_ERROR} />
+    <Toaster position="bottom-center" theme="dark" richColors />
+  </>
 );
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
