@@ -215,6 +215,14 @@ custom install command.
 
 Open [http://localhost:5173](http://localhost:5173) in development or [http://localhost:3000](http://localhost:3000) in production.
 
+### Clerk publishable key
+
+`VITE_CLERK_PUBLISHABLE_KEY` is a client-side Vite variable and must be
+available when the frontend is built. Use a real key from Clerk that starts with
+`pk_test_` for local development or `pk_live_` for production. Placeholder
+values from `.env.example` are intentionally rejected at runtime so deployments
+fail with an actionable configuration notice instead of a blank screen.
+
 ---
 
 ## 🛠️ Tech Stack
