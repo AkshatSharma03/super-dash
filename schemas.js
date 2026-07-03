@@ -78,7 +78,12 @@ export const AnalyticsSchema = z.object({
 
 export const RegisterSchema = z.object({
   email:    z.string().email('invalid email address'),
-  password: z.string().min(8, 'password must be at least 8 characters'),
+  password: z
+    .string()
+    .min(12, 'password must be at least 12 characters')
+    .regex(/[a-z]/, 'password must include a lowercase letter')
+    .regex(/[A-Z]/, 'password must include an uppercase letter')
+    .regex(/[0-9]/, 'password must include a number'),
   name:     z.string().min(1, 'name is required').max(80),
 });
 
@@ -89,7 +94,12 @@ export const LoginSchema = z.object({
 
 export const ChangePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'currentPassword is required'),
-  newPassword:     z.string().min(8, 'newPassword must be at least 8 characters'),
+  newPassword:     z
+    .string()
+    .min(12, 'newPassword must be at least 12 characters')
+    .regex(/[a-z]/, 'newPassword must include a lowercase letter')
+    .regex(/[A-Z]/, 'newPassword must include an uppercase letter')
+    .regex(/[0-9]/, 'newPassword must include a number'),
 });
 
 export const DeleteAccountSchema = z.object({
@@ -102,7 +112,12 @@ export const ForgotPasswordSchema = z.object({
 
 export const ResetPasswordSchema = z.object({
   token:       z.string().min(1, 'token is required'),
-  newPassword: z.string().min(8, 'newPassword must be at least 8 characters'),
+  newPassword: z
+    .string()
+    .min(12, 'newPassword must be at least 12 characters')
+    .regex(/[a-z]/, 'newPassword must include a lowercase letter')
+    .regex(/[A-Z]/, 'newPassword must include an uppercase letter')
+    .regex(/[0-9]/, 'newPassword must include a number'),
 });
 
 // ── Session endpoints ─────────────────────────────────────────────────────────

@@ -30,12 +30,67 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Slider } from "@/components/ui/slider";
 import { cn } from "@/lib/utils";
-import { AlertTriangle, Loader2, Globe2, RefreshCw } from "lucide-react";
+import {
+  AlertTriangle,
+  Loader2,
+  Globe2,
+  RefreshCw,
+  FileText,
+  ShieldCheck,
+  Sparkles,
+  Download,
+} from "lucide-react";
 import DataQualityHeatmap from "../ui/DataQualityHeatmap";
 import { PeerComparison } from "../ui/PeerComparison";
 
 const DASH_TABS = ["GDP", "Exports", "Imports", "Trade Balance"] as const;
 type DashTab = (typeof DASH_TABS)[number];
+
+function formatMoney(value: number | null | undefined) {
+  if (value == null) return "not available";
+  return `$${value.toLocaleString()}B`;
+}
+
+function getBriefingSignals(dataset: CountryDataset) {
+  const latest = dataset.gdpData[dataset.gdpData.length - 1];
+  const previous = dataset.gdpData[dataset.gdpData.length - 2];
+  const latestExports = dataset.exportData[dataset.exportData.length - 1];
+  const latestImports = dataset.importData[dataset.importData.length - 1];
+  const tradeBalance =
+    latestExports && latestImports
+      ? +(latestExports.total - latestImports.total).toFixed(1)
+      : null;
+  const openness =
+    latest && latestExports && latestImports && latest.gdp_bn > 0
+      ? +(((latestExports.total + latestImports.total) / latest.gdp_bn) * 100)
+          .toFixed(1)
+      : null;
+  const growthDirection =
+    latest?.gdp_growth == null || previous?.gdp_growth == null
+      ? "requires source review"
+      : latest.gdp_growth > previous.gdp_growth
+        ? "accelerated"
+        : latest.gdp_growth < previous.gdp_growth
+          ? "slowed"
+          : "held steady";
+
+  return { latest, tradeBalance, openness, growthDirection };
+}
+
+function getCoverageSummary(dataset: CountryDataset) {
+  const rows = [
+    ...dataset.gdpData,
+    ...dataset.exportData,
+    ...dataset.importData,
+  ];
+  const completeRows = rows.filter((row) =>
+    Object.values(row).some((value) => typeof value === "number"),
+  ).length;
+  const score = rows.length ? Math.round((completeRows / rows.length) * 100) : 0;
+  if (score >= 90) return { label: "High coverage", score };
+  if (score >= 65) return { label: "Moderate coverage", score };
+  return { label: "Limited coverage", score };
+}
 
 interface Props {
   token: string;
@@ -44,6 +99,7 @@ interface Props {
   error: string | null;
   onSelectCountry: (code: string) => void;
   onRefresh: () => void;
+  onOpenReports?: () => void;
 }
 
 export default function DashboardMode({
@@ -53,6 +109,7 @@ export default function DashboardMode({
   error,
   onSelectCountry,
   onRefresh,
+  onOpenReports,
 }: Props) {
   const isMobile = useMobile();
   // UI-local state.
@@ -135,10 +192,128 @@ export default function DashboardMode({
   const cachedAgo = dataset?._meta?.cachedAt
     ? timeAgo(dataset._meta.cachedAt)
     : null;
+  const briefing = dataset ? getBriefingSignals(dataset) : null;
+  const coverage = dataset ? getCoverageSummary(dataset) : null;
 
   // Render.
   return (
     <>
+      <section className="mb-5 bg-white border-4 border-memphis-black shadow-hard-lg p-4 sm:p-5 relative overflow-hidden">
+        <div
+          className="absolute top-0 left-0 right-0 h-2"
+          style={{
+            background: `repeating-linear-gradient(
+              90deg,
+              #8338EC 0px,
+              #8338EC 12px,
+              #00D9FF 12px,
+              #00D9FF 24px,
+              #FFBE0B 24px,
+              #FFBE0B 36px
+            )`,
+          }}
+        />
+        <div className="grid gap-4 lg:grid-cols-[1.4fr_0.9fr] pt-2">
+          <div>
+            <div className="inline-flex items-center gap-2 border-3 border-memphis-black bg-memphis-yellow px-3 py-1 text-[11px] font-black uppercase tracking-wide shadow-hard-sm mb-3">
+              <FileText className="w-3.5 h-3.5" />
+              Briefing workflow
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black tracking-[-0.8px] text-memphis-black mb-2">
+              Build a source-backed country briefing
+            </h1>
+            <p className="text-sm text-memphis-black/70 max-w-2xl leading-relaxed">
+              Select a country, review the key signals and provenance, inspect
+              the underlying charts, then export a portable report. No forced
+              upgrades, hidden fees, or preselected consent.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-4">
+              {[
+                ["1", "Choose country", dataset ? dataset.name : "Start with search"],
+                ["2", "Review trust", coverage ? `${coverage.label}: ${coverage.score}%` : "Sources shown"],
+                ["3", "Export report", dataset ? "Ready in Reports" : "After data loads"],
+              ].map(([step, title, copy]) => (
+                <div
+                  key={step}
+                  className="border-3 border-memphis-black bg-memphis-offwhite p-3 shadow-hard-sm"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="w-6 h-6 border-2 border-memphis-black bg-white inline-flex items-center justify-center text-xs font-black">
+                      {step}
+                    </span>
+                    <span className="text-xs font-black uppercase">
+                      {title}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-memphis-black/60 font-medium">
+                    {copy}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="border-3 border-memphis-black bg-memphis-offwhite p-4 shadow-hard">
+            <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wide mb-3">
+              <Sparkles className="w-4 h-4 text-memphis-pink" />
+              Executive snapshot
+            </div>
+            {dataset && briefing?.latest ? (
+              <div className="space-y-3 text-sm text-memphis-black/75 leading-relaxed">
+                <p>
+                  <strong className="text-memphis-black">
+                    {dataset.flag} {dataset.name}
+                  </strong>{" "}
+                  latest source-backed GDP is{" "}
+                  <strong>{formatMoney(briefing.latest.gdp_bn)}</strong> for{" "}
+                  <strong>{briefing.latest.year}</strong>.
+                </p>
+                <p>
+                  GDP growth{" "}
+                  <strong>{briefing.growthDirection}</strong>; the latest
+                  trade balance is{" "}
+                  <strong>
+                    {briefing.tradeBalance == null
+                      ? "not available"
+                      : `${briefing.tradeBalance >= 0 ? "+" : ""}$${briefing.tradeBalance}B`}
+                  </strong>
+                  {briefing.openness != null
+                    ? ` and trade openness is ${briefing.openness}%.`
+                    : "."}
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowQuality((v) => !v)}
+                    className="justify-center"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 mr-1.5" />
+                    Trust details
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={onOpenReports}
+                    className="justify-center"
+                    disabled={!onOpenReports}
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5" />
+                    Open Reports
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-memphis-black/65 leading-relaxed">
+                Search for a country below or pick a common market to generate
+                a briefing preview with data, charts, provenance, and exports.
+              </p>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* Country selector */}
       <div className="mb-5">
         {/* Search bar row */}
@@ -314,15 +489,20 @@ export default function DashboardMode({
       {!loading && !error && dataset && (
         <>
           {/* Provenance + refresh bar */}
-          <div className="flex items-center gap-2.5 mb-4 flex-wrap">
+          <div className="flex items-center gap-2.5 mb-4 flex-wrap border-3 border-memphis-black bg-white p-3 shadow-hard-sm">
             <Badge variant="default">
               {dataset.flag} {dataset.name} · {dataset.region}
             </Badge>
+            {coverage && (
+              <Badge variant={coverage.score >= 90 ? "success" : "warning"}>
+                {coverage.label}: {coverage.score}%
+              </Badge>
+            )}
             {dataset._meta?.stale && (
               <Badge variant="warning">⚠ Stale cache</Badge>
             )}
-            <span className="text-[11px] text-slate-600">
-              {dataset._meta?.sources.join(" · ")}
+            <span className="text-[11px] text-slate-600 font-semibold">
+              Sources: {dataset._meta?.sources.join(" · ") || "World Bank"}
             </span>
             <span className="ml-auto text-[11px] text-slate-700">
               Cached {cachedAgo}
