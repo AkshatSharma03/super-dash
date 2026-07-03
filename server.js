@@ -104,12 +104,10 @@ if (!ANTHROPIC_API_KEY && process.env.NODE_ENV !== 'test') {
   process.exit(1);
 }
 if (!KAGI_API_KEY && process.env.NODE_ENV !== 'test') {
-  console.error('ERROR: KAGI_API_KEY environment variable is required and must be set.');
-  process.exit(1);
+  console.warn('WARN: KAGI_API_KEY is not set. Search mode will return provider configuration errors until it is configured.');
 }
 if (!UN_COMTRADE_API_KEY && process.env.NODE_ENV !== 'test') {
-  console.error('ERROR: UN_COMTRADE_API_KEY environment variable is required and must be set.');
-  process.exit(1);
+  console.warn('WARN: UN_COMTRADE_API_KEY is not set. Trade enrichment will be limited to available fallback data.');
 }
 
 // ── PostHog telemetry ─────────────────────────────────────────────────────────
@@ -1581,6 +1579,16 @@ app.use((_, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({ build: APP_BUILD_ID });
+});
+
+app.get('/env.js', (_req, res) => {
+  const publicConfig = {
+    VITE_CLERK_PUBLISHABLE_KEY: process.env.VITE_CLERK_PUBLISHABLE_KEY || '',
+    VITE_POSTHOG_KEY: process.env.VITE_POSTHOG_KEY || '',
+  };
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.send(`window.__SUPERDASH_CONFIG__ = ${JSON.stringify(publicConfig)};`);
 });
 
 app.use(staticLimiter);

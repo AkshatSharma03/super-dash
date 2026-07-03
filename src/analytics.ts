@@ -5,8 +5,9 @@
 // Import { track, identifyUser, resetUser } from here — never call posthog directly.
 // ─────────────────────────────────────────────────────────────────────────────
 import posthog from "posthog-js";
+import { getRuntimeEnv } from "./config/runtimeEnv";
 
-const KEY  = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
+const KEY = getRuntimeEnv("VITE_POSTHOG_KEY");
 const HOST = "https://us.i.posthog.com";
 
 export function initAnalytics() {

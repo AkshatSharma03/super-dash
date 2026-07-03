@@ -5,10 +5,11 @@ import { Toaster } from "sonner";
 import App, { LocalOnlyApp } from "./App";
 import "./index.css";
 import { initAnalytics } from "./analytics";
+import { getRuntimeEnv } from "./config/runtimeEnv";
 
 initAnalytics();
 
-const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const clerkPublishableKey = getRuntimeEnv("VITE_CLERK_PUBLISHABLE_KEY");
 const CLERK_INIT_ERROR =
   "Clerk failed to initialize. Verify that VITE_CLERK_PUBLISHABLE_KEY is " +
   "available at build time and that the value matches the Clerk instance for " +
