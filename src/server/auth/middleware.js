@@ -4,6 +4,9 @@ import { verifyToken as verifyClerkToken } from '@clerk/backend';
 
 export function createRequireAuth({
   JWT_SECRET,
+  JWT_ISSUER,
+  JWT_AUDIENCE,
+  JWT_REQUIRE_CLAIMS,
   CLERK_AUTH_ENABLED,
   CLERK_SECRET_KEY,
   CLERK_JWT_KEY,
@@ -16,7 +19,10 @@ export function createRequireAuth({
     if (!token) return res.status(401).json({ error: 'Authentication required' });
 
     try {
-      const payload = jwt.verify(token, JWT_SECRET);
+      const payload = jwt.verify(token, JWT_SECRET, {
+        ...(JWT_REQUIRE_CLAIMS ? { issuer: JWT_ISSUER, audience: JWT_AUDIENCE } : {}),
+        algorithms: ['HS256'],
+      });
       if (payload.jti && stmt.isTokenRevoked.get(payload.jti)) {
         return res.status(401).json({ error: 'Token has been revoked' });
       }
