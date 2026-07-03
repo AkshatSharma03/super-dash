@@ -26,11 +26,16 @@ import {
   chatCacheTtlMs,
   RL_WINDOW_MS,
   RL_MAX,
+  BODY_LIMIT,
+  CORS_ORIGINS,
   MAX_HISTORY,
   CSV_SAMPLE_ROWS,
   MAX_SEARCH_HISTORY,
   ANTHROPIC_STREAM_TIMEOUT_MS,
   JWT_SECRET,
+  JWT_ISSUER,
+  JWT_AUDIENCE,
+  JWT_REQUIRE_CLAIMS,
   BCRYPT_ROUNDS,
   DB_PATH,
   COUNTRY_CACHE_TTL_MS,
@@ -99,12 +104,10 @@ if (!ANTHROPIC_API_KEY && process.env.NODE_ENV !== 'test') {
   process.exit(1);
 }
 if (!KAGI_API_KEY && process.env.NODE_ENV !== 'test') {
-  console.error('ERROR: KAGI_API_KEY environment variable is required and must be set.');
-  process.exit(1);
+  console.warn('WARN: KAGI_API_KEY is not set. Search mode will return provider configuration errors until it is configured.');
 }
 if (!UN_COMTRADE_API_KEY && process.env.NODE_ENV !== 'test') {
-  console.error('ERROR: UN_COMTRADE_API_KEY environment variable is required and must be set.');
-  process.exit(1);
+  console.warn('WARN: UN_COMTRADE_API_KEY is not set. Trade enrichment will be limited to available fallback data.');
 }
 
 // ── PostHog telemetry ─────────────────────────────────────────────────────────
@@ -113,6 +116,10 @@ const { ph, track } = createTelemetry();
 
 if (!process.env.JWT_SECRET && !IS_DEV) {
   console.error('ERROR: JWT_SECRET environment variable is not set in production.');
+  process.exit(1);
+}
+if (!IS_DEV && JWT_SECRET.length < 32) {
+  console.error('ERROR: JWT_SECRET must be at least 32 characters in production.');
   process.exit(1);
 }
 
@@ -240,6 +247,9 @@ const authenticateApiKey = createAuthenticateApiKey({
 
 const requireAuth = createRequireAuth({
   JWT_SECRET,
+  JWT_ISSUER,
+  JWT_AUDIENCE,
+  JWT_REQUIRE_CLAIMS,
   CLERK_AUTH_ENABLED,
   CLERK_SECRET_KEY,
   CLERK_JWT_KEY,
@@ -631,17 +641,16 @@ async function buildCountryDataset(isoCode) {
 // ── Express setup ─────────────────────────────────────────────────────────────
 
 const app = express();
+app.disable('x-powered-by');
 app.set('trust proxy', 1); // Railway / other reverse proxies set X-Forwarded-For
-const DEV_ORIGINS = new Set(
-  (process.env.CORS_ORIGINS || 'http://localhost:5173,http://localhost:5174')
-    .split(',').map(o => o.trim()).filter(Boolean)
-);
+const ALLOWED_CORS_ORIGINS = new Set(CORS_ORIGINS);
 
 app.use((req, res, next) => {
   const origin = req.headers.origin || '';
-  if (DEV_ORIGINS.has(origin)) {
+  res.setHeader('Vary', 'Origin');
+  if (ALLOWED_CORS_ORIGINS.has(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Max-Age', '600');
   }
@@ -652,6 +661,7 @@ app.use((req, res, next) => {
 app.use(
   helmet({
     contentSecurityPolicy: {
+      useDefaults: true,
       directives: {
         defaultSrc:     ["'self'"],
         scriptSrc:      [
@@ -692,14 +702,30 @@ app.use(
         frameSrc:       ["'self'", 'https://*.clerk.com', 'https://*.clerk.accounts.dev', 'https://*.clerk.dev', 'https://challenges.cloudflare.com', 'https://*.hcaptcha.com', 'https://*.google.com', 'https://*.gstatic.com'],
         workerSrc:      ["'self'", 'blob:'],
         frameAncestors: ["'none'"],
+        objectSrc:      ["'none'"],
+        baseUri:        ["'self'"],
+        formAction:     ["'self'", 'https://*.clerk.com', 'https://*.clerk.accounts.dev', 'https://*.clerk.dev'],
+        ...(IS_DEV ? {} : { upgradeInsecureRequests: [] }),
       },
     },
     crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+    hsts: IS_DEV ? false : { maxAge: 15552000, includeSubDomains: true, preload: false },
+    referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
   })
 );
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+  if (req.path.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store');
+  }
+  next();
+});
+
+app.use(express.json({ limit: BODY_LIMIT, strict: true }));
+app.use(express.urlencoded({ limit: BODY_LIMIT, extended: true, parameterLimit: 200 }));
 
 const apiLimiter = createApiLimiter({ windowMs: RL_WINDOW_MS, max: RL_MAX });
 const authLimiter = createAuthLimiter();
@@ -721,6 +747,8 @@ app.use('/api/auth', createAuthRouter({
   },
   BCRYPT_ROUNDS,
   JWT_SECRET,
+  JWT_ISSUER,
+  JWT_AUDIENCE,
   PORT,
   revokeCurrentToken,
 }));
@@ -1551,6 +1579,16 @@ app.use((_, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({ build: APP_BUILD_ID });
+});
+
+app.get('/env.js', (_req, res) => {
+  const publicConfig = {
+    VITE_CLERK_PUBLISHABLE_KEY: process.env.VITE_CLERK_PUBLISHABLE_KEY || '',
+    VITE_POSTHOG_KEY: process.env.VITE_POSTHOG_KEY || '',
+  };
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.send(`window.__SUPERDASH_CONFIG__ = ${JSON.stringify(publicConfig)};`);
 });
 
 app.use(staticLimiter);

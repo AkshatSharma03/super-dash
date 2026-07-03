@@ -25,65 +25,61 @@ interface ModeMeta {
 }
 
 export const MODES: ModeDefinition[] = [
-  { mode: "chat", label: "AI Chat", Icon: MessageSquare },
-  { mode: "search", label: "Search", Icon: Search },
-  { mode: "data", label: "Data", Icon: Database },
-  { mode: "analytics", label: "Analytics", Icon: LineChart },
-  { mode: "dashboard", label: "Country Data", Icon: BarChart3 },
-  { mode: "methodology", label: "Methodology", Icon: BookOpen },
-  { mode: "export", label: "Export", Icon: Download },
+  { mode: "dashboard", label: "Briefing", Icon: BarChart3 },
+  { mode: "chat", label: "Ask AI", Icon: MessageSquare },
+  { mode: "search", label: "Research", Icon: Search },
+  { mode: "data", label: "Upload", Icon: Database },
+  { mode: "analytics", label: "Advanced", Icon: LineChart },
+  { mode: "export", label: "Reports", Icon: Download },
+  { mode: "methodology", label: "Methods", Icon: BookOpen },
 ];
 
 export const MOBILE_PRIMARY_MODES: Mode[] = [
+  "dashboard",
   "chat",
   "search",
   "data",
   "analytics",
-  "dashboard",
-  "methodology",
+  "export",
 ];
 
 export const MODE_META: Record<Mode, ModeMeta> = {
   chat: {
-    label: "AI Chat",
+    label: "Ask AI",
     color: "#FF006E",
     bg: "#FF006E",
     desc:
-      "Ask any economic question — Kagi FastGPT generates analysis from " +
-      "your query",
+      "Ask follow-up questions after you review the source-backed briefing."
   },
   search: {
-    label: "Web Search",
+    label: "Research",
     color: "#00D9FF",
     bg: "#00D9FF",
-    desc: "Live web search · Kagi FastGPT · cited economic sources",
+    desc: "Current web research with citations — no hidden sources or forced upgrades.",
   },
   data: {
-    label: "Data Upload",
+    label: "Upload Data",
     color: "#FB5607",
     bg: "#FB5607",
     desc:
-      "Upload a CSV file · Claude analyses your data and creates charts " +
-      "automatically",
+      "Bring your own CSV for transparent AI-assisted charts and summaries.",
   },
   analytics: {
-    label: "Analytics",
+    label: "Advanced Analysis",
     color: "#FFBE0B",
     bg: "#FFBE0B",
     desc:
-      "Economics algorithms: OLS Regression · HHI Concentration · " +
-      "K-Means Segmentation · Z-Score Outlier Detection",
+      "Run regression, clustering, concentration, and anomaly checks when you need depth.",
   },
   dashboard: {
-    label: "Country Data",
+    label: "Country Briefing",
     color: "#8338EC",
     bg: "#8338EC",
     desc:
-      "Select any country — real GDP & trade data from World Bank, cached " +
-      "locally · no AI-estimated country values",
+      "Start here: choose a country, review source-backed signals, then export a briefing.",
   },
   methodology: {
-    label: "Methodology",
+    label: "Methods",
     color: "#10B981",
     bg: "#10B981",
     desc:
@@ -91,11 +87,10 @@ export const MODE_META: Record<Mode, ModeMeta> = {
       "and references",
   },
   export: {
-    label: "Export",
+    label: "Reports",
     color: "#00F5D4",
     bg: "#00F5D4",
     desc:
-      "Download data as CSV / JSON · Generate standalone HTML reports with " +
-      "embedded SVG charts · Print to PDF",
+      "Create portable reports with data tables, charts, sources, and methodology notes.",
   },
 };
