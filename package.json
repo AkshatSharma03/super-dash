@@ -14,7 +14,10 @@
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "mcp": "node mcp-server.js",
-    "admin:enterprise": "node scripts/upgrade-user-enterprise.mjs"
+    "admin:enterprise": "node scripts/upgrade-user-enterprise.mjs",
+    "ci:install:prod": "npm ci --omit=dev",
+    "audit:security": "npm audit --audit-level=moderate",
+    "deps:outdated": "npm outdated --long"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -4,6 +4,11 @@
 // helpers which trigger browser actions.
 // ─────────────────────────────────────────────────────────────────────────────
 import type { CountryDataset, Message, AIResponse, ChartConfig, SearchResult } from "../types";
+import {
+  getReportProfile,
+  REPORT_GROUNDING_STANDARDS,
+  type ReportAudience,
+} from "../config/reportProfiles";
 
 // ── Download primitives ───────────────────────────────────────────────────────
 
@@ -162,7 +167,9 @@ const KPI_BG: Record<string, string> = {
 export function buildDashboardHTML(
   dataset: CountryDataset,
   svgs: Record<string, string> = {},
+  options: { audience?: ReportAudience } = {},
 ): string {
+  const profile = getReportProfile(options.audience);
   const generated = new Date().toLocaleDateString("en-GB", {
     day: "numeric", month: "long", year: "numeric",
   });
@@ -301,8 +308,8 @@ tr:nth-child(even) td{background:#fafafa}
 <body>
 
 <div class="header">
-  <h1>${dataset.flag} ${dataset.name} — Economic Report</h1>
-  <p class="sub">${dataset.region}</p>
+  <h1>${dataset.flag} ${dataset.name} — ${profile.label}</h1>
+  <p class="sub">${dataset.region} · ${profile.headline}</p>
   <div class="meta">
     <span>📅 Generated: ${generated}</span>
     <span>🗄 Data cached: ${cachedAt}</span>

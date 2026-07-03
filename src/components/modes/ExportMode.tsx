@@ -131,6 +131,9 @@ export default function ExportMode({
 }: ExportModeProps) {
   const isMobile = useMobile();
   const [generating, setGenerating] = useState<"dash" | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<ReportAudience>(
+    DEFAULT_REPORT_PROFILE.id,
+  );
 
   const refs = useDashboardChartRefs();
   const chartRefs = useMemo(
@@ -195,7 +198,9 @@ export default function ExportMode({
         imports: extractSVG(chartRefs.imports),
       };
 
-      const html = buildDashboardHTML(dashDataset, svgByChart);
+      const html = buildDashboardHTML(dashDataset, svgByChart, {
+        audience: selectedProfile,
+      });
 
       if (print) {
         const opened = printHTML(html);
@@ -209,7 +214,7 @@ export default function ExportMode({
         const url = URL.createObjectURL(blob);
         const anchor = Object.assign(document.createElement("a"), {
           href: url,
-          download: `${dashDataset.code}_economic_report.html`,
+          download: `${dashDataset.code}_${selectedProfile}_briefing.html`,
         });
         document.body.appendChild(anchor);
         anchor.click();
@@ -271,6 +276,34 @@ export default function ExportMode({
           Create portable analyst deliverables with charts, data tables,
           provenance, and methodology notes. Every action is explicit.
         </p>
+        <div className={`grid gap-2 ${isMobile ? "grid-cols-1" : "grid-cols-3"}`}>
+          {REPORT_PROFILES.map((profile) => {
+            const active = selectedProfile === profile.id;
+            return (
+              <button
+                key={profile.id}
+                type="button"
+                onClick={() => setSelectedProfile(profile.id)}
+                className={
+                  "text-left border-3 border-memphis-black p-3 transition-snap " +
+                  "shadow-hard-sm focus:outline-none focus:ring-3 focus:ring-memphis-black"
+                }
+                style={{
+                  background: active ? "#FFBE0B" : "#FFFFFF",
+                  color: "#1A1A2E",
+                }}
+                aria-pressed={active}
+              >
+                <span className="block text-[11px] font-black uppercase mb-1">
+                  {profile.label}
+                </span>
+                <span className="block text-[11px] text-memphis-black/65 leading-relaxed">
+                  {profile.headline}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className={`flex gap-4 items-start ${isMobile ? "flex-col" : ""}`}>

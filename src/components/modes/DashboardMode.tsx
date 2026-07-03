@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import DataQualityHeatmap from "../ui/DataQualityHeatmap";
 import { PeerComparison } from "../ui/PeerComparison";
+import { REPORT_PROFILES } from "../../config/reportProfiles";
 
 const DASH_TABS = ["GDP", "Exports", "Imports", "Trade Balance"] as const;
 type DashTab = (typeof DASH_TABS)[number];
