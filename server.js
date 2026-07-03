@@ -1214,11 +1214,29 @@ async function fetchPeerMetricRows(metric, countryCodes, startYear, endYear) {
   const codes = countryCodes.filter(Boolean).filter((item, idx, all) => all.indexOf(item) === idx);
   if (!codes.length) return [];
 
+  const fetchWorldBankPeerIndicator = async (indicator) => {
+    const primaryRows = await fetchWorldBankIndicator(codes, indicator, startYear, endYear);
+    const foundCodes = new Set(primaryRows.map(peerCodeFromRow));
+    const missingCodes = codes.filter((code) => !foundCodes.has(String(code).toUpperCase()));
+    if (!missingCodes.length) return primaryRows;
+
+    const fallbackCodes = missingCodes
+      .map((code) => {
+        const normalized = String(code).toUpperCase();
+        return normalized.length === 2 ? countries.alpha2ToAlpha3(normalized) || normalized : normalized;
+      })
+      .filter((code, idx, all) => code && all.indexOf(code) === idx);
+
+    if (!fallbackCodes.length) return primaryRows;
+    const fallbackRows = await fetchWorldBankIndicator(fallbackCodes, indicator, startYear, endYear);
+    return [...primaryRows, ...fallbackRows];
+  };
+
   if (metric === 'trade_openness') {
     const [importsRows, exportsRows, gdpRows] = await Promise.all([
-      fetchWorldBankIndicator(codes, API_INDICATORS.imports, startYear, endYear),
-      fetchWorldBankIndicator(codes, API_INDICATORS.exports, startYear, endYear),
-      fetchWorldBankIndicator(codes, API_INDICATORS.gdp, startYear, endYear),
+      fetchWorldBankPeerIndicator(API_INDICATORS.imports),
+      fetchWorldBankPeerIndicator(API_INDICATORS.exports),
+      fetchWorldBankPeerIndicator(API_INDICATORS.gdp),
     ]);
 
     const toMap = (rows) => {
@@ -1268,7 +1286,7 @@ async function fetchPeerMetricRows(metric, countryCodes, startYear, endYear) {
 
   const wbCode = API_INDICATORS[metric];
   if (!wbCode) return [];
-  return fetchWorldBankIndicator(codes, wbCode, startYear, endYear);
+  return fetchWorldBankPeerIndicator(wbCode);
 }
 
 function buildPeerRows(valuesByCode, targetCode, catalogByCode, metricLabel) {

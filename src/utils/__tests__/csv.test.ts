@@ -73,10 +73,20 @@ describe("parseCSV", () => {
   });
 
   it("handles a quoted field containing newline (CRLF inside quotes)", () => {
-    // Note: the parser does not strip CRLF inside quotes (it parses line-by-line),
-    // so we only test that a newline BETWEEN quoted commas works correctly.
-    const r = parseCSV('id,desc\n1,"has, comma"');
-    expect(r.rows[0].desc).toBe("has, comma");
+    const r = parseCSV('id,desc\r\n1,"first line\r\nsecond line"\r\n2,"has, comma"');
+    expect(r.rows).toHaveLength(2);
+    expect(r.rows[0].desc).toBe("first line\r\nsecond line");
+    expect(r.rows[1].desc).toBe("has, comma");
+  });
+
+  it("preserves whitespace inside quoted field values", () => {
+    const r = parseCSV('col\n"  keep padding  "');
+    expect(r.rows[0].col).toBe("  keep padding  ");
+  });
+
+  it("ignores a UTF-8 BOM before the first header", () => {
+    const r = parseCSV("\uFEFFyear,value\n2024,10");
+    expect(r.headers).toEqual(["year", "value"]);
   });
 
   // ── Edge cases ────────────────────────────────────────────────────────────
@@ -113,6 +123,19 @@ describe("parseCSV", () => {
     const r = parseCSV('name,phrase\nAlice,"hello world"');
     expect(r.rows[0].phrase).toBe("hello world");
   });
+  it("allows whitespace around quoted fields", () => {
+    const r = parseCSV('name,phrase\nAlice,  "hello world"  ');
+    expect(r.rows[0].phrase).toBe("hello world");
+  });
+
+  it("throws on a quote embedded in an unquoted field", () => {
+    expect(() => parseCSV('name,val\ntest,abc"def')).toThrow(/unexpected quote/i);
+  });
+
+  it("throws on non-whitespace characters after a closing quote", () => {
+    expect(() => parseCSV('name,val\ntest,"abc"def')).toThrow(/after closing quote/i);
+  });
+
 
   it("header row of a single column (edge case)", () => {
     const r = parseCSV("value\n42\n43");
