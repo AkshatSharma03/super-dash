@@ -233,6 +233,23 @@ export function buildDashboardHTML(
   const cachedAt = dataset._meta?.cachedAt
     ? new Date(dataset._meta.cachedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : "unknown";
+  const latestGdp = dataset.gdpData[dataset.gdpData.length - 1];
+  const latestTradeBalance = latestExp && latestImp
+    ? +(latestExp.total - latestImp.total).toFixed(1)
+    : null;
+  const latestOpenness = latestGdp && latestExp && latestImp && latestGdp.gdp_bn > 0
+    ? +(((latestExp.total + latestImp.total) / latestGdp.gdp_bn) * 100).toFixed(1)
+    : null;
+  const coverageRows = [
+    ...dataset.gdpData,
+    ...dataset.exportData,
+    ...dataset.importData,
+  ];
+  const coverageScore = coverageRows.length
+    ? Math.round((coverageRows.filter((row) =>
+        Object.values(row).some((value) => typeof value === "number"),
+      ).length / coverageRows.length) * 100)
+    : 0;
 
   // ── SVG wrappers ──────────────────────────────────────────────────────────
   function chartSection(title: string, svgKey: string): string {
@@ -270,6 +287,13 @@ tr:nth-child(even) td{background:#fafafa}
 .header .meta{display:flex;gap:20px;margin-top:10px;font-size:11px;color:#94a3b8}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:12px 0}
 @media(max-width:640px){.two-col{grid-template-columns:1fr}}
+.summary{background:#f8fafc;border:1px solid #cbd5e1;border-left:4px solid #3b82f6;border-radius:10px;padding:16px 18px;margin:18px 0}
+.summary p{font-size:13px;color:#334155;margin:0 0 8px}
+.trust-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.trust-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px}
+.trust-card strong{display:block;font-size:16px;color:#0f172a}
+.trust-card span{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.4px}
+@media(max-width:640px){.trust-grid{grid-template-columns:1fr}}
 .footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 @media print{body{padding:20px}.no-print{display:none}h2{page-break-after:avoid}table,figure{page-break-inside:avoid}}
 </style>
@@ -285,6 +309,21 @@ tr:nth-child(even) td{background:#fafafa}
     <span>📊 Source: ${sources.join(" · ")}</span>
   </div>
 </div>
+
+<h2>Executive Summary</h2>
+<div class="summary">
+  <p><strong>${dataset.name}</strong> latest source-backed GDP is ${latestGdp ? `$${latestGdp.gdp_bn}B in ${latestGdp.year}` : "not available"}.</p>
+  <p>Latest recorded GDP growth is ${latestGdp?.gdp_growth != null ? `${latestGdp.gdp_growth}%` : "not available"}; latest trade balance is ${latestTradeBalance != null ? `${latestTradeBalance >= 0 ? "+" : ""}$${latestTradeBalance}B` : "not available"}${latestOpenness != null ? `; trade openness is ${latestOpenness}%.` : "."}</p>
+  <p>This report uses the data tables below as its source of truth and avoids estimated values where source data is missing.</p>
+</div>
+
+<h2>Trust & Provenance</h2>
+<div class="trust-grid">
+  <div class="trust-card"><span>Data coverage</span><strong>${coverageScore}%</strong></div>
+  <div class="trust-card"><span>Data cached</span><strong>${cachedAt}</strong></div>
+  <div class="trust-card"><span>Sources</span><strong>${sources.length}</strong></div>
+</div>
+<p style="font-size:12px;color:#64748b">Sources: ${sources.join(" · ")}. Methodology note: GDP, trade totals, balances, and openness are calculated from source-backed rows included in this export.</p>
 
 <h2>Key Performance Indicators</h2>
 <div class="kpi-grid">${kpiHTML}</div>

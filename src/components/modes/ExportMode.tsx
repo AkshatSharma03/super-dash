@@ -21,6 +21,7 @@ import { ALGO_DEFS, FILE_FORMATS } from "./export/constants";
 import { buildAlgoCSVs } from "./export/buildAlgoCsvs";
 import { HiddenCharts } from "./export/HiddenCharts";
 import { ExportBtn, Panel, SectionTitle } from "./export/ui";
+import { trackReportExported } from "../../analytics";
 
 interface ExportModeProps {
   dashDataset: CountryDataset | null;
@@ -169,12 +170,14 @@ export default function ExportMode({
 
     const [csv, filename] = map[which]() as [string, string];
     downloadCSV(filename, csv);
+    trackReportExported(`csv_${which}`, dashDataset.code);
     toast.success(`Downloaded ${filename}`);
   }
 
   function handleDashJSON() {
     if (!dashDataset) return;
     downloadJSON(`${dashDataset.code}_dataset.json`, dashDataset);
+    trackReportExported("json_dataset", dashDataset.code);
     toast.success(`Downloaded ${dashDataset.code}_dataset.json`);
   }
 
@@ -198,6 +201,8 @@ export default function ExportMode({
         const opened = printHTML(html);
         if (!opened) {
           toast.error("Popup blocked. Enable popups, then retry print.");
+        } else {
+          trackReportExported("pdf_print", dashDataset.code);
         }
       } else {
         const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -210,6 +215,7 @@ export default function ExportMode({
         anchor.click();
         document.body.removeChild(anchor);
         URL.revokeObjectURL(url);
+        trackReportExported("html_briefing", dashDataset.code);
         toast.success("Report downloaded");
       }
 
@@ -223,12 +229,14 @@ export default function ExportMode({
 
     const filename = `${analyticsDataset.code}_${key}.csv`;
     downloadCSV(filename, csv);
+    trackReportExported(`algorithm_csv_${key}`, analyticsDataset.code);
     toast.success(`Downloaded ${filename}`);
   }
 
   function handleAlgoJSON() {
     if (!analyticsDataset) return;
     downloadJSON(`${analyticsDataset.code}_all_algorithms.json`, algoCsvs);
+    trackReportExported("algorithm_json", analyticsDataset.code);
     toast.success("Downloaded all algorithm results as JSON");
   }
 
@@ -257,11 +265,11 @@ export default function ExportMode({
 
       <div className="mb-6">
         <h1 className="text-[22px] font-black text-memphis-black tracking-tight mb-1 uppercase">
-          Export &amp; Reports
+          Reports &amp; Briefings
         </h1>
         <p className="text-[13px] text-memphis-black/60 font-medium">
-          Download country data as CSV / JSON · Generate standalone HTML reports
-          with embedded charts · Print to PDF
+          Create portable analyst deliverables with charts, data tables,
+          provenance, and methodology notes. Every action is explicit.
         </p>
       </div>
 
@@ -316,17 +324,20 @@ export default function ExportMode({
                 full
               />
 
-              <SectionTitle>Full Report</SectionTitle>
+              <SectionTitle>Analyst Briefing</SectionTitle>
               <p className="text-[11px] text-memphis-black/50 mb-2 font-medium">
-                Generates a standalone `.html` file with embedded SVG charts,
-                KPI cards, and data tables.
+                Generates a standalone `.html` file with an executive summary,
+                embedded SVG charts, KPI cards, data tables, sources, and
+                methodology notes.
               </p>
               <div className="flex flex-col sm:flex-row gap-1.5">
                 <div className="flex-1">
                   <ExportBtn
                     icon={generating === "dash" ? "..." : "HTML"}
                     label={
-                      generating === "dash" ? "Generating…" : "Download HTML"
+                      generating === "dash"
+                        ? "Generating…"
+                        : "Download briefing"
                     }
                     onClick={() => handleDashReport(false)}
                     disabled={generating === "dash"}
@@ -336,7 +347,7 @@ export default function ExportMode({
                 <div className="flex-1">
                   <ExportBtn
                     icon="PDF"
-                    label="Print / Save PDF"
+                    label="Print / save PDF"
                     onClick={() => handleDashReport(true)}
                     disabled={generating === "dash"}
                     full
