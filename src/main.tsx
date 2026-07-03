@@ -17,8 +17,7 @@ const CLERK_INIT_ERROR =
 const CLERK_MISSING_KEY_ERROR =
   "Missing or placeholder VITE_CLERK_PUBLISHABLE_KEY. Add the Clerk " +
   "publishable key to your local .env file and to your hosting provider's " +
-  "build-time environment variables, then rebuild the client. Guest mode is " +
-  "available now, but saved accounts require Clerk.";
+  "build-time environment variables, then rebuild the client.";
 
 const isValidClerkKey = (key?: string): key is string => {
   if (!key) return false;
@@ -84,31 +83,8 @@ const ConfigNotice = ({ message }: { message: string }) => (
           Set <code>VITE_CLERK_PUBLISHABLE_KEY=pk_test_...</code> locally or{" "}
           <code>pk_live_...</code> in production.
         </li>
-        <li>
-          If Clerk shows <code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code>, copy
-          the same <code>pk_...</code> value but rename the variable to{" "}
-          <code>VITE_CLERK_PUBLISHABLE_KEY</code> for this Vite app.
-        </li>
         <li>Re-run the Vite build so the client bundle receives the value.</li>
       </ol>
-      <p
-        style={{
-          marginTop: "14px",
-          marginBottom: 0,
-          fontSize: "13px",
-          color: "#1A1A2E",
-        }}
-      >
-        Open{" "}
-        <a href="https://dashboard.clerk.com/last-active?path=api-keys">
-          Clerk API keys
-        </a>{" "}
-        or read the{" "}
-        <a href="https://clerk.com/docs/guides/development/clerk-environment-variables">
-          Clerk environment variable guide
-        </a>
-        .
-      </p>
     </div>
   </div>
 );

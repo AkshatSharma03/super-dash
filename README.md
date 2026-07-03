@@ -223,40 +223,6 @@ available when the frontend is built. Use a real key from Clerk that starts with
 values from `.env.example` are intentionally rejected at runtime so deployments
 fail with an actionable configuration notice instead of a blank screen.
 
-To get it: open the [Clerk Dashboard](https://dashboard.clerk.com), select your
-application, go to **API keys**, copy **Publishable key**, and paste it into
-`.env` as `VITE_CLERK_PUBLISHABLE_KEY=pk_test_...`. Copy the backend
-**Secret key** into `.env` as `CLERK_SECRET_KEY=sk_test_...`; never expose the
-secret key with a `VITE_` prefix.
-
-If Clerk's quick-copy selector is set to **Next.js**, it may show
-`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...`. This app uses **Vite**, so copy
-the same `pk_test_...` / `pk_live_...` value but name the variable
-`VITE_CLERK_PUBLISHABLE_KEY`.
-
-### Railway / deployment environment variables
-
-Vite replaces `import.meta.env.VITE_*` values during the frontend build. If a
-deploy platform builds the app before production variables are available, the
-client bundle can miss `VITE_CLERK_PUBLISHABLE_KEY` even when Railway shows the
-variable at runtime. To make Railway-style deployments resilient, the Express
-server also serves `/env.js`, which exposes only safe public client variables
-(`VITE_CLERK_PUBLISHABLE_KEY` and `VITE_POSTHOG_KEY`) from the runtime
-environment before the React bundle loads.
-
-On Railway, set these variables on the service that runs `npm start` and then
-redeploy:
-
-- `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...` (or `pk_test_...` for a test Clerk instance)
-- `CLERK_SECRET_KEY=sk_live_...` (server-side only; never expose it with `VITE_`)
-- `ANTHROPIC_API_KEY=...` (required for AI features)
-- `JWT_SECRET=...` with at least 32 characters in production
-
-`KAGI_API_KEY` and `UN_COMTRADE_API_KEY` are recommended for richer Search and
-trade enrichment, but missing values no longer prevent the web server from
-starting; related features will show provider configuration errors until the
-keys are added.
-
 ---
 
 ## 🛠️ Tech Stack
