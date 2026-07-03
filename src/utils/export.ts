@@ -257,23 +257,6 @@ export function buildDashboardHTML(
         Object.values(row).some((value) => typeof value === "number"),
       ).length / coverageRows.length) * 100)
     : 0;
-  const primaryQuestionsHTML = profile.primaryQuestions
-    .map((question) => `<li>${question}</li>`)
-    .join("");
-  const sectionsHTML = profile.recommendedSections
-    .map((section) => `<li>${section}</li>`)
-    .join("");
-  const groundingHTML = REPORT_GROUNDING_STANDARDS
-    .map((standard) => `<li>${standard}</li>`)
-    .join("");
-  const evidenceRows = [
-    ["GDP table", `${dataset.gdpData.length} rows`, "Source-backed rows included in export"],
-    ["Exports table", `${dataset.exportData.length} rows`, "Trade balance uses these values when available"],
-    ["Imports table", `${dataset.importData.length} rows`, "Trade openness uses imports + exports / GDP"],
-    ["Source metadata", sources.join(" · "), `Cached ${cachedAt}`],
-  ].map(([area, coverage, note]) =>
-    `<tr><td>${area}</td><td>${coverage}</td><td>${note}</td></tr>`
-  ).join("");
 
   // ── SVG wrappers ──────────────────────────────────────────────────────────
   function chartSection(title: string, svgKey: string): string {
@@ -318,9 +301,6 @@ tr:nth-child(even) td{background:#fafafa}
 .trust-card strong{display:block;font-size:16px;color:#0f172a}
 .trust-card span{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.4px}
 @media(max-width:640px){.trust-grid{grid-template-columns:1fr}}
-.callout{background:#fff7ed;border:1px solid #fed7aa;border-left:4px solid #f97316;border-radius:10px;padding:16px 18px;margin:18px 0}
-.callout p,.callout li{font-size:13px;color:#334155;margin-bottom:6px}
-.callout ul{padding-left:20px;margin-top:8px}
 .footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 @media print{body{padding:20px}.no-print{display:none}h2{page-break-after:avoid}table,figure{page-break-inside:avoid}}
 </style>
@@ -334,22 +314,6 @@ tr:nth-child(even) td{background:#fafafa}
     <span>📅 Generated: ${generated}</span>
     <span>🗄 Data cached: ${cachedAt}</span>
     <span>📊 Source: ${sources.join(" · ")}</span>
-  </div>
-</div>
-
-<h2>Reader Context</h2>
-<div class="callout">
-  <p><strong>${profile.label}:</strong> ${profile.description}</p>
-  <p><strong>Evidence standard:</strong> ${profile.evidenceStandard}</p>
-  <div class="two-col">
-    <div>
-      <h3>Decision questions</h3>
-      <ul>${primaryQuestionsHTML}</ul>
-    </div>
-    <div>
-      <h3>Recommended sections</h3>
-      <ul>${sectionsHTML}</ul>
-    </div>
   </div>
 </div>
 
@@ -367,18 +331,6 @@ tr:nth-child(even) td{background:#fafafa}
   <div class="trust-card"><span>Sources</span><strong>${sources.length}</strong></div>
 </div>
 <p style="font-size:12px;color:#64748b">Sources: ${sources.join(" · ")}. Methodology note: GDP, trade totals, balances, and openness are calculated from source-backed rows included in this export.</p>
-
-<h2>Evidence Ledger</h2>
-<table>
-  <thead><tr><th>Evidence area</th><th>Coverage / source</th><th>Use in report</th></tr></thead>
-  <tbody>${evidenceRows}</tbody>
-</table>
-
-<h2>Grounding Standards</h2>
-<div class="callout">
-  <ul>${groundingHTML}</ul>
-  <p><strong>Limitation:</strong> This report is descriptive. It can support briefing, screening, and prioritization, but causal claims and forecasts require additional model design and validation.</p>
-</div>
 
 <h2>Key Performance Indicators</h2>
 <div class="kpi-grid">${kpiHTML}</div>
