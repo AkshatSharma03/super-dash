@@ -2,7 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import { join } from 'path';
 import helmet from 'helmet';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import countries from 'i18n-iso-countries';
 import {
