@@ -252,21 +252,6 @@ export default function DashboardMode({
                 </div>
               ))}
             </div>
-            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-              {REPORT_PROFILES.map((profile) => (
-                <div
-                  key={profile.id}
-                  className="border-3 border-memphis-black bg-white p-3 shadow-hard-sm"
-                >
-                  <p className="text-[11px] font-black uppercase text-memphis-pink mb-1">
-                    {profile.label}
-                  </p>
-                  <p className="text-[11px] text-memphis-black/65 leading-relaxed">
-                    {profile.headline}
-                  </p>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="border-3 border-memphis-black bg-memphis-offwhite p-4 shadow-hard">

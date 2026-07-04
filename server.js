@@ -646,16 +646,6 @@ app.set('trust proxy', 1); // Railway / other reverse proxies set X-Forwarded-Fo
 const ALLOWED_CORS_ORIGINS = new Set(CORS_ORIGINS);
 
 app.use((req, res, next) => {
-  const inboundRequestId = String(req.headers['x-request-id'] || '').trim();
-  const requestId = /^[a-zA-Z0-9_.:-]{8,128}$/.test(inboundRequestId)
-    ? inboundRequestId
-    : randomUUID();
-  req.id = requestId;
-  res.setHeader('X-Request-Id', requestId);
-  next();
-});
-
-app.use((req, res, next) => {
   const origin = req.headers.origin || '';
   res.setHeader('Vary', 'Origin');
   if (ALLOWED_CORS_ORIGINS.has(origin)) {
@@ -1589,30 +1579,6 @@ app.use((_, res, next) => {
 
 app.get('/api/version', (_req, res) => {
   res.json({ build: APP_BUILD_ID });
-});
-
-app.get('/api/health', (_req, res) => {
-  const dbStatus = (() => {
-    try {
-      db.prepare('SELECT 1 AS ok').get();
-      return 'ok';
-    } catch {
-      return 'error';
-    }
-  })();
-
-  const status = dbStatus === 'ok' ? 'ok' : 'degraded';
-  res.status(status === 'ok' ? 200 : 503).json({
-    status,
-    build: APP_BUILD_ID,
-    uptimeSeconds: Math.round(process.uptime()),
-    checks: { database: dbStatus },
-    caches: {
-      api: apiCache.stats(),
-      canonicalization: canonCache.stats(),
-      rawData: rawDataCache.stats(),
-    },
-  });
 });
 
 app.get('/env.js', (_req, res) => {

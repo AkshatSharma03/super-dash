@@ -223,59 +223,6 @@ available when the frontend is built. Use a real key from Clerk that starts with
 values from `.env.example` are intentionally rejected at runtime so deployments
 fail with an actionable configuration notice instead of a blank screen.
 
-To get it: open the [Clerk Dashboard](https://dashboard.clerk.com), select your
-application, go to **API keys**, copy **Publishable key**, and paste it into
-`.env` as `VITE_CLERK_PUBLISHABLE_KEY=pk_test_...`. Copy the backend
-**Secret key** into `.env` as `CLERK_SECRET_KEY=sk_test_...`; never expose the
-secret key with a `VITE_` prefix.
-
-If Clerk's quick-copy selector is set to **Next.js**, it may show
-`NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...`. This app uses **Vite**, so copy
-the same `pk_test_...` / `pk_live_...` value but name the variable
-`VITE_CLERK_PUBLISHABLE_KEY`.
-
-### Railway / deployment environment variables
-
-Vite replaces `import.meta.env.VITE_*` values during the frontend build. If a
-deploy platform builds the app before production variables are available, the
-client bundle can miss `VITE_CLERK_PUBLISHABLE_KEY` even when Railway shows the
-variable at runtime. To make Railway-style deployments resilient, the Express
-server also serves `/env.js`, which exposes only safe public client variables
-(`VITE_CLERK_PUBLISHABLE_KEY` and `VITE_POSTHOG_KEY`) from the runtime
-environment before the React bundle loads.
-
-On Railway, set these variables on the service that runs `npm start` and then
-redeploy:
-
-- `VITE_CLERK_PUBLISHABLE_KEY=pk_live_...` (or `pk_test_...` for a test Clerk instance)
-- `CLERK_SECRET_KEY=sk_live_...` (server-side only; never expose it with `VITE_`)
-- `ANTHROPIC_API_KEY=...` (required for AI features)
-- `JWT_SECRET=...` with at least 32 characters in production
-
-`KAGI_API_KEY` and `UN_COMTRADE_API_KEY` are recommended for richer Search and
-trade enrichment, but missing values no longer prevent the web server from
-starting; related features will show provider configuration errors until the
-keys are added.
-
-### Railway deployment command settings
-
-This repository includes `railway.json` and `nixpacks.toml` so Railway builds
-once and starts the server directly with `node server.js`. The Nixpacks plan pins
-Node 22 and installs the Python/C++ toolchain required by native modules such as
-`better-sqlite3` when a prebuilt binary is unavailable. This avoids the previous
-double-build path (`npm run build` followed by `npm start` triggering `prestart`)
-and avoids runtime npm warnings from deprecated `NPM_CONFIG_PRODUCTION=true`
-settings.
-
-If you previously added `NPM_CONFIG_PRODUCTION=true` or
-`npm_config_production=true` in Railway variables, remove it. Use
-`NPM_CONFIG_OMIT=dev` only for install phases where dev dependencies are not
-needed. Because the Vite build requires dev dependencies, the Railway build
-should run before pruning dev dependencies, or use Railway's default Node/Nixpacks
-install behavior with the checked-in `railway.json` and `nixpacks.toml`. Keep
-secret values as Railway runtime variables; they are not needed for the image
-build now that public client config is served via `/env.js`.
-
 ---
 
 ## 🛠️ Tech Stack
