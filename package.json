@@ -19,7 +19,7 @@
     "deps:outdated": "npm outdated --long"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0 <25.0.0"
   },
   "dependencies": {
     "@clerk/backend": "^3.2.9",

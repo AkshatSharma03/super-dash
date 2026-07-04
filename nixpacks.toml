@@ -1,0 +1,19 @@
+# Railway/Nixpacks build plan.
+# Keep Node on 22 for native addon prebuild compatibility and include the
+# node-gyp toolchain so better-sqlite3 can compile if a prebuild is unavailable.
+
+[variables]
+NIXPACKS_NODE_VERSION = '22'
+
+[phases.setup]
+nixPkgs = ['...', 'nodejs_22']
+aptPkgs = ['...', 'python3', 'make', 'g++']
+
+[phases.install]
+cmds = ['env -u NPM_CONFIG_PRODUCTION -u npm_config_production npm ci']
+
+[phases.build]
+cmds = ['npm run build']
+
+[start]
+cmd = 'node server.js'
