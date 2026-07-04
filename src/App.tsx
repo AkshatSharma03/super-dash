@@ -19,7 +19,14 @@ import {
   logoutApi,
   setAuthTokenGetter,
 } from "./utils/api";
-import { identifyUser, resetUser, track } from "./analytics";
+import {
+  identifyUser,
+  resetUser,
+  track,
+  trackCountrySelected,
+  trackGuestStarted,
+  trackUpgradePromptViewed,
+} from "./analytics";
 import { BarChart3, ChevronDown, Download, Menu, X } from "lucide-react";
 import { MOBILE_PRIMARY_MODES, MODE_META, MODES } from "./config/modes";
 
@@ -87,6 +94,7 @@ interface ModeContentParams {
   loadCountry: (code: string, token: string) => Promise<void>;
   loadAnalyticsCountry: (code: string, token: string) => Promise<void>;
   handleRefreshCountry: (token: string, countryCode: string) => Promise<void>;
+  onSwitchMode: (mode: Mode) => void;
 }
 
 function renderModeContent(params: ModeContentParams) {
@@ -103,6 +111,7 @@ function renderModeContent(params: ModeContentParams) {
     loadCountry,
     loadAnalyticsCountry,
     handleRefreshCountry,
+    onSwitchMode,
   } = params;
 
   if (mode === "chat") {
@@ -145,6 +154,7 @@ function renderModeContent(params: ModeContentParams) {
           onRefresh={() =>
             countryData && handleRefreshCountry(token, countryData.code)
           }
+          onOpenReports={() => onSwitchMode("export")}
         />
       </div>
     );
@@ -168,15 +178,35 @@ function renderModeContent(params: ModeContentParams) {
   );
 }
 
-export default function App() {
-  const { isLoaded: clerkLoaded, isSignedIn, getToken } = useAuth();
-  const { user: clerkUser } = useUser();
-  const { signOut } = useClerk();
+interface AppShellProps {
+  clerkLoaded: boolean;
+  isSignedIn: boolean;
+  getToken: () => Promise<string | null>;
+  clerkUser?: {
+    id: string;
+    primaryEmailAddress?: { emailAddress?: string | null } | null;
+    fullName?: string | null;
+    firstName?: string | null;
+  } | null;
+  signOut: () => Promise<void>;
+  clerkAvailable?: boolean;
+  authNotice?: string;
+}
+
+function AppShell({
+  clerkLoaded,
+  isSignedIn,
+  getToken,
+  clerkUser,
+  signOut,
+  clerkAvailable = true,
+  authNotice,
+}: AppShellProps) {
 
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string>("");
   const [authReady, setAuthReady] = useState(false);
-  const [mode, setMode] = useState<Mode>("chat");
+  const [mode, setMode] = useState<Mode>("dashboard");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const isMobile = useMobile();
@@ -201,6 +231,7 @@ export default function App() {
   const analyticsReqIdRef = useRef(0);
 
   const loadCountry = useCallback(async (code: string, tok: string) => {
+    trackCountrySelected(code, "briefing");
     const nextRequestId = ++countryReqIdRef.current;
 
     await runDatasetRequest({
@@ -216,6 +247,7 @@ export default function App() {
 
   const loadAnalyticsCountry = useCallback(
     async (code: string, tok: string) => {
+      trackCountrySelected(code, "advanced_analysis");
       const nextRequestId = ++analyticsReqIdRef.current;
 
       await runDatasetRequest({
@@ -307,6 +339,7 @@ export default function App() {
     localStorage.setItem("ec_guest_user", JSON.stringify(u));
     setToken(t);
     setUser(u);
+    trackGuestStarted();
   };
 
   const logout = async () => {
@@ -317,7 +350,7 @@ export default function App() {
     }
     localStorage.removeItem("ec_guest_token");
     localStorage.removeItem("ec_guest_user");
-    if (!user?.isGuest && isSignedIn) {
+    if (clerkAvailable && !user?.isGuest && isSignedIn) {
       await signOut();
     }
     setToken("");
@@ -331,14 +364,18 @@ export default function App() {
     setAnalyticsError(null);
     setSettingsOpen(false);
     setMobileMenuOpen(false);
-    setMode("chat");
+    setMode("dashboard");
   };
 
   if (!authReady) return null;
   if (!user)
     return (
       <Suspense fallback={null}>
-        <AuthPage onGuestAuth={handleGuestAuth} />
+        <AuthPage
+          onGuestAuth={handleGuestAuth}
+          clerkAvailable={clerkAvailable}
+          authNotice={authNotice}
+        />
       </Suspense>
     );
 
@@ -472,7 +509,13 @@ export default function App() {
               <span className="text-xs font-bold text-memphis-black/60 uppercase tracking-wide">
                 Guest
               </span>
-              <Button size="sm" onClick={logout}>
+              <Button
+                size="sm"
+                onClick={() => {
+                  trackUpgradePromptViewed("header_guest_chip");
+                  logout();
+                }}
+              >
                 Sign Up
               </Button>
             </>
@@ -547,7 +590,7 @@ export default function App() {
               )}
             >
               <span className="inline-flex items-center gap-2">
-                <Download className="w-4 h-4" /> Export Center
+                <Download className="w-4 h-4" /> Reports
               </span>
             </button>
           </div>
@@ -680,6 +723,7 @@ export default function App() {
               loadCountry,
               loadAnalyticsCountry,
               handleRefreshCountry,
+              onSwitchMode: switchMode,
             })}
           </Suspense>
         </div>
@@ -733,5 +777,36 @@ export default function App() {
         </Suspense>
       )}
     </div>
+  );
+}
+
+export function LocalOnlyApp({ authNotice }: { authNotice?: string }) {
+  return (
+    <AppShell
+      clerkLoaded
+      isSignedIn={false}
+      getToken={async () => null}
+      clerkUser={null}
+      signOut={async () => {}}
+      clerkAvailable={false}
+      authNotice={authNotice}
+    />
+  );
+}
+
+export default function App() {
+  const { isLoaded: clerkLoaded, isSignedIn, getToken } = useAuth();
+  const { user: clerkUser } = useUser();
+  const { signOut } = useClerk();
+
+  return (
+    <AppShell
+      clerkLoaded={clerkLoaded}
+      isSignedIn={Boolean(isSignedIn)}
+      getToken={getToken}
+      clerkUser={clerkUser}
+      signOut={signOut}
+      clerkAvailable
+    />
   );
 }

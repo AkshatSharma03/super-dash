@@ -2,25 +2,29 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { ClerkProvider } from "@clerk/react";
 import { Toaster } from "sonner";
-import App from "./App";
+import App, { LocalOnlyApp } from "./App";
 import "./index.css";
 import { initAnalytics } from "./analytics";
+import { getRuntimeEnv } from "./config/runtimeEnv";
 
 initAnalytics();
 
-const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const clerkPublishableKey = getRuntimeEnv("VITE_CLERK_PUBLISHABLE_KEY");
 const CLERK_INIT_ERROR =
-  "Clerk failed to initialize in production. " +
-  "Ensure VITE_CLERK_PUBLISHABLE_KEY is set at build time and redeploy from Railway.";
+  "Clerk failed to initialize. Verify that VITE_CLERK_PUBLISHABLE_KEY is " +
+  "available at build time and that the value matches the Clerk instance for " +
+  "this deployment.";
 const CLERK_MISSING_KEY_ERROR =
-  "Missing or placeholder VITE_CLERK_PUBLISHABLE_KEY. " +
-  "Add your real Clerk publishable key in Railway Variables and redeploy.";
+  "Missing or placeholder VITE_CLERK_PUBLISHABLE_KEY. Add the Clerk " +
+  "publishable key to your local .env file and to your hosting provider's " +
+  "build-time environment variables, then rebuild the client. Guest mode is " +
+  "available now, but saved accounts require Clerk.";
 
 const isValidClerkKey = (key?: string): key is string => {
   if (!key) return false;
   const trimmed = key.trim();
   if (!trimmed) return false;
-  if (!trimmed.startsWith("pk_")) return false;
+  if (!/^pk_(test|live)_/.test(trimmed)) return false;
   if (/x{4,}/i.test(trimmed)) return false;
   return true;
 };
@@ -66,6 +70,45 @@ const ConfigNotice = ({ message }: { message: string }) => (
       >
         {message}
       </p>
+      <ol
+        style={{
+          marginTop: "14px",
+          paddingLeft: "20px",
+          fontSize: "13px",
+          lineHeight: 1.7,
+          color: "#1A1A2E",
+        }}
+      >
+        <li>Open the Clerk dashboard and copy the publishable key.</li>
+        <li>
+          Set <code>VITE_CLERK_PUBLISHABLE_KEY=pk_test_...</code> locally or{" "}
+          <code>pk_live_...</code> in production.
+        </li>
+        <li>
+          If Clerk shows <code>NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY</code>, copy
+          the same <code>pk_...</code> value but rename the variable to{" "}
+          <code>VITE_CLERK_PUBLISHABLE_KEY</code> for this Vite app.
+        </li>
+        <li>Re-run the Vite build so the client bundle receives the value.</li>
+      </ol>
+      <p
+        style={{
+          marginTop: "14px",
+          marginBottom: 0,
+          fontSize: "13px",
+          color: "#1A1A2E",
+        }}
+      >
+        Open{" "}
+        <a href="https://dashboard.clerk.com/last-active?path=api-keys">
+          Clerk API keys
+        </a>{" "}
+        or read the{" "}
+        <a href="https://clerk.com/docs/guides/development/clerk-environment-variables">
+          Clerk environment variable guide
+        </a>
+        .
+      </p>
     </div>
   </div>
 );
@@ -100,7 +143,10 @@ const Root = isValidClerkKey(clerkPublishableKey) ? (
     </ClerkProvider>
   </RootErrorBoundary>
 ) : (
-  <ConfigNotice message={CLERK_MISSING_KEY_ERROR} />
+  <>
+    <LocalOnlyApp authNotice={CLERK_MISSING_KEY_ERROR} />
+    <Toaster position="bottom-center" theme="dark" richColors />
+  </>
 );
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

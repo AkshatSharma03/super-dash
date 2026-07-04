@@ -5,8 +5,9 @@
 // Import { track, identifyUser, resetUser } from here — never call posthog directly.
 // ─────────────────────────────────────────────────────────────────────────────
 import posthog from "posthog-js";
+import { getRuntimeEnv } from "./config/runtimeEnv";
 
-const KEY  = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
+const KEY = getRuntimeEnv("VITE_POSTHOG_KEY");
 const HOST = "https://us.i.posthog.com";
 
 export function initAnalytics() {
@@ -37,4 +38,20 @@ export function resetUser() {
 export function track(event: string, properties?: Record<string, unknown>) {
   if (!KEY) return;
   posthog.capture(event, properties);
+}
+
+export function trackGuestStarted() {
+  track("guest_started");
+}
+
+export function trackCountrySelected(countryCode: string, surface: string) {
+  track("country_selected", { country_code: countryCode, surface });
+}
+
+export function trackReportExported(format: string, countryCode?: string) {
+  track("report_exported", { format, country_code: countryCode });
+}
+
+export function trackUpgradePromptViewed(surface: string) {
+  track("upgrade_prompt_viewed", { surface });
 }
