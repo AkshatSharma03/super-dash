@@ -301,6 +301,11 @@ export function createDataToolsService({
     return String(value).trim().toLowerCase();
   }
 
+  function witsRestKeyPart(value) {
+    if (Array.isArray(value)) return value.map(witsRestKeyPart).join('+');
+    return encodeURIComponent(String(value ?? '').trim());
+  }
+
   function readWitsDimension(dim, index) {
     const value = dim?.values?.[index] ?? {};
     return {
@@ -382,6 +387,138 @@ export function createDataToolsService({
     return rows.sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
   }
 
+  function decodeXmlEntities(value) {
+    return String(value ?? '')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
+  }
+
+  function parseXmlAttributes(source) {
+    const attrs = {};
+    const attrPattern = /([A-Za-z_:-]+)="([^"]*)"/g;
+    let match;
+    while ((match = attrPattern.exec(source)) !== null) {
+      attrs[match[1]] = decodeXmlEntities(match[2]);
+    }
+    return attrs;
+  }
+
+  function putWitsXmlDimension(row, id, value) {
+    if (!id) return;
+    const normalized = decodeXmlEntities(value);
+    const key = String(id).replace(/\s+/g, '');
+    row[key] = normalized;
+
+    const lower = key.toLowerCase();
+    if (lower === 'reporter') {
+      row.reporterCode = normalized;
+      row.reporter = normalized;
+    } else if (lower === 'partner') {
+      row.partnerCode = normalized;
+      row.partner = normalized;
+    } else if (lower === 'productcode') {
+      row.productCode = normalized;
+      row.product = normalized;
+    } else if (lower === 'indicator') {
+      row.indicator = normalized;
+      row.indicatorName = normalized;
+    } else if (lower === 'freq') {
+      row.frequencyCode = normalized;
+      row.frequency = normalized;
+    }
+  }
+
+  function parseWITSGenericXmlRows(xml) {
+    const rows = [];
+    const seriesPattern = /<generic:Series\b[^>]*>([\s\S]*?)<\/generic:Series>/g;
+    let seriesMatch;
+
+    while ((seriesMatch = seriesPattern.exec(xml)) !== null) {
+      const seriesXml = seriesMatch[1];
+      const base = {};
+      const keyMatch = seriesXml.match(/<generic:SeriesKey\b[^>]*>([\s\S]*?)<\/generic:SeriesKey>/);
+      if (keyMatch) {
+        const valuePattern = /<generic:Value\b([^>]*)\/>/g;
+        let valueMatch;
+        while ((valueMatch = valuePattern.exec(keyMatch[1])) !== null) {
+          const attrs = parseXmlAttributes(valueMatch[1]);
+          putWitsXmlDimension(base, attrs.id, attrs.value);
+        }
+      }
+
+      const obsPattern = /<generic:Obs\b[^>]*>([\s\S]*?)<\/generic:Obs>/g;
+      let obsMatch;
+      while ((obsMatch = obsPattern.exec(seriesXml)) !== null) {
+        const obsXml = obsMatch[1];
+        const obsValue = Number(parseXmlAttributes(obsXml.match(/<generic:ObsValue\b([^>]*)\/>/)?.[1] ?? '').value);
+        if (!Number.isFinite(obsValue)) continue;
+        const period = parseXmlAttributes(obsXml.match(/<generic:ObsDimension\b([^>]*)\/>/)?.[1] ?? '').value ?? null;
+        const year = period ? Number.parseInt(String(period).slice(0, 4), 10) : null;
+        const row = {
+          ...base,
+          period,
+          year: Number.isFinite(year) ? year : null,
+          value: obsValue,
+        };
+
+        const attrsMatch = obsXml.match(/<generic:Attributes\b[^>]*>([\s\S]*?)<\/generic:Attributes>/);
+        if (attrsMatch) {
+          const attrPattern = /<generic:Value\b([^>]*)\/>/g;
+          let attrMatch;
+          while ((attrMatch = attrPattern.exec(attrsMatch[1])) !== null) {
+            const attrs = parseXmlAttributes(attrMatch[1]);
+            if (attrs.id) row[String(attrs.id).replace(/\s+/g, '')] = decodeXmlEntities(attrs.value);
+          }
+        }
+
+        rows.push(row);
+      }
+    }
+
+    return rows.sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+  }
+
+  function witsRestDataflow(datasource) {
+    const normalized = String(datasource || '').toLowerCase();
+    if (normalized === 'tradestats-trade' || normalized === 'tradestatstrade') return 'df_wits_tradestats_trade';
+    if (normalized === 'tradestats-tariff' || normalized === 'tradestatstariff') return 'df_wits_tradestats_tariff';
+    if (normalized === 'tradestats-development' || normalized === 'tradestatsdevelopment') return 'df_wits_tradestats_development';
+    return null;
+  }
+
+  function normalizeWITSYearRange(year) {
+    const raw = String(year ?? '').trim();
+    if (!raw || raw.toLowerCase() === 'all') return { start: null, end: null };
+    const parts = raw.split(/[;:+,]/).map((part) => part.trim()).filter(Boolean);
+    const years = parts.map((part) => Number.parseInt(part, 10)).filter(Number.isFinite);
+    if (!years.length) return { start: raw, end: raw };
+    return { start: String(Math.min(...years)), end: String(Math.max(...years)) };
+  }
+
+  function buildWITSRestUrl({ datasource, reporter, partner, product, year, indicator }) {
+    const dataflow = witsRestDataflow(datasource);
+    if (!dataflow) return null;
+    const productCode = String(product || '').toLowerCase() === 'all' ? '' : witsPathPart(product);
+    const key = ['A', reporter, partner, productCode, indicator]
+      .map((part) => witsRestKeyPart(part))
+      .join('.');
+    const url = new URL(`https://wits.worldbank.org/API/V1/SDMX/V21/rest/data/${dataflow}/${key}/`);
+    const range = normalizeWITSYearRange(year);
+    if (range.start) url.searchParams.set('startperiod', range.start);
+    if (range.end) url.searchParams.set('endperiod', range.end);
+    return url.toString();
+  }
+
+  function withWITSProxy(url) {
+    if (!WITS_PROXY_URL) return url;
+    const proxyBase = new URL(WITS_PROXY_URL);
+    proxyBase.searchParams.set('url', url);
+    return proxyBase.toString();
+  }
+
   async function fetchWITSIndicator({
     indicator,
     reporter,
@@ -400,30 +537,44 @@ export function createDataToolsService({
       ? [datasource, reporterCode, partner, product, year, 'indicator', indicator]
       : [datasource, reporterCode, year, partner, product, 'indicator', indicator];
     const directUrl = `https://wits.worldbank.org/API/V1/SDMX/V21/${parts.map(witsPathPart).join('/')}?format=JSON`;
-    const proxyBase = WITS_PROXY_URL ? new URL(WITS_PROXY_URL) : null;
-    if (proxyBase) proxyBase.searchParams.set('url', directUrl);
-    const url = proxyBase?.toString() ?? directUrl;
-    const ck = `wits:${url}`;
+    const restUrl = buildWITSRestUrl({ datasource, reporter: reporterCode, partner, product, year, indicator });
+    const urls = [restUrl, directUrl].filter(Boolean).map(withWITSProxy);
+    const ck = `wits:${urls.join('|')}`;
     const hit = rawDataCache.get(ck);
     if (hit) return hit;
 
-    const res = await fetchWithRetry(
-      url,
-      {
-        headers: {
-          Accept: 'application/json,text/plain,*/*',
-          'User-Agent': 'SuperDash/2.0 (+https://github.com/AkshatSharma03/super-dash)',
-        },
-      },
-      0,
-      1500,
-      [429, 500, 502, 503, 504],
-      8000
-    );
-    const json = await res.json();
-    const rows = parseWITSRows(json);
-    rawDataCache.put(ck, rows, RAW_DATA_TTL_MS);
-    return rows;
+    let lastError = null;
+    for (const url of urls) {
+      try {
+        const isRestDataRequest = url.includes('/SDMX/V21/rest/data/');
+        const res = await fetchWithRetry(
+          url,
+          {
+            headers: {
+              Accept: isRestDataRequest
+                ? 'application/xml,text/xml,*/*'
+                : 'application/json,text/plain,*/*',
+              'User-Agent': 'SuperDash/2.0 (+https://github.com/AkshatSharma03/super-dash)',
+            },
+          },
+          0,
+          1500,
+          [429, 500, 502, 503, 504],
+          8000
+        );
+        const body = await res.text();
+        const trimmed = body.trim();
+        const rows = trimmed.startsWith('<')
+          ? parseWITSGenericXmlRows(trimmed)
+          : parseWITSRows(JSON.parse(trimmed));
+        rawDataCache.put(ck, rows, RAW_DATA_TTL_MS);
+        return rows;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+
+    throw lastError ?? new Error('WITS request failed');
   }
 
   const WB_TO_IMF_INDICATOR = {
