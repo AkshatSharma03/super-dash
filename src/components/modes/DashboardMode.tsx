@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import DataQualityHeatmap from "../ui/DataQualityHeatmap";
 import { PeerComparison } from "../ui/PeerComparison";
+import { buildEconomicBriefing, type BriefingTone } from "../../utils/economicBriefing";
 
 const DASH_TABS = ["GDP", "Exports", "Imports", "Trade Balance"] as const;
 type DashTab = (typeof DASH_TABS)[number];
@@ -91,6 +92,13 @@ function getCoverageSummary(dataset: CountryDataset) {
   if (score >= 65) return { label: "Moderate coverage", score };
   return { label: "Limited coverage", score };
 }
+
+const TONE_STYLES: Record<BriefingTone, string> = {
+  positive: "border-emerald-500 bg-emerald-50 text-emerald-950",
+  neutral: "border-sky-500 bg-sky-50 text-sky-950",
+  warning: "border-amber-500 bg-amber-50 text-amber-950",
+  critical: "border-red-500 bg-red-50 text-red-950",
+};
 
 interface Props {
   token: string;
@@ -193,6 +201,7 @@ export default function DashboardMode({
     ? timeAgo(dataset._meta.cachedAt)
     : null;
   const briefing = dataset ? getBriefingSignals(dataset) : null;
+  const analystBriefing = dataset ? buildEconomicBriefing(dataset) : null;
   const coverage = dataset ? getCoverageSummary(dataset) : null;
 
   // Render.
@@ -533,6 +542,117 @@ export default function DashboardMode({
             <div className="mb-4">
               <DataQualityHeatmap dataset={dataset} />
             </div>
+          )}
+
+          {analystBriefing && (
+            <section className="mb-4 border-3 border-memphis-black bg-white shadow-hard-sm">
+              <div className="border-b-3 border-memphis-black bg-memphis-offwhite p-3 sm:p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[11px] font-black uppercase tracking-wide text-memphis-pink mb-1">
+                      Analyst country briefing
+                    </div>
+                    <h2 className="text-lg sm:text-xl font-black text-memphis-black">
+                      {analystBriefing.headline}
+                    </h2>
+                  </div>
+                  <Badge variant={analystBriefing.quality.score >= 85 ? "success" : "warning"}>
+                    {analystBriefing.quality.label} · {analystBriefing.quality.score}%
+                  </Badge>
+                </div>
+              </div>
+
+              <div className="p-3 sm:p-4 space-y-4">
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {analystBriefing.executiveSummary.map((point) => (
+                    <div
+                      key={point}
+                      className="border-2 border-memphis-black bg-memphis-offwhite p-3 text-xs leading-relaxed font-semibold text-memphis-black/75"
+                    >
+                      {point}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {analystBriefing.signals.map((signal) => (
+                    <div
+                      key={signal.label}
+                      className={cn(
+                        "border-2 p-3 min-h-[112px]",
+                        TONE_STYLES[signal.tone],
+                      )}
+                    >
+                      <div className="text-[10px] font-black uppercase tracking-wide opacity-70">
+                        {signal.label}
+                      </div>
+                      <div className="text-lg font-black mt-1">
+                        {signal.value}
+                      </div>
+                      <p className="text-[11px] leading-relaxed mt-1 font-semibold opacity-80">
+                        {signal.detail}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-3">
+                  {analystBriefing.sections.map((section) => (
+                    <div
+                      key={section.title}
+                      className="border-2 border-memphis-black bg-white p-3"
+                    >
+                      <h3 className="text-xs font-black uppercase tracking-wide text-memphis-black mb-2">
+                        {section.title}
+                      </h3>
+                      <ul className="space-y-2">
+                        {section.points.map((point) => (
+                          <li
+                            key={point}
+                            className="text-[11px] leading-relaxed text-memphis-black/70 font-medium"
+                          >
+                            {point}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="border-2 border-memphis-black bg-memphis-offwhite p-3">
+                    <h3 className="text-xs font-black uppercase tracking-wide text-memphis-black mb-2">
+                      Watchlist
+                    </h3>
+                    <div className="space-y-2">
+                      {analystBriefing.risks.map((risk) => (
+                        <div key={risk.label} className="text-xs">
+                          <span className="font-black">{risk.label}:</span>{" "}
+                          <span className="text-memphis-black/70">{risk.detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="border-2 border-memphis-black bg-memphis-yellow/20 p-3">
+                    <h3 className="text-xs font-black uppercase tracking-wide text-memphis-black mb-2">
+                      Analyst next steps
+                    </h3>
+                    <div className="space-y-2">
+                      {analystBriefing.opportunities.map((item) => (
+                        <div key={item.label} className="text-xs">
+                          <span className="font-black">{item.label}:</span>{" "}
+                          <span className="text-memphis-black/70">{item.detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t-2 border-memphis-black pt-3 text-[11px] text-memphis-black/60 font-semibold">
+                  {analystBriefing.sourceNotes.join(" ")}
+                </div>
+              </div>
+            </section>
           )}
 
           {/* KPI row */}

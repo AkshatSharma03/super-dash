@@ -8,6 +8,7 @@ import {
   getReportProfile,
   type ReportAudience,
 } from "../config/reportProfiles";
+import { buildEconomicBriefing, type BriefingTone } from "./economicBriefing";
 
 // ── Download primitives ───────────────────────────────────────────────────────
 
@@ -158,6 +159,13 @@ const KPI_BG: Record<string, string> = {
   "#F97316": "#fff7ed",
 };
 
+const BRIEFING_TONE: Record<BriefingTone, { border: string; bg: string; fg: string }> = {
+  positive: { border: "#10b981", bg: "#ecfdf5", fg: "#064e3b" },
+  neutral: { border: "#0ea5e9", bg: "#f0f9ff", fg: "#0c4a6e" },
+  warning: { border: "#f59e0b", bg: "#fffbeb", fg: "#78350f" },
+  critical: { border: "#ef4444", bg: "#fef2f2", fg: "#7f1d1d" },
+};
+
 /** Build a standalone HTML report for a CountryDataset.
  *  @param svgs  Map of named SVG strings extracted from live Recharts renders.
  *               Keys: "gdp" | "growth" | "trade" | "exports" | "imports"
@@ -239,13 +247,7 @@ export function buildDashboardHTML(
   const cachedAt = dataset._meta?.cachedAt
     ? new Date(dataset._meta.cachedAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })
     : "unknown";
-  const latestGdp = dataset.gdpData[dataset.gdpData.length - 1];
-  const latestTradeBalance = latestExp && latestImp
-    ? +(latestExp.total - latestImp.total).toFixed(1)
-    : null;
-  const latestOpenness = latestGdp && latestExp && latestImp && latestGdp.gdp_bn > 0
-    ? +(((latestExp.total + latestImp.total) / latestGdp.gdp_bn) * 100).toFixed(1)
-    : null;
+  const briefing = buildEconomicBriefing(dataset);
   const coverageRows = [
     ...dataset.gdpData,
     ...dataset.exportData,
@@ -256,6 +258,26 @@ export function buildDashboardHTML(
         Object.values(row).some((value) => typeof value === "number"),
       ).length / coverageRows.length) * 100)
     : 0;
+  const briefingSignalsHTML = briefing.signals.map((signal) => {
+    const tone = BRIEFING_TONE[signal.tone];
+    return `
+    <div style="border:1px solid ${tone.border};background:${tone.bg};color:${tone.fg};border-radius:8px;padding:12px">
+      <p style="margin:0 0 3px;font-size:9px;text-transform:uppercase;letter-spacing:.5px;font-weight:800;opacity:.72">${signal.label}</p>
+      <p style="margin:0 0 4px;font-size:16px;font-weight:800">${signal.value}</p>
+      <p style="margin:0;font-size:11px;line-height:1.45">${signal.detail}</p>
+    </div>`;
+  }).join("");
+  const briefingSectionsHTML = briefing.sections.map((section) => `
+    <div style="border:1px solid #e2e8f0;border-radius:8px;padding:13px;background:#fff">
+      <h3 style="font-size:12px;margin:0 0 8px;color:#0f172a;text-transform:uppercase;letter-spacing:.4px">${section.title}</h3>
+      <ul style="margin:0;padding-left:16px;color:#334155;font-size:12px">
+        ${section.points.map((point) => `<li style="margin-bottom:6px">${point}</li>`).join("")}
+      </ul>
+    </div>`).join("");
+  const risksHTML = briefing.risks.map((risk) => `
+    <tr><td>${risk.label}</td><td>${risk.detail}</td></tr>`).join("");
+  const opportunitiesHTML = briefing.opportunities.map((item) => `
+    <tr><td>${item.label}</td><td>${item.detail}</td></tr>`).join("");
 
   // ── SVG wrappers ──────────────────────────────────────────────────────────
   function chartSection(title: string, svgKey: string): string {
@@ -299,7 +321,10 @@ tr:nth-child(even) td{background:#fafafa}
 .trust-card{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:12px}
 .trust-card strong{display:block;font-size:16px;color:#0f172a}
 .trust-card span{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.4px}
+.briefing-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:14px 0}
+.briefing-sections{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:14px 0}
 @media(max-width:640px){.trust-grid{grid-template-columns:1fr}}
+@media(max-width:760px){.briefing-grid,.briefing-sections{grid-template-columns:1fr}}
 .footer{margin-top:48px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:10px;color:#9ca3af;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
 @media print{body{padding:20px}.no-print{display:none}h2{page-break-after:avoid}table,figure{page-break-inside:avoid}}
 </style>
@@ -318,18 +343,37 @@ tr:nth-child(even) td{background:#fafafa}
 
 <h2>Executive Summary</h2>
 <div class="summary">
-  <p><strong>${dataset.name}</strong> latest source-backed GDP is ${latestGdp ? `$${latestGdp.gdp_bn}B in ${latestGdp.year}` : "not available"}.</p>
-  <p>Latest recorded GDP growth is ${latestGdp?.gdp_growth != null ? `${latestGdp.gdp_growth}%` : "not available"}; latest trade balance is ${latestTradeBalance != null ? `${latestTradeBalance >= 0 ? "+" : ""}$${latestTradeBalance}B` : "not available"}${latestOpenness != null ? `; trade openness is ${latestOpenness}%.` : "."}</p>
-  <p>This report uses the data tables below as its source of truth and avoids estimated values where source data is missing.</p>
+  ${briefing.executiveSummary.map((point) => `<p>${point}</p>`).join("")}
+</div>
+
+<h2>Analyst Briefing Signals</h2>
+<p style="font-size:12px;color:#64748b;margin-bottom:10px">${briefing.headline}</p>
+<div class="briefing-grid">${briefingSignalsHTML}</div>
+
+<h2>Interpretation</h2>
+<div class="briefing-sections">${briefingSectionsHTML}</div>
+
+<div class="two-col">
+  <div>
+    <h2>Watchlist</h2>
+    <table><thead><tr><th>Issue</th><th>Why It Matters</th></tr></thead><tbody>${risksHTML}</tbody></table>
+  </div>
+  <div>
+    <h2>Analyst Next Steps</h2>
+    <table><thead><tr><th>Action</th><th>Purpose</th></tr></thead><tbody>${opportunitiesHTML}</tbody></table>
+  </div>
 </div>
 
 <h2>Trust & Provenance</h2>
 <div class="trust-grid">
-  <div class="trust-card"><span>Data coverage</span><strong>${coverageScore}%</strong></div>
+  <div class="trust-card"><span>Data coverage</span><strong>${briefing.quality.score || coverageScore}%</strong></div>
   <div class="trust-card"><span>Data cached</span><strong>${cachedAt}</strong></div>
   <div class="trust-card"><span>Sources</span><strong>${sources.length}</strong></div>
 </div>
 <p style="font-size:12px;color:#64748b">Sources: ${sources.join(" · ")}. Methodology note: GDP, trade totals, balances, and openness are calculated from source-backed rows included in this export.</p>
+<ul style="font-size:12px;color:#64748b;margin:8px 0 0 18px">
+  ${briefing.quality.notes.map((note) => `<li>${note}</li>`).join("")}
+</ul>
 
 <h2>Key Performance Indicators</h2>
 <div class="kpi-grid">${kpiHTML}</div>
