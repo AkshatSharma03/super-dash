@@ -34,6 +34,7 @@ let authTokenGetter: null | (() => Promise<string | null>) = null;
 const API_TIMEOUT_MS = 30_000;
 const CHAT_STREAM_TIMEOUT_MS = 190_000;
 const SEARCH_TIMEOUT_MS = 75_000;
+const COUNTRY_DATA_TIMEOUT_MS = 120_000;
 
 export function setAuthTokenGetter(getter: (() => Promise<string | null>) | null) {
   authTokenGetter = getter;
@@ -156,8 +157,8 @@ async function post<T>(path: string, body: unknown, token?: string, timeoutMs?: 
 }
 
 /** Helper: GET from an endpoint with optional auth. */
-async function get<T>(path: string, token?: string): Promise<T> {
-  return requestJSON<T>(path, { token });
+async function get<T>(path: string, token?: string, timeoutMs?: number): Promise<T> {
+  return requestJSON<T>(path, { token, timeoutMs });
 }
 
 /** Helper: PATCH an endpoint with optional auth. */
@@ -415,14 +416,14 @@ export function searchCountries(q: string, token: string): Promise<CountrySearch
  * Served from SQLite cache (7-day TTL); fetched fresh from World Bank + Claude if stale.
  */
 export function getCountryData(code: string, token: string): Promise<CountryDataset> {
-  return get<CountryDataset>(`/api/country/${code}`, token);
+  return get<CountryDataset>(`/api/country/${code}`, token, COUNTRY_DATA_TIMEOUT_MS);
 }
 
 /**
  * Force a re-fetch of a country's data from World Bank + Claude, bypassing the cache.
  */
 export function refreshCountryData(code: string, token: string): Promise<CountryDataset> {
-  return post<CountryDataset>(`/api/country/${code}/refresh`, {}, token);
+  return post<CountryDataset>(`/api/country/${code}/refresh`, {}, token, COUNTRY_DATA_TIMEOUT_MS);
 }
 
 /**

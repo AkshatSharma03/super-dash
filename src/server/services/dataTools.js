@@ -8,6 +8,7 @@ export function createDataToolsService({
   BOTMARKET_API_KEY,
   OECD_API_KEY,
   UN_COMTRADE_API_KEY,
+  WITS_PROXY_URL,
 }) {
   async function fetchWithRetry(url, options, retries = 2, baseDelay = 1000, retryStatuses = [429, 503], timeoutMs = null) {
     for (let i = 0; i <= retries; i += 1) {
@@ -295,6 +296,136 @@ export function createDataToolsService({
     return rows;
   }
 
+  function witsPathPart(value) {
+    if (Array.isArray(value)) return value.map(witsPathPart).join(';');
+    return String(value).trim().toLowerCase();
+  }
+
+  function readWitsDimension(dim, index) {
+    const value = dim?.values?.[index] ?? {};
+    return {
+      id: value.id ?? value.ID ?? value.code ?? null,
+      name: value.name ?? value.Name ?? value.text ?? value.id ?? null,
+    };
+  }
+
+  function putWitsDimension(row, dimName, dimValue) {
+    const key = String(dimName || '').replace(/\s+/g, '');
+    row[key] = dimValue.name;
+    row[`${key}Code`] = dimValue.id;
+
+    const lower = key.toLowerCase();
+    if (lower.includes('reporter')) {
+      row.reporter = dimValue.name;
+      row.reporterCode = dimValue.id;
+    } else if (lower.includes('partner')) {
+      row.partner = dimValue.name;
+      row.partnerCode = dimValue.id;
+    } else if (lower.includes('product')) {
+      row.product = dimValue.name;
+      row.productCode = dimValue.id;
+    } else if (lower.includes('indicator')) {
+      row.indicator = dimValue.id;
+      row.indicatorName = dimValue.name;
+    } else if (lower.includes('frequency')) {
+      row.frequency = dimValue.name;
+      row.frequencyCode = dimValue.id;
+    }
+  }
+
+  function parseWITSRows(json) {
+    const dataSet = json?.dataSets?.[0];
+    const series = dataSet?.series ?? {};
+    const seriesDims = json?.structure?.dimensions?.series ?? [];
+    const obsDims = json?.structure?.dimensions?.observation ?? [];
+    const obsAttrs = json?.structure?.attributes?.observation ?? [];
+    const rows = [];
+
+    for (const [seriesKey, seriesValue] of Object.entries(series)) {
+      const seriesIndexes = String(seriesKey).split(':').map((v) => Number.parseInt(v, 10));
+      const base = {};
+      seriesDims.forEach((dim, index) => {
+        putWitsDimension(base, dim?.name || dim?.id || `series_${index}`, readWitsDimension(dim, seriesIndexes[index]));
+      });
+
+      for (const [obsKey, rawValues] of Object.entries(seriesValue?.observations ?? {})) {
+        if (!Array.isArray(rawValues) || rawValues[0] == null || rawValues[0] === '') continue;
+        const row = { ...base, value: Number(rawValues[0]) };
+        const obsIndexes = String(obsKey).split(':').map((v) => Number.parseInt(v, 10));
+
+        obsDims.forEach((dim, index) => {
+          const dimValue = readWitsDimension(dim, obsIndexes[index]);
+          const key = String(dim?.name || dim?.id || `obs_${index}`).replace(/\s+/g, '');
+          row[key] = dimValue.name;
+          row[`${key}Code`] = dimValue.id;
+          if (/time|year|period/i.test(key)) {
+            row.period = dimValue.name ?? dimValue.id;
+            row.year = Number.parseInt(String(row.period).slice(0, 4), 10);
+          }
+        });
+
+        obsAttrs.forEach((attr, index) => {
+          const raw = rawValues[index + 1];
+          if (raw == null || raw === '') return;
+          const attrValue = Number.isInteger(raw) && attr?.values?.[raw]
+            ? readWitsDimension(attr, raw)
+            : { id: raw, name: raw };
+          const key = String(attr?.name || attr?.id || `attr_${index}`).replace(/\s+/g, '');
+          row[key] = attrValue.name;
+          row[`${key}Code`] = attrValue.id;
+        });
+
+        if (Number.isFinite(row.value)) rows.push(row);
+      }
+    }
+
+    return rows.sort((a, b) => (a.year ?? 0) - (b.year ?? 0));
+  }
+
+  async function fetchWITSIndicator({
+    indicator,
+    reporter,
+    partner = 'wld',
+    product = 'all',
+    year = '2023',
+    datasource = 'tradestats-trade',
+  }) {
+    if (!indicator) throw new Error('WITS indicator is required');
+    if (!reporter) throw new Error('WITS reporter is required');
+
+    const reporterCode = String(reporter).length === 2
+      ? countries.alpha2ToAlpha3(String(reporter).toUpperCase()) ?? reporter
+      : reporter;
+    const parts = datasource === 'trn'
+      ? [datasource, reporterCode, partner, product, year, 'indicator', indicator]
+      : [datasource, reporterCode, year, partner, product, 'indicator', indicator];
+    const directUrl = `https://wits.worldbank.org/API/V1/SDMX/V21/${parts.map(witsPathPart).join('/')}?format=JSON`;
+    const proxyBase = WITS_PROXY_URL ? new URL(WITS_PROXY_URL) : null;
+    if (proxyBase) proxyBase.searchParams.set('url', directUrl);
+    const url = proxyBase?.toString() ?? directUrl;
+    const ck = `wits:${url}`;
+    const hit = rawDataCache.get(ck);
+    if (hit) return hit;
+
+    const res = await fetchWithRetry(
+      url,
+      {
+        headers: {
+          Accept: 'application/json,text/plain,*/*',
+          'User-Agent': 'SuperDash/2.0 (+https://github.com/AkshatSharma03/super-dash)',
+        },
+      },
+      0,
+      1500,
+      [429, 500, 502, 503, 504],
+      8000
+    );
+    const json = await res.json();
+    const rows = parseWITSRows(json);
+    rawDataCache.put(ck, rows, RAW_DATA_TTL_MS);
+    return rows;
+  }
+
   const WB_TO_IMF_INDICATOR = {
     'NY.GDP.MKTP.KD.ZG': 'NGDP_RPCH',
     'NY.GDP.MKTP.CD': 'NGDPD',
@@ -422,6 +553,36 @@ export function createDataToolsService({
         cmd_code,
         period,
         sourceUrl,
+      });
+    }
+
+    if (name === 'fetch_wits_indicator') {
+      const {
+        indicator,
+        reporter,
+        partner = 'wld',
+        product = 'all',
+        year = '2023',
+        datasource = 'tradestats-trade',
+      } = input;
+      const rows = await fetchWITSIndicator({
+        indicator,
+        reporter,
+        partner,
+        product,
+        year,
+        datasource,
+      });
+      if (rows.length === 0) throw new Error('WITS returned no data for this query');
+      return JSON.stringify({
+        rows,
+        source: 'World Integrated Trade Solution (WITS)',
+        indicator,
+        reporter,
+        partner,
+        product,
+        year,
+        sourceUrl: 'https://wits.worldbank.org/',
       });
     }
 
@@ -587,6 +748,41 @@ OTHER: BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), 
     });
   }
 
+  DATA_TOOLS.push({
+    name: 'fetch_wits_indicator',
+    description: 'Fetch World Bank WITS trade/tariff indicator data, following the mwouts/world_trade_data WITS API wrapper semantics.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        indicator: {
+          type: 'string',
+          description: 'WITS indicator code, e.g. "XPRT-TRD-VL" for exports or "MPRT-TRD-VL" for imports.',
+        },
+        reporter: {
+          type: 'string',
+          description: 'Reporter ISO-2 or ISO-3 country code, e.g. "US" or "usa".',
+        },
+        partner: {
+          type: 'string',
+          description: 'Partner code; default "wld" for World.',
+        },
+        product: {
+          type: 'string',
+          description: 'Product code; default "all".',
+        },
+        year: {
+          type: 'string',
+          description: 'Year or year range, e.g. "2023" or "2018:2023".',
+        },
+        datasource: {
+          type: 'string',
+          description: 'WITS datasource, default "tradestats-trade".',
+        },
+      },
+      required: ['indicator', 'reporter'],
+    },
+  });
+
   return {
     fetchWithRetry,
     fetchWorldBankIndicator,
@@ -595,6 +791,7 @@ OTHER: BN.CAB.XOKA.CD (current account $), GC.DOD.TOTL.GD.ZS (govt debt % GDP), 
     fetchBotMarketData,
     fetchOECDData,
     fetchUNComtrade,
+    fetchWITSIndicator,
     executeDataTool,
     DATA_TOOLS,
   };

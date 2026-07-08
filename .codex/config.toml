@@ -1,0 +1,4 @@
+[mcp_servers.econchart-local]
+command = "node"
+args = ["mcp-server.js"]
+env_vars = ["FRED_API_KEY"]

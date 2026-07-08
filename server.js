@@ -16,6 +16,7 @@ import {
   BOTMARKET_API_KEY,
   OECD_API_KEY,
   UN_COMTRADE_API_KEY,
+  WITS_PROXY_URL,
   IS_DEV,
   CLERK_SECRET_KEY,
   CLERK_JWT_KEY,
@@ -284,6 +285,7 @@ const {
   fetchBotMarketData,
   fetchOECDData,
   fetchUNComtrade,
+  fetchWITSIndicator,
   executeDataTool,
   DATA_TOOLS,
 } = createDataToolsService({
@@ -294,6 +296,7 @@ const {
   BOTMARKET_API_KEY,
   OECD_API_KEY,
   UN_COMTRADE_API_KEY,
+  WITS_PROXY_URL,
 });
 
 function iso2ToFlag(code) {
@@ -383,6 +386,76 @@ const DATA_SOURCES = {
     coverage: new Set(['AU', 'AT', 'BE', 'CA', 'CL', 'CO', 'CR', 'CZ', 'DK', 'EE', 'FI', 'FR', 'DE', 'GR', 'HU', 'IS', 'IE', 'IL', 'IT', 'JP', 'KR', 'LV', 'LT', 'LU', 'MX', 'NL', 'NZ', 'NO', 'PL', 'PT', 'SK', 'SI', 'ES', 'SE', 'CH', 'TR', 'GB', 'US']),
   },
 };
+
+const TRADE_BREAKDOWN_COLORS = ['#00AAFF', '#FF006E', '#FFBE0B', '#10B981', '#8B5CF6', '#F97316', '#06B6D4'];
+
+function tradeKey(label, prefix) {
+  const key = String(label || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 32);
+  return `${prefix}_${key || 'other'}`;
+}
+
+function isAggregateWitsProduct(row) {
+  const label = String(row.product || row.Product || '').toLowerCase();
+  const code = String(row.productCode || row.ProductCode || '').toLowerCase();
+  return !label || label === 'all products' || label === 'total' || code === 'all' || code === 'total';
+}
+
+function witsValueToBillions(value) {
+  // WITS trade value indicators are reported in thousand USD.
+  return +(Number(value) / 1_000_000).toFixed(1);
+}
+
+function buildWitsBreakdown(rows, prefix) {
+  const latestYear = Math.max(...rows.map((row) => Number(row.year)).filter(Number.isFinite));
+  if (!Number.isFinite(latestYear)) return null;
+
+  const latestRows = rows
+    .filter((row) => Number(row.year) === latestYear && !isAggregateWitsProduct(row))
+    .map((row) => ({
+      label: String(row.product || row.Product || row.productCode || row.ProductCode || 'Other'),
+      code: String(row.productCode || row.ProductCode || ''),
+      value: witsValueToBillions(row.value),
+    }))
+    .filter((row) => Number.isFinite(row.value) && row.value > 0)
+    .sort((a, b) => b.value - a.value);
+
+  if (!latestRows.length) return null;
+
+  const top = latestRows.slice(0, 6);
+  const series = top.map((row, index) => ({
+    key: tradeKey(row.code || row.label, prefix),
+    label: row.label,
+    color: TRADE_BREAKDOWN_COLORS[index % TRADE_BREAKDOWN_COLORS.length],
+  }));
+  const values = Object.fromEntries(series.map((item, index) => [item.key, top[index].value]));
+  const pie = top.map((row) => ({ name: row.label, value: row.value }));
+
+  return { year: latestYear, series, values, pie };
+}
+
+async function fetchWitsTradeBreakdown(code, indicator, years, prefix) {
+  for (const year of years) {
+    try {
+      const rows = await fetchWITSIndicator({
+        indicator,
+        reporter: code,
+        partner: 'wld',
+        product: 'all',
+        year: String(year),
+      });
+      const breakdown = buildWitsBreakdown(rows, prefix);
+      if (breakdown) return breakdown;
+    } catch (err) {
+      if (IS_DEV) console.warn(`[wits] ${code} ${indicator} ${year}: ${errorMessage(err)}`);
+    }
+  }
+
+  return null;
+}
 
 
 async function fetchIndicatorWithFallback(isoCode, indicatorType) {
@@ -578,6 +651,29 @@ async function buildCountryDataset(isoCode) {
     .filter((year) => typeof impMap[year] === 'number')
     .map((year) => ({ year, total: +(impMap[year] / 1e9).toFixed(1) }));
 
+  const candidateTradeYears = [...new Set([
+    ...tradeYears,
+    2023,
+    2022,
+    2021,
+  ])]
+    .filter((year) => Number.isFinite(year) && year >= 2010)
+    .sort((a, b) => b - a)
+    .slice(0, 4);
+  const [witsExports, witsImports] = await Promise.all([
+    fetchWitsTradeBreakdown(code, 'XPRT-TRD-VL', candidateTradeYears, 'export'),
+    fetchWitsTradeBreakdown(code, 'MPRT-TRD-VL', candidateTradeYears, 'import'),
+  ]);
+
+  if (witsExports) {
+    const row = exportData.find((entry) => entry.year === witsExports.year);
+    if (row) Object.assign(row, witsExports.values);
+  }
+  if (witsImports) {
+    const row = importData.find((entry) => entry.year === witsImports.year);
+    if (row) Object.assign(row, witsImports.values);
+  }
+
   const gdpDataFinal = gdpData;
 
   // Build KPIs
@@ -612,6 +708,15 @@ async function buildCountryDataset(isoCode) {
       trend: null, color: '#EF4444' },
   ];
 
+  if (witsImports?.pie?.length) {
+    const topImport = witsImports.pie[0];
+    const importerKpi = kpis.find((kpi) => kpi.label === '#1 Importer');
+    if (importerKpi) {
+      importerKpi.value = topImport.name;
+      importerKpi.sub = `$${topImport.value}B imports, ${witsImports.year}`;
+    }
+  }
+
   return {
     code,
     name: countryName,
@@ -620,18 +725,21 @@ async function buildCountryDataset(isoCode) {
     gdpData: gdpDataFinal,
     exportData,
     importData,
-    exportSectors: [],
-    importPartners: [],
+    exportSectors: witsExports?.series ?? [],
+    importPartners: witsImports?.series ?? [],
     kpis,
-    pieExports: [],
-    pieImports: [],
+    pieExports: witsExports?.pie ?? [],
+    pieImports: witsImports?.pie ?? [],
     _meta: {
-      sources: Array.from(sourcesUsed).map(s => {
+      sources: [
+        ...Array.from(sourcesUsed).map(s => {
         const src = Object.values(DATA_SOURCES).find(ds => ds.name.toLowerCase().replace(/\s/g, '') === s);
         return src ? src.name : s;
-      }),
+        }),
+        ...(witsExports || witsImports ? ['World Integrated Trade Solution (WITS)'] : []),
+      ],
       fallbackUsed: sourcesUsed.has('imf') || sourcesUsed.has('oecd'),
-      noEstimatedTradeBreakdown: true,
+      noEstimatedTradeBreakdown: !(witsExports || witsImports),
       dataQuality: sourcesUsed.has('worldbank') ? 'high' : sourcesUsed.has('imf') ? 'good' : 'limited',
       cachedAt: Date.now(),
     },

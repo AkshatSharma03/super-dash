@@ -28,67 +28,6 @@ const isValidClerkKey = (key?: string): key is string => {
   return true;
 };
 
-const ConfigNotice = ({ message }: { message: string }) => (
-  <div
-    style={{
-      minHeight: "100vh",
-      display: "grid",
-      placeItems: "center",
-      background: "#FAF9F6",
-      padding: "24px",
-    }}
-  >
-    <div
-      style={{
-        maxWidth: "560px",
-        width: "100%",
-        border: "4px solid #1A1A2E",
-        background: "#FFFFFF",
-        padding: "20px",
-        boxShadow: "8px 8px 0 #1A1A2E",
-        fontFamily: "Inter, sans-serif",
-      }}
-    >
-      <h1
-        style={{
-          margin: 0,
-          fontSize: "20px",
-          fontWeight: 900,
-          color: "#1A1A2E",
-        }}
-      >
-        Configuration required
-      </h1>
-      <p
-        style={{
-          marginTop: "10px",
-          marginBottom: 0,
-          fontSize: "14px",
-          color: "#1A1A2E",
-        }}
-      >
-        {message}
-      </p>
-      <ol
-        style={{
-          marginTop: "14px",
-          paddingLeft: "20px",
-          fontSize: "13px",
-          lineHeight: 1.7,
-          color: "#1A1A2E",
-        }}
-      >
-        <li>Open the Clerk dashboard and copy the publishable key.</li>
-        <li>
-          Set <code>VITE_CLERK_PUBLISHABLE_KEY=pk_test_...</code> locally or{" "}
-          <code>pk_live_...</code> in production.
-        </li>
-        <li>Re-run the Vite build so the client bundle receives the value.</li>
-      </ol>
-    </div>
-  </div>
-);
-
 class RootErrorBoundary extends React.Component<
   React.PropsWithChildren,
   { hasError: boolean }
@@ -104,7 +43,12 @@ class RootErrorBoundary extends React.Component<
 
   render() {
     if (this.state.hasError) {
-      return <ConfigNotice message={CLERK_INIT_ERROR} />;
+      return (
+        <>
+          <LocalOnlyApp authNotice={CLERK_INIT_ERROR} />
+          <Toaster position="bottom-center" theme="dark" richColors />
+        </>
+      );
     }
 
     return this.props.children;

@@ -22,6 +22,11 @@ import { buildAlgoCSVs } from "./export/buildAlgoCsvs";
 import { HiddenCharts } from "./export/HiddenCharts";
 import { ExportBtn, Panel, SectionTitle } from "./export/ui";
 import { trackReportExported } from "../../analytics";
+import {
+  DEFAULT_REPORT_PROFILE,
+  REPORT_PROFILES,
+  type ReportAudience,
+} from "../../config/reportProfiles";
 
 interface ExportModeProps {
   dashDataset: CountryDataset | null;

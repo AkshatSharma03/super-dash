@@ -13,6 +13,7 @@ export const KAGI_BASE = process.env.KAGI_BASE || 'https://kagi.com/api/v0';
 export const BOTMARKET_API_KEY = process.env.BOTMARKET_API_KEY;
 export const OECD_API_KEY = process.env.OECD_API_KEY;
 export const UN_COMTRADE_API_KEY = process.env.UN_COMTRADE_API_KEY;
+export const WITS_PROXY_URL = process.env.WITS_PROXY_URL?.trim();
 export const IS_DEV = process.env.NODE_ENV !== 'production';
 export const IS_TEST = process.env.NODE_ENV === 'test';
 export const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY;
