@@ -10,7 +10,7 @@ nixPkgs = ['...', 'nodejs_24']
 aptPkgs = ['...', 'python3', 'make', 'g++']
 
 [phases.install]
-cmds = ['env -u NPM_CONFIG_PRODUCTION -u npm_config_production npm ci']
+cmds = ['env -u NPM_CONFIG_PRODUCTION -u npm_config_production npm ci --include=dev']
 
 [phases.build]
 cmds = ['npm run build']
